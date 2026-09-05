@@ -1,0 +1,54 @@
+{
+  "name": "2play",
+  "version": "2.1.0",
+  "private": true,
+  "description": "2PLAY — Universal 2D Multiplayer Gaming Platform (\"Play Together, Anywhere.\")",
+  "workspaces": [
+    "shared",
+    "server",
+    "client",
+    "tests"
+  ],
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "scripts": {
+    "install:all": "npm install",
+    "dev": "concurrently -k -n shared,server,client -c blue,magenta,cyan \"npm:dev:shared\" \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:shared": "npm run dev -w @2play/shared",
+    "dev:server": "npm run dev -w @2play/server",
+    "dev:client": "npm run dev -w @2play/client",
+    "build": "npm run build -w @2play/shared && npm run build -w @2play/server && npm run build -w @2play/client",
+    "build:shared": "npm run build -w @2play/shared",
+    "build:server": "npm run build -w @2play/server",
+    "build:client": "npm run build -w @2play/client",
+    "start": "npm run start -w @2play/server",
+    "typecheck": "npm run typecheck -w @2play/shared && npm run typecheck -w @2play/server && npm run typecheck -w @2play/client && npm run typecheck -w @2play/tests",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"{shared,server,client,tests}/src/**/*.{ts,tsx,css}\"",
+    "test": "npm run test -w @2play/shared && npm run test -w @2play/server && npm run test -w @2play/client",
+    "test:server": "npm run test -w @2play/server",
+    "test:client": "npm run test -w @2play/client",
+    "test:shared": "npm run test -w @2play/shared",
+    "test:integration": "npm run test -w @2play/tests",
+    "test:all": "npm run test && npm run test:integration",
+    "db:migrate": "npm run db:migrate -w @2play/server",
+    "db:verify": "npm run db:verify -w @2play/server",
+    "clean": "rimraf shared/dist server/dist client/dist tests/dist coverage .eslintcache"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/node": "^22.8.1",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "globals": "^15.11.0",
+    "prettier": "^3.3.3",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.11.0",
+    "vitest": "^2.1.4"
+  }
+}

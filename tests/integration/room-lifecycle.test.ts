@@ -125,12 +125,16 @@ describe('room lifecycle over sockets', () => {
     };
     expect(games.games.map((game: { id: string }) => game.id).sort()).toEqual([
       '2048-battle',
+      'capture-the-flag-2d',
       'dots-and-boxes',
       'math-rush',
       'maze-race-2d',
       'memory-match',
       'reaction-race',
       'shape-match-battle',
+      'snake-battle',
+      'target-rush',
+      'traffic-dodge-race',
       'word-race',
       'word-scramble-battle',
     ]);

@@ -297,3 +297,131 @@ export const SHAPE_MATCH_METADATA = {
   defaultRounds: 10,
   version: '1.0.0',
 } satisfies GameMetadata;
+
+
+export const SNAKE_BATTLE_METADATA = {
+  id: 'snake-battle',
+  name: 'Snake Battle',
+  description:
+    'Two snakes, one arena. Grab the food, cut off your rival and be the last serpent sliding. The server moves every snake on a fixed clock.',
+  category: 'reflex' as const,
+  icon: '🐍',
+  thumbnail: '🐍',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 180,
+  difficulty: 'medium' as const,
+  controls: 'Steer with WASD / arrow keys, swipe on the arena or use the D-pad below it.',
+  rules: [
+    'Both snakes slide on the same 17x17 grid, one cell every quarter second.',
+    'Turn up, down, left or right — reversing into yourself is rejected by the server.',
+    'Eating food grows your snake by one segment and scores 10 points.',
+    'Hitting a wall, any snake body or another head kills your snake instantly.',
+    'A dead snake is out, but the survivor keeps eating until the clock or their own crash.',
+    'Survive longer to win; if both die on the same step the higher score takes it.',
+  ],
+  scoring: '10 points per food. Survival beats score; score breaks survival ties.',
+  winCondition: 'Outlive your rival (or outhunt them on the fatal step).',
+  tags: ['reflex', 'arcade', 'classic', '2 players'],
+  featured: false,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const TRAFFIC_DODGE_METADATA = {
+  id: 'traffic-dodge-race',
+  name: 'Traffic Dodge Race',
+  description:
+    'A five-lane arcade sprint: weave through oncoming traffic, survive the crashes and outrun your rival to the finish line.',
+  category: 'reflex' as const,
+  icon: '🏎️',
+  thumbnail: '🏎️',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'medium' as const,
+  controls: 'Switch lanes with A/D, the left/right arrow keys, swipe or the side buttons.',
+  rules: [
+    'Both racers share one five-lane road and accelerate automatically — steering is all you do.',
+    'Traffic ahead of you is generated from the server seed; every racer sees the same road.',
+    'Hitting a car stuns you for 1.5 seconds and drops you behind it — the race goes on.',
+    'The finish line is 2000 units away; the first racer across wins.',
+    'If the clock runs out, the racer closest to the finish wins.',
+  ],
+  scoring: 'Progress decides: finishing first wins, otherwise the furthest racer takes it.',
+  winCondition: 'Cross the finish line first (or lead at the timeout).',
+  tags: ['reflex', 'racing', 'arcade', '2 players'],
+  featured: false,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const TARGET_RUSH_METADATA = {
+  id: 'target-rush',
+  name: 'Target Rush',
+  description:
+    'Three targets, one symbol to hit. Read the prompt, tap the right target first and build a streak your rival cannot match.',
+  category: 'reflex' as const,
+  icon: '🎯',
+  thumbnail: '🎯',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 120,
+  difficulty: 'easy' as const,
+  controls: 'Tap or click the target that matches the prompt symbol.',
+  rules: [
+    'Every round shows a prompt symbol and three large targets — exactly one matches.',
+    'The first correct tap scores: 10 points, up to 10 extra for speed, plus a combo bonus for your streak.',
+    'Tapping a wrong target scores nothing, breaks your streak and locks you out for a second.',
+    'A round ends on the first correct tap or when its timer runs out (all streaks reset).',
+    'Eight rounds — the highest total score wins, equal totals are a draw.',
+  ],
+  scoring: '10 points per hit + up to 10 speed points + 2 per streak step (max +6).',
+  winCondition: 'Score the most points across eight rounds.',
+  tags: ['reflex', 'speed', 'focus', '2 players'],
+  featured: false,
+  hasRounds: true,
+  defaultRounds: 8,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const CAPTURE_THE_FLAG_METADATA = {
+  id: 'capture-the-flag-2d',
+  name: 'Capture the Flag 2D',
+  description:
+    'Sneak across the arena, grab the enemy flag and carry it home — but one touch sends you back to your base. First team to three captures.',
+  category: 'strategy' as const,
+  icon: '🚩',
+  thumbnail: '🚩',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 180,
+  difficulty: 'medium' as const,
+  controls: 'Move one cell at a time with WASD / arrow keys, swipe or the D-pad.',
+  rules: [
+    'Two teams: with four players, seats 1 & 3 face seats 2 & 4; with two it is a duel.',
+    'Enter the enemy flag cell to pick the flag up — it moves with you.',
+    'Carry it onto your own base to score a capture; first team to 3 captures wins.',
+    'Moving onto an opponent tags them: they respawn at their base and any carried flag returns home.',
+    'Players standing on their own base cannot be tagged (no spawn camping).',
+    'If the clock runs out, the team with more captures wins.',
+  ],
+  scoring: '1 point per captured flag for the whole team.',
+  winCondition: 'Reach 3 captures or lead when the clock ends.',
+  tags: ['strategy', 'teams', 'arcade', '2-4 players'],
+  featured: false,
+  version: '1.0.0',
+} satisfies GameMetadata;

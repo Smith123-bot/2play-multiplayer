@@ -8,6 +8,10 @@ import { battle2048Game } from '../games/2048-battle';
 import { mazeRaceGame } from '../games/maze-race-2d';
 import { wordScrambleGame } from '../games/word-scramble-battle';
 import { shapeMatchGame } from '../games/shape-match-battle';
+import { snakeBattleGame } from '../games/snake-battle';
+import { trafficDodgeGame } from '../games/traffic-dodge-race';
+import { targetRushGame } from '../games/target-rush';
+import { captureTheFlagGame } from '../games/capture-the-flag-2d';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -33,6 +37,10 @@ export class GameLoader {
       mazeRaceGame,
       wordScrambleGame,
       shapeMatchGame,
+      snakeBattleGame,
+      trafficDodgeGame,
+      targetRushGame,
+      captureTheFlagGame,
     ];
 
     for (const game of games) {

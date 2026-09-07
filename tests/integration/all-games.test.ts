@@ -85,6 +85,41 @@ const CASES: GameCase[] = [
       Boolean(state.target) && Array.isArray(state.options) && state.options.length === 4,
     action: { type: 'select', payload: { optionId: 'shape-0' } },
   },
+  {
+    id: 'snake-battle',
+    expect: (state) =>
+      Array.isArray(state.foods) &&
+      Boolean(state.snakes) &&
+      typeof state.stepMs === 'number' &&
+      typeof state.endsAt === 'number',
+    action: { type: 'turn', payload: { direction: 'up' } },
+  },
+  {
+    id: 'traffic-dodge-race',
+    expect: (state) =>
+      typeof state.lanes === 'number' &&
+      typeof state.trackLength === 'number' &&
+      Array.isArray(state.traffic) &&
+      Boolean(state.racers),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'target-rush',
+    settings: { rounds: 3 },
+    expect: (state) =>
+      typeof state.totalRounds === 'number' && Array.isArray(state.targets) && Boolean(state.scores),
+    action: { type: 'hit', payload: { targetId: 'target-0' } },
+  },
+  {
+    id: 'capture-the-flag-2d',
+    expect: (state) =>
+      Array.isArray(state.walls) &&
+      state.walls.length === 225 &&
+      Boolean(state.bases) &&
+      Boolean(state.flags) &&
+      Boolean(state.scores),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

@@ -9,6 +9,10 @@ import { battle2048Client } from '../2048-battle';
 import { mazeRaceClient } from '../maze-race-2d';
 import { wordScrambleClient } from '../word-scramble-battle';
 import { shapeMatchClient } from '../shape-match-battle';
+import { snakeBattleClient } from '../snake-battle';
+import { trafficDodgeClient } from '../traffic-dodge-race';
+import { targetRushClient } from '../target-rush';
+import { captureTheFlagClient } from '../capture-the-flag-2d';
 
 /**
  * Client game registry.
@@ -26,6 +30,10 @@ const modules: ClientGameModule[] = [
   mazeRaceClient,
   wordScrambleClient,
   shapeMatchClient,
+  snakeBattleClient,
+  trafficDodgeClient,
+  targetRushClient,
+  captureTheFlagClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

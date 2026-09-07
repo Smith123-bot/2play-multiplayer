@@ -29,6 +29,10 @@ import { snakeBattleGame } from '../games/snake-battle';
 import { trafficDodgeGame } from '../games/traffic-dodge-race';
 import { targetRushGame } from '../games/target-rush';
 import { captureTheFlagGame } from '../games/capture-the-flag-2d';
+import { paddleDuelGame } from '../games/paddle-duel';
+import { brickBreakerGame } from '../games/brick-breaker-battle';
+import { patternMemoryGame } from '../games/pattern-memory-battle';
+import { bombPassGame } from '../games/bomb-pass-2d';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -146,6 +150,10 @@ export function createTestPlatform(
       trafficDodgeGame,
       targetRushGame,
       captureTheFlagGame,
+      paddleDuelGame,
+      brickBreakerGame,
+      patternMemoryGame,
+      bombPassGame,
     ]) {
       platform.registry.register(game);
     }

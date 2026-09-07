@@ -13,6 +13,10 @@ import { snakeBattleClient } from '../snake-battle';
 import { trafficDodgeClient } from '../traffic-dodge-race';
 import { targetRushClient } from '../target-rush';
 import { captureTheFlagClient } from '../capture-the-flag-2d';
+import { paddleDuelClient } from '../paddle-duel';
+import { brickBreakerClient } from '../brick-breaker-battle';
+import { patternMemoryClient } from '../pattern-memory-battle';
+import { bombPassClient } from '../bomb-pass-2d';
 
 /**
  * Client game registry.
@@ -34,6 +38,10 @@ const modules: ClientGameModule[] = [
   trafficDodgeClient,
   targetRushClient,
   captureTheFlagClient,
+  paddleDuelClient,
+  brickBreakerClient,
+  patternMemoryClient,
+  bombPassClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

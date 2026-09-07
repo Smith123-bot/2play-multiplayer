@@ -120,6 +120,43 @@ const CASES: GameCase[] = [
       Boolean(state.scores),
     action: { type: 'move', payload: { direction: 'right' } },
   },
+  {
+    id: 'paddle-duel',
+    expect: (state) =>
+      Boolean(state.paddles) &&
+      Boolean(state.ball) &&
+      typeof state.scoreLimit === 'number' &&
+      typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { direction: 'up' } },
+  },
+  {
+    id: 'brick-breaker-battle',
+    expect: (state) =>
+      typeof state.width === 'number' &&
+      Boolean(state.arenas) &&
+      Object.values(state.arenas as Record<string, { bricks: unknown[] } | null>).every(
+        (arena) => Array.isArray(arena?.bricks) && arena!.bricks.length === 28,
+      ),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'pattern-memory-battle',
+    expect: (state) =>
+      typeof state.totalRounds === 'number' &&
+      typeof state.patternLength === 'number' &&
+      Boolean(state.players) &&
+      typeof state.round === 'number',
+    action: { type: 'tap', payload: { tile: 0 } },
+  },
+  {
+    id: 'bomb-pass-2d',
+    expect: (state) =>
+      typeof state.totalRounds === 'number' &&
+      typeof state.fuseMs === 'number' &&
+      Boolean(state.players) &&
+      typeof state.round === 'number',
+    action: { type: 'pass', payload: { targetId: 'nobody' } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

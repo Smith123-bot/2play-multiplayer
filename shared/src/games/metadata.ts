@@ -425,3 +425,133 @@ export const CAPTURE_THE_FLAG_METADATA = {
   featured: false,
   version: '1.0.0',
 } satisfies GameMetadata;
+
+
+export const PADDLE_DUEL_METADATA = {
+  id: 'paddle-duel',
+  name: 'Paddle Duel',
+  description:
+    'Classic paddle versus paddle. Keep the ball in play, angle your returns and outlast your rival — first to the point limit takes the duel.',
+  category: 'reflex' as const,
+  icon: '🏓',
+  thumbnail: '🏓',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 180,
+  difficulty: 'medium' as const,
+  controls: 'Slide your paddle with W/S, the up/down arrow keys, or drag on your side of the arena.',
+  rules: [
+    'Both paddles live on the server — the ball is simulated there on a fixed clock.',
+    'The ball bounces off the top and bottom walls; returning it speeds it up a little.',
+    'Hit the ball with the edge of your paddle to angle it sharply.',
+    'If the ball passes your paddle your rival scores a point.',
+    'First to 7 points (configurable 3–15) wins; at the 3-minute timeout the leader takes it.',
+  ],
+  scoring: '1 point per rally won by your opponent missing the ball.',
+  winCondition: 'Reach the point limit first, or lead when the clock ends.',
+  tags: ['reflex', 'arcade', 'classic', '2 players'],
+  featured: false,
+  hasRounds: true,
+  defaultRounds: 7,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const BRICK_BREAKER_METADATA = {
+  id: 'brick-breaker-battle',
+  name: 'Brick Breaker Battle',
+  description:
+    'Two identical arenas, one mirrored brick wall each. Break your wall faster, chain combos and bank more points than your rival before the clock or your lives run out.',
+  category: 'reflex' as const,
+  icon: '🧱',
+  thumbnail: '🧱',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 180,
+  difficulty: 'medium' as const,
+  controls: 'Slide your paddle with A/D, the left/right arrow keys, mouse or by dragging on your arena.',
+  rules: [
+    'Each player breaks their own identical wall — the server simulates both balls.',
+    'Bricks are worth more the higher they sit: 10 to 30 points.',
+    'Chain bricks without touching your paddle to multiply them, up to x4.',
+    'Missing the ball costs a life; you have three, then your run is over.',
+    'Clearing the whole wall banks a 100-point bonus — most points in 3 minutes wins.',
+  ],
+  scoring: 'Brick points x combo multiplier (up to x4) + 100 for a full clear.',
+  winCondition: 'Score the most points (ties: earlier finish, then lives left).',
+  tags: ['reflex', 'arcade', 'classic', '2 players'],
+  featured: false,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const PATTERN_MEMORY_METADATA = {
+  id: 'pattern-memory-battle',
+  name: 'Pattern Memory Battle',
+  description:
+    'Watch the tiles flash, then replay the sequence from memory. The patterns grow longer every round — who can keep up longest?',
+  category: 'memory' as const,
+  icon: '🔮',
+  thumbnail: '🔮',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 180,
+  difficulty: 'medium' as const,
+  controls: 'Watch the flashes, then tap the tiles in the same order.',
+  rules: [
+    'Both players memorise the exact same server-generated sequence.',
+    'The pattern starts at three tiles and grows by one every two rounds.',
+    'Replay it in order: every correct tap advances you, one wrong tap ends your attempt.',
+    'A full replay scores pattern length x 10, a speed bonus and a streak bonus.',
+    'Eight rounds — the highest total wins, equal totals are a draw.',
+  ],
+  scoring: '10 per tile + up to 5 per tile for speed + a streak bonus (max +6).',
+  winCondition: 'Score the most points across eight rounds.',
+  tags: ['memory', 'focus', 'party', '2 players'],
+  featured: false,
+  hasRounds: true,
+  defaultRounds: 8,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const BOMB_PASS_METADATA = {
+  id: 'bomb-pass-2d',
+  name: 'Bomb Pass 2D',
+  description:
+    'A cartoon firework is ticking and nobody wants to be holding it. Pass it around, watch the fuse shrink and dodge three strikes across eight frantic rounds.',
+  category: 'reflex' as const,
+  icon: '🧨',
+  thumbnail: '🧨',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'easy' as const,
+  controls: 'Tap a player to pass them the firework before the fuse burns out.',
+  rules: [
+    'A purely fictional cartoon firework starts with a random player and a server-timed fuse.',
+    'Only the holder can pass, and only to someone still in the game (never to themselves).',
+    'You must hold the firework for a moment before passing it on — no instant ping-pong.',
+    'Holding it when the fuse ends costs a strike; everyone else scores a point.',
+    'Three strikes and you are out. Last player standing, or fewest strikes after eight rounds, wins.',
+  ],
+  scoring: '1 point for surviving a round you are not holding the firework in.',
+  winCondition: 'Be the last player standing, or have the fewest strikes after eight rounds.',
+  tags: ['reflex', 'party', 'hot-potato', '2-4 players'],
+  featured: false,
+  hasRounds: true,
+  defaultRounds: 8,
+  version: '1.0.0',
+} satisfies GameMetadata;

@@ -34,6 +34,11 @@ import { fakeDoorGame } from '../games/fake-door-battle';
 import { movingIslandGame } from '../games/moving-island';
 import { magnetThiefGame } from '../games/magnet-thief';
 import { invisiblePathGame } from '../games/invisible-path';
+import { reverseRaceGame } from '../games/reverse-race';
+import { mirrorArenaGame } from '../games/mirror-arena';
+import { chainReactionGame } from '../games/chain-reaction-battle';
+import { oneButtonGame } from '../games/one-button-battle';
+import { splitWorldGame } from '../games/split-world';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -85,6 +90,11 @@ export class GameLoader {
       movingIslandGame,
       magnetThiefGame,
       invisiblePathGame,
+      reverseRaceGame,
+      mirrorArenaGame,
+      chainReactionGame,
+      oneButtonGame,
+      splitWorldGame,
     ];
 
     for (const game of games) {

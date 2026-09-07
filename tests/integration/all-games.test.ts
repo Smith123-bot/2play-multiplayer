@@ -327,6 +327,54 @@ const CASES: GameCase[] = [
       typeof state.round === 'number',
     action: { type: 'move', payload: { x: 1, y: 3 } },
   },
+  {
+    id: 'reverse-race',
+    settings: { rounds: 2 },
+    expect: (state) =>
+      Array.isArray(state.grid) &&
+      Boolean(state.players) &&
+      Boolean(state.objective) &&
+      typeof state.round === 'number',
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'mirror-arena',
+    expect: (state) =>
+      Array.isArray(state.grid) &&
+      Array.isArray(state.plates) &&
+      Boolean(state.players) &&
+      typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'chain-reaction-battle',
+    settings: { rounds: 2 },
+    expect: (state) =>
+      Array.isArray(state.nodes) &&
+      Boolean(state.players) &&
+      typeof state.round === 'number' &&
+      typeof state.cols === 'number',
+    action: { type: 'TRIGGER_NODE', payload: { nodeId: '0,0' } },
+  },
+  {
+    id: 'one-button-battle',
+    expect: (state) =>
+      Boolean(state.players) &&
+      typeof state.currentIndex === 'number' &&
+      typeof state.totalEvents === 'number' &&
+      typeof state.endsAt === 'number',
+    action: { type: 'tap' },
+  },
+  {
+    id: 'split-world',
+    expect: (state) =>
+      Array.isArray(state.tiles) &&
+      Boolean(state.players) &&
+      Boolean(state.goal) &&
+      typeof state.role === 'string' &&
+      state.trueTiles === undefined,
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

@@ -35,6 +35,11 @@ import { fakeDoorClient } from '../fake-door-battle';
 import { movingIslandClient } from '../moving-island';
 import { magnetThiefClient } from '../magnet-thief';
 import { invisiblePathClient } from '../invisible-path';
+import { reverseRaceClient } from '../reverse-race';
+import { mirrorArenaClient } from '../mirror-arena';
+import { chainReactionClient } from '../chain-reaction-battle';
+import { oneButtonClient } from '../one-button-battle';
+import { splitWorldClient } from '../split-world';
 
 /**
  * Client game registry.
@@ -78,6 +83,11 @@ const modules: ClientGameModule[] = [
   movingIslandClient,
   magnetThiefClient,
   invisiblePathClient,
+  reverseRaceClient,
+  mirrorArenaClient,
+  chainReactionClient,
+  oneButtonClient,
+  splitWorldClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

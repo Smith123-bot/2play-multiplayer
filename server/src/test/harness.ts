@@ -51,6 +51,11 @@ import { fakeDoorGame } from '../games/fake-door-battle';
 import { movingIslandGame } from '../games/moving-island';
 import { magnetThiefGame } from '../games/magnet-thief';
 import { invisiblePathGame } from '../games/invisible-path';
+import { reverseRaceGame } from '../games/reverse-race';
+import { mirrorArenaGame } from '../games/mirror-arena';
+import { chainReactionGame } from '../games/chain-reaction-battle';
+import { oneButtonGame } from '../games/one-button-battle';
+import { splitWorldGame } from '../games/split-world';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -190,6 +195,11 @@ export function createTestPlatform(
       movingIslandGame,
       magnetThiefGame,
       invisiblePathGame,
+      reverseRaceGame,
+      mirrorArenaGame,
+      chainReactionGame,
+      oneButtonGame,
+      splitWorldGame,
     ]) {
       platform.registry.register(game);
     }

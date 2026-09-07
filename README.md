@@ -293,6 +293,11 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 🏝️ Moving Island | reflex | 2–4 | yes | Sliding / blinking / spinning platforms, checkpoint respawns |
 | 🧲 Magnet Thief | strategy | 2–4 | yes | Server magnet range, cooldown, steal and ownership |
 | ✨ Invisible Path | memory | 2–4 | yes | Preview then hide; wrong-tile stun; server-owned safe set |
+| 🔄 Reverse Race | reflex | 2–4 | yes | Changing round objectives; server-owned movement, tokens and finish times |
+| 🪞 Mirror Arena | strategy | 2–4 | yes | Mirrored twin, plates, gates and crystals; server collisions |
+| 💥 Chain Reaction Battle | strategy | 2–4 | yes | Trigger a node; the server owns chain length, multipliers and score |
+| 🔘 One Button Battle | reflex | 2–4 | yes | One tap, many contexts; server-owned timing windows |
+| 🌍 Split World | strategy | 2–4 | yes | Shared true world, per-player views; hidden tiles never leave the server |
 
 Every game is server-authoritative: clients send *intents*, the server decides
 legality, scores, winners and timers.

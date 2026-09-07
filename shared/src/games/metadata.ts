@@ -1095,9 +1095,164 @@ export const MAGNET_THIEF_METADATA = {
 } satisfies GameMetadata;
 
 
+export const REVERSE_RACE_METADATA = {
+  id: 'reverse-race',
+  name: 'Reverse Race',
+  description:
+    'Every round flips the objective: finish first, finish second, hit an exact time, collect exactly N, or stop in the zone.',
+  category: 'reflex' as const,
+  icon: '🔄',
+  thumbnail: '🔄',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'medium' as const,
+  controls: 'WASD / arrows / swipe / D-pad. The current objective is shown above the track.',
+  rules: [
+    'Each round the server publishes a new target. Reaching the flag first is not always the win.',
+    'Objectives include exact time, second place, collect exactly N tokens, or stop inside the zone.',
+    'Movement, tokens, finish times and ranks are validated on the server.',
+    'Highest total after every round wins.',
+  ],
+  scoring: 'Up to 100 per round based on how closely you match the published objective.',
+  winCondition: 'Hold the highest score after four rounds.',
+  tags: ['reflex', 'race', 'party', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 4,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const MIRROR_ARENA_METADATA = {
+  id: 'mirror-arena',
+  name: 'Mirror Arena',
+  description:
+    'Every step you take is mirrored across the arena. Use your twin to hold plates, grab crystals and open the gate.',
+  category: 'strategy' as const,
+  icon: '🪞',
+  thumbnail: '🪞',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'medium' as const,
+  controls: 'WASD / arrows / swipe / D-pad. Your mirror always moves opposite you.',
+  rules: [
+    'Your mirror is at (width-1-x, y). It is not a second player — it is you, flipped.',
+    'Plates stay active while you or a mirror stand on them. Gates open only when every plate is held.',
+    'Crystals can be collected by you or your mirror. Hazards freeze you briefly.',
+    'The exit only scores while the gates are open. The server owns collisions and the mirror.',
+  ],
+  scoring: 'Crystal +20, exit +80. Highest total when the clock ends wins.',
+  winCondition: 'Hold the highest score when time expires (exiters rank first on a tie).',
+  tags: ['strategy', 'puzzle', 'mirror', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const CHAIN_REACTION_METADATA = {
+  id: 'chain-reaction-battle',
+  name: 'Chain Reaction Battle',
+  description:
+    'Trigger one node and watch the board cascade. Long, high-value chains win — the server owns every spark.',
+  category: 'strategy' as const,
+  icon: '💥',
+  thumbnail: '💥',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 140,
+  difficulty: 'medium' as const,
+  controls: 'Tap a node to trigger it. Two triggers per round.',
+  rules: [
+    'Each round the server deals a coloured board of normal, bonus, multiplier, blocker and arrow nodes.',
+    'Trigger a node: same-colour neighbours chain. Arrows continue in their direction. Blockers never chain.',
+    'You get two triggers per round. Clients submit a node id — never a chain length.',
+    'Highest total after four rounds wins.',
+  ],
+  scoring: 'Chain length × 10 × multipliers, plus 15 per bonus node in the chain.',
+  winCondition: 'Score the most points across four rounds.',
+  tags: ['strategy', 'puzzle', 'party', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 4,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const ONE_BUTTON_METADATA = {
+  id: 'one-button-battle',
+  name: 'One Button Battle',
+  description:
+    'One button, many contexts. Jump, dash, dodge, switch, collect or shield — only if you press in the window.',
+  category: 'reflex' as const,
+  icon: '🔘',
+  thumbnail: '🔘',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 120,
+  difficulty: 'medium' as const,
+  controls: 'One large action button, or Space. Timing is everything.',
+  rules: [
+    'A sequence of events approaches. The current context (jump, dash, dodge, switch, collect, shield) is shown.',
+    'Press in the timing window to succeed. Early or late presses miss and break your streak.',
+    'The server owns the window, the context and the score. Clients only send tap.',
+    'Highest score after the sequence wins.',
+  ],
+  scoring: 'Hit +20 plus 5 per streak step. Misses score 0 and reset the streak.',
+  winCondition: 'Score the most points across the event sequence.',
+  tags: ['reflex', 'timing', 'party', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const SPLIT_WORLD_METADATA = {
+  id: 'split-world',
+  name: 'Split World',
+  description:
+    'One shared 2D world, different eyes. You see switches, your partner sees the door — talk it out and finish together.',
+  category: 'strategy' as const,
+  icon: '🌍',
+  thumbnail: '🌍',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 160,
+  difficulty: 'medium' as const,
+  controls: 'WASD / arrows / swipe / D-pad. Chat is part of the puzzle.',
+  rules: [
+    'The true layout lives on the server. Each seat gets a different view of the same world.',
+    'Alpha seats see switches. Beta seats see the door. Decoys are visual only.',
+    'Real walls still block everyone. The door opens only when every switch is held.',
+    'Reach the goal after the door opens. Hidden true tiles never leave the server.',
+  ],
+  scoring: 'Switch hold +30, goal +100. Highest total when the clock ends wins.',
+  winCondition: 'Hold the highest score when time expires (goal finishers rank first on a tie).',
+  tags: ['strategy', 'coop', 'puzzle', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
 export const INVISIBLE_PATH_METADATA = {
   id: 'invisible-path',
   name: 'Invisible Path',
+
   description:
     'Memorise the glowing path, then cross the grid after it vanishes. Wrong tiles bounce you back.',
   category: 'memory' as const,

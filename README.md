@@ -263,6 +263,41 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 🔤 Word Race | word | 2–4 | yes | Server-owned dictionary, unique words score, 3 rounds |
 | 🔲 Dots and Boxes | strategy | 2–4 | yes | Server-tracked lines/boxes, greedy + safety heuristics |
 | 🧮 Math Rush | math | 2–4 | yes | Server questions/answers, speed bonus, difficulty scaling |
+| 🔢 2048 Battle | strategy | 2 | yes | Private boards, server-owned tiles |
+| 🧩 Maze Race 2D | reflex | 2–4 | yes | Seeded maze, first to the flag |
+| 🔀 Word Scramble Battle | word | 2–4 | yes | Hidden word until reveal |
+| 🔶 Shape Match Battle | reflex | 2–4 | yes | Server-owned matching target |
+| 🐍 Snake Battle | reflex | 2 | yes | Shared grid, server-stepped snakes |
+| 🏎️ Traffic Dodge Race | reflex | 2 | yes | Seeded traffic, first to the finish |
+| 🎯 Target Rush | reflex | 2 | yes | First correct tap, combos |
+| 🚩 Capture the Flag 2D | strategy | 2/4 | yes | Team captures, no spawn camping |
+| 🏓 Paddle Duel | reflex | 2 | yes | Server-simulated ball |
+| 🧱 Brick Breaker Battle | reflex | 2 | yes | Mirrored walls, combos |
+| 🔮 Pattern Memory Battle | memory | 2 | yes | Hidden sequence until reveal |
+| 🧨 Bomb Pass 2D | reflex | 2–4 | yes | Server-timed fuse |
+| 🎨 Draw & Guess Battle | word | 2–4 | yes | Secret word, stroke sync, guess scoring |
+| 🕵️ Secret Role | strategy | 3–4 | yes | Private roles, no identity leak |
+| 🏃 Platform Dash 2D | reflex | 2–4 | yes | Server-simulated 2D race |
+| 🌈 Color Clash | reflex | 2–4 | yes | Fast colour rounds, labelled buttons |
+| 🗺️ Territory Rush | reflex | 2–4 | yes | Grid capture, flood-fill loops, trail cuts |
+| ⬡ Hexa Conquest | strategy | 2–4 | yes | Turn-based hex expansion, Bridge special |
+| 🌀 Color Trails | reflex | 2–4 | yes | Fading trails, colour combos, zone bonuses |
+| 🪙 Coin Hunters Arena | reflex | 2–4 | yes | Server-spawned coins, multipliers, bonus zone |
+| 🏰 Castle Siege 2D | strategy | 2–4 | yes | Castle HP, energy, defenses, capture nodes |
+| 🚦 Traffic Control Battle | reflex | 2–4 | yes | Server-driven cars, lights, jam penalties |
+| 🧲 Magnet Maze | reflex | 2–4 | yes | Seeded maze, polarity, server-verified finish |
+| 🛒 Shop Rush Battle | strategy | 2–4 | yes | Private lists, limited inventory, server checkout |
+| 🌑 Shadow Copy Battle | strategy | 2–4 | yes | Server-recorded paths replay as Shadow Copies; plates open gates |
+| 🌀 Echo Maze | memory | 2–4 | yes | Preview then fog; echo trail; server-owned walls and finish |
+| 🚪 Fake Door Battle | memory | 2–4 | yes | Learnable clues, server-owned safe door |
+| 🏝️ Moving Island | reflex | 2–4 | yes | Sliding / blinking / spinning platforms, checkpoint respawns |
+| 🧲 Magnet Thief | strategy | 2–4 | yes | Server magnet range, cooldown, steal and ownership |
+| ✨ Invisible Path | memory | 2–4 | yes | Preview then hide; wrong-tile stun; server-owned safe set |
+| 🔄 Reverse Race | reflex | 2–4 | yes | Changing round objectives; server-owned movement, tokens and finish times |
+| 🪞 Mirror Arena | strategy | 2–4 | yes | Mirrored twin, plates, gates and crystals; server collisions |
+| 💥 Chain Reaction Battle | strategy | 2–4 | yes | Trigger a node; the server owns chain length, multipliers and score |
+| 🔘 One Button Battle | reflex | 2–4 | yes | One tap, many contexts; server-owned timing windows |
+| 🌍 Split World | strategy | 2–4 | yes | Shared true world, per-player views; hidden tiles never leave the server |
 
 Every game is server-authoritative: clients send *intents*, the server decides
 legality, scores, winners and timers.

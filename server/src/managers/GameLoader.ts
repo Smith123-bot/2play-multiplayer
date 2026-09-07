@@ -16,6 +16,29 @@ import { paddleDuelGame } from '../games/paddle-duel';
 import { brickBreakerGame } from '../games/brick-breaker-battle';
 import { patternMemoryGame } from '../games/pattern-memory-battle';
 import { bombPassGame } from '../games/bomb-pass-2d';
+import { drawGuessGame } from '../games/draw-guess-battle';
+import { secretRoleGame } from '../games/secret-role';
+import { platformDashGame } from '../games/platform-dash-2d';
+import { colorClashGame } from '../games/color-clash';
+import { territoryRushGame } from '../games/territory-rush';
+import { hexaConquestGame } from '../games/hexa-conquest';
+import { colorTrailsGame } from '../games/color-trails';
+import { coinHuntersGame } from '../games/coin-hunters-arena';
+import { castleSiegeGame } from '../games/castle-siege-2d';
+import { trafficControlGame } from '../games/traffic-control-battle';
+import { magnetMazeGame } from '../games/magnet-maze';
+import { shopRushGame } from '../games/shop-rush-battle';
+import { shadowCopyGame } from '../games/shadow-copy-battle';
+import { echoMazeGame } from '../games/echo-maze';
+import { fakeDoorGame } from '../games/fake-door-battle';
+import { movingIslandGame } from '../games/moving-island';
+import { magnetThiefGame } from '../games/magnet-thief';
+import { invisiblePathGame } from '../games/invisible-path';
+import { reverseRaceGame } from '../games/reverse-race';
+import { mirrorArenaGame } from '../games/mirror-arena';
+import { chainReactionGame } from '../games/chain-reaction-battle';
+import { oneButtonGame } from '../games/one-button-battle';
+import { splitWorldGame } from '../games/split-world';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -49,6 +72,29 @@ export class GameLoader {
       brickBreakerGame,
       patternMemoryGame,
       bombPassGame,
+      drawGuessGame,
+      secretRoleGame,
+      platformDashGame,
+      colorClashGame,
+      territoryRushGame,
+      hexaConquestGame,
+      colorTrailsGame,
+      coinHuntersGame,
+      castleSiegeGame,
+      trafficControlGame,
+      magnetMazeGame,
+      shopRushGame,
+      shadowCopyGame,
+      echoMazeGame,
+      fakeDoorGame,
+      movingIslandGame,
+      magnetThiefGame,
+      invisiblePathGame,
+      reverseRaceGame,
+      mirrorArenaGame,
+      chainReactionGame,
+      oneButtonGame,
+      splitWorldGame,
     ];
 
     for (const game of games) {

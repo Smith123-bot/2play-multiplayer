@@ -17,6 +17,29 @@ import { paddleDuelClient } from '../paddle-duel';
 import { brickBreakerClient } from '../brick-breaker-battle';
 import { patternMemoryClient } from '../pattern-memory-battle';
 import { bombPassClient } from '../bomb-pass-2d';
+import { drawGuessClient } from '../draw-guess-battle';
+import { secretRoleClient } from '../secret-role';
+import { platformDashClient } from '../platform-dash-2d';
+import { colorClashClient } from '../color-clash';
+import { territoryRushClient } from '../territory-rush';
+import { hexaConquestClient } from '../hexa-conquest';
+import { colorTrailsClient } from '../color-trails';
+import { coinHuntersClient } from '../coin-hunters-arena';
+import { castleSiegeClient } from '../castle-siege-2d';
+import { trafficControlClient } from '../traffic-control-battle';
+import { magnetMazeClient } from '../magnet-maze';
+import { shopRushClient } from '../shop-rush-battle';
+import { shadowCopyClient } from '../shadow-copy-battle';
+import { echoMazeClient } from '../echo-maze';
+import { fakeDoorClient } from '../fake-door-battle';
+import { movingIslandClient } from '../moving-island';
+import { magnetThiefClient } from '../magnet-thief';
+import { invisiblePathClient } from '../invisible-path';
+import { reverseRaceClient } from '../reverse-race';
+import { mirrorArenaClient } from '../mirror-arena';
+import { chainReactionClient } from '../chain-reaction-battle';
+import { oneButtonClient } from '../one-button-battle';
+import { splitWorldClient } from '../split-world';
 
 /**
  * Client game registry.
@@ -42,6 +65,29 @@ const modules: ClientGameModule[] = [
   brickBreakerClient,
   patternMemoryClient,
   bombPassClient,
+  drawGuessClient,
+  secretRoleClient,
+  platformDashClient,
+  colorClashClient,
+  territoryRushClient,
+  hexaConquestClient,
+  colorTrailsClient,
+  coinHuntersClient,
+  castleSiegeClient,
+  trafficControlClient,
+  magnetMazeClient,
+  shopRushClient,
+  shadowCopyClient,
+  echoMazeClient,
+  fakeDoorClient,
+  movingIslandClient,
+  magnetThiefClient,
+  invisiblePathClient,
+  reverseRaceClient,
+  mirrorArenaClient,
+  chainReactionClient,
+  oneButtonClient,
+  splitWorldClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

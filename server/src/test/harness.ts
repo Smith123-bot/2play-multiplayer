@@ -21,6 +21,10 @@ import { memoryMatchGame } from '../games/memory-match';
 import { wordRaceGame } from '../games/word-race';
 import { dotsAndBoxesGame } from '../games/dots-and-boxes';
 import { mathRushGame } from '../games/math-rush';
+import { battle2048Game } from '../games/2048-battle';
+import { mazeRaceGame } from '../games/maze-race-2d';
+import { wordScrambleGame } from '../games/word-scramble-battle';
+import { shapeMatchGame } from '../games/shape-match-battle';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -130,6 +134,10 @@ export function createTestPlatform(
       wordRaceGame,
       dotsAndBoxesGame,
       mathRushGame,
+      battle2048Game,
+      mazeRaceGame,
+      wordScrambleGame,
+      shapeMatchGame,
     ]) {
       platform.registry.register(game);
     }

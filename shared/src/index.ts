@@ -6,3 +6,4 @@ export * from './socket-events/event-names';
 export * from './schemas';
 export * from './utils';
 export * from './games/metadata';
+export * from './games/shapes';

@@ -5,6 +5,10 @@ import { memoryMatchClient } from '../memory-match';
 import { wordRaceClient } from '../word-race';
 import { dotsAndBoxesClient } from '../dots-and-boxes';
 import { mathRushClient } from '../math-rush';
+import { battle2048Client } from '../2048-battle';
+import { mazeRaceClient } from '../maze-race-2d';
+import { wordScrambleClient } from '../word-scramble-battle';
+import { shapeMatchClient } from '../shape-match-battle';
 
 /**
  * Client game registry.
@@ -18,6 +22,10 @@ const modules: ClientGameModule[] = [
   wordRaceClient,
   dotsAndBoxesClient,
   mathRushClient,
+  battle2048Client,
+  mazeRaceClient,
+  wordScrambleClient,
+  shapeMatchClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

@@ -124,11 +124,15 @@ describe('room lifecycle over sockets', () => {
       games: Array<{ id: string }>;
     };
     expect(games.games.map((game: { id: string }) => game.id).sort()).toEqual([
+      '2048-battle',
       'dots-and-boxes',
       'math-rush',
+      'maze-race-2d',
       'memory-match',
       'reaction-race',
+      'shape-match-battle',
       'word-race',
+      'word-scramble-battle',
     ]);
   });
 });

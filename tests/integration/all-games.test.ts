@@ -279,6 +279,54 @@ const CASES: GameCase[] = [
       typeof state.round === 'number',
     action: { type: 'move', payload: { direction: 'right' } },
   },
+  {
+    id: 'echo-maze',
+    expect: (state) =>
+      Array.isArray(state.tiles) &&
+      Boolean(state.runners) &&
+      Boolean(state.goal) &&
+      typeof state.round === 'number',
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'fake-door-battle',
+    settings: { rounds: 3 },
+    expect: (state) =>
+      Array.isArray(state.doors) &&
+      (state.doors as unknown[]).length === 4 &&
+      typeof state.clue === 'string' &&
+      state.correctDoorId === null,
+    action: { type: 'pick', payload: { doorId: 'door-0' } },
+  },
+  {
+    id: 'moving-island',
+    expect: (state) =>
+      Array.isArray(state.platforms) &&
+      Boolean(state.players) &&
+      typeof state.width === 'number' &&
+      typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { dx: 1, dy: 0 } },
+  },
+  {
+    id: 'magnet-thief',
+    expect: (state) =>
+      Array.isArray(state.gems) &&
+      Boolean(state.players) &&
+      typeof state.range === 'number' &&
+      typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { dx: 1, dy: 0 } },
+  },
+  {
+    id: 'invisible-path',
+    settings: { rounds: 2 },
+    expect: (state) =>
+      Array.isArray(state.safe) &&
+      Boolean(state.players) &&
+      Boolean(state.start) &&
+      Boolean(state.goal) &&
+      typeof state.round === 'number',
+    action: { type: 'move', payload: { x: 1, y: 3 } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

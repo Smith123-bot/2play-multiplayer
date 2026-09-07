@@ -288,6 +288,11 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 🧲 Magnet Maze | reflex | 2–4 | yes | Seeded maze, polarity, server-verified finish |
 | 🛒 Shop Rush Battle | strategy | 2–4 | yes | Private lists, limited inventory, server checkout |
 | 🌑 Shadow Copy Battle | strategy | 2–4 | yes | Server-recorded paths replay as Shadow Copies; plates open gates |
+| 🌀 Echo Maze | memory | 2–4 | yes | Preview then fog; echo trail; server-owned walls and finish |
+| 🚪 Fake Door Battle | memory | 2–4 | yes | Learnable clues, server-owned safe door |
+| 🏝️ Moving Island | reflex | 2–4 | yes | Sliding / blinking / spinning platforms, checkpoint respawns |
+| 🧲 Magnet Thief | strategy | 2–4 | yes | Server magnet range, cooldown, steal and ownership |
+| ✨ Invisible Path | memory | 2–4 | yes | Preview then hide; wrong-tile stun; server-owned safe set |
 
 Every game is server-authoritative: clients send *intents*, the server decides
 legality, scores, winners and timers.

@@ -969,3 +969,159 @@ export const SHADOW_COPY_METADATA = {
   gridOptions: ['twin-plates', 'shadow-vault', 'relay-gate', 'split-loops', 'hazard-run'],
   version: '1.0.0',
 } satisfies GameMetadata;
+
+
+export const ECHO_MAZE_METADATA = {
+  id: 'echo-maze',
+  name: 'Echo Maze',
+  description:
+    'Memorise the maze in a short preview, then race through fog. Your echo trail shows where you have already walked.',
+  category: 'memory' as const,
+  icon: '🌀',
+  thumbnail: '🌀',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'medium' as const,
+  controls: 'WASD / arrows / swipe / D-pad. Walls stay real even when the fog hides them.',
+  rules: [
+    'A short preview shows the full maze. Then selected walls vanish into fog.',
+    'Move one cell at a time. Hidden walls still block you — the server owns collisions.',
+    'Checkpoints score extra. Your echo trail is the last few validated steps.',
+    'Reach the exit first (or with the highest score) before the clock ends.',
+  ],
+  scoring: 'Finish +100, checkpoint +50, leftover time bonus. Highest total wins.',
+  winCondition: 'Hold the highest score when every runner finishes or the clock ends.',
+  tags: ['memory', 'maze', 'race', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 2,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const FAKE_DOOR_METADATA = {
+  id: 'fake-door-battle',
+  name: 'Fake Door Battle',
+  description:
+    'Four doors, one safe route. Read the clue, remember last round, and skip the fakes — the server owns the answer.',
+  category: 'memory' as const,
+  icon: '🚪',
+  thumbnail: '🚪',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 140,
+  difficulty: 'medium' as const,
+  controls: 'Tap a door (or keys 1–4). Clues are colour, symbol, number, position or memory.',
+  rules: [
+    'Each round shows four doors and one learnable clue. Exactly one door is safe.',
+    'A correct pick advances you. A fake door costs time and scores nothing.',
+    'Clues are never random: colour match, unique symbol, even number, far-right, or last-round memory.',
+    'The correct door never leaves the server until the reveal.',
+  ],
+  scoring: 'Correct door +100 plus a speed bonus. Highest total after five rounds wins.',
+  winCondition: 'Score the most points across five rounds.',
+  tags: ['memory', 'puzzle', 'party', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 5,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const MOVING_ISLAND_METADATA = {
+  id: 'moving-island',
+  name: 'Moving Island',
+  description:
+    'Hop across 2D platforms that slide, blink and spin. Grab checkpoints before the islands drift away.',
+  category: 'reflex' as const,
+  icon: '🏝️',
+  thumbnail: '🏝️',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'medium' as const,
+  controls: 'WASD / arrows / swipe / D-pad to step onto a neighbouring platform cell.',
+  rules: [
+    'Platforms slide, blink or rotate on the server clock. Falling respawns you at your last checkpoint.',
+    'Stand on a checkpoint to lock it. Coins on islands score extra.',
+    'Reach the flag cell to finish. Nobody is eliminated for falling.',
+    'The server moves every platform and validates every step.',
+  ],
+  scoring: 'Coin +10, checkpoint +25, finish +100. Highest total when the clock ends wins.',
+  winCondition: 'Hold the highest score when time expires (finishers rank first on a tie).',
+  tags: ['reflex', 'platformer', 'arcade', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const MAGNET_THIEF_METADATA = {
+  id: 'magnet-thief',
+  name: 'Magnet Thief',
+  description:
+    'Vacuum coins with a directional magnet, then steal a rival gem if you are in range. Ownership is server-side.',
+  category: 'strategy' as const,
+  icon: '🧲',
+  thumbnail: '💎',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 140,
+  difficulty: 'medium' as const,
+  controls: 'Move with WASD / arrows / D-pad. Magnet with Q/E or the magnet buttons (direction + activate).',
+  rules: [
+    'Step onto a coin to collect it. The server grants the points.',
+    'Activate your magnet in a direction to pull nearby coins one cell toward you (cooldown applies).',
+    'A carried gem can be stolen if you magnetise within range and the owner is not in a safe corner.',
+    'Magnetic zones double range. Clients cannot assign themselves an object.',
+  ],
+  scoring: 'Coin +10, gem +50 (held at the buzzer). Highest valid total wins.',
+  winCondition: 'Hold the highest score when the arena clock ends.',
+  tags: ['strategy', 'collection', 'arcade', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const INVISIBLE_PATH_METADATA = {
+  id: 'invisible-path',
+  name: 'Invisible Path',
+  description:
+    'Memorise the glowing path, then cross the grid after it vanishes. Wrong tiles bounce you back.',
+  category: 'memory' as const,
+  icon: '✨',
+  thumbnail: '✨',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 140,
+  difficulty: 'medium' as const,
+  controls: 'WASD / arrows / swipe / D-pad. Only the server knows which tiles stay safe.',
+  rules: [
+    'A short preview shows the safe path (and a few decoy tiles). Then everything hides.',
+    'Step onto a safe tile to continue. A wrong tile stuns you and returns you to your last safe cell.',
+    'Checkpoints along the path score extra. Reach the finish cell to bank the round.',
+    'Paths grow longer each round. The safe set never leaves the server during play.',
+  ],
+  scoring: 'Safe step +5, checkpoint +30, finish +80, wrong tile −10. Highest total wins.',
+  winCondition: 'Hold the highest score after three rounds.',
+  tags: ['memory', 'puzzle', 'race', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 3,
+  version: '1.0.0',
+} satisfies GameMetadata;

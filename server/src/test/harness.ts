@@ -46,6 +46,11 @@ import { trafficControlGame } from '../games/traffic-control-battle';
 import { magnetMazeGame } from '../games/magnet-maze';
 import { shopRushGame } from '../games/shop-rush-battle';
 import { shadowCopyGame } from '../games/shadow-copy-battle';
+import { echoMazeGame } from '../games/echo-maze';
+import { fakeDoorGame } from '../games/fake-door-battle';
+import { movingIslandGame } from '../games/moving-island';
+import { magnetThiefGame } from '../games/magnet-thief';
+import { invisiblePathGame } from '../games/invisible-path';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -180,6 +185,11 @@ export function createTestPlatform(
       magnetMazeGame,
       shopRushGame,
       shadowCopyGame,
+      echoMazeGame,
+      fakeDoorGame,
+      movingIslandGame,
+      magnetThiefGame,
+      invisiblePathGame,
     ]) {
       platform.registry.register(game);
     }

@@ -29,6 +29,11 @@ import { trafficControlGame } from '../games/traffic-control-battle';
 import { magnetMazeGame } from '../games/magnet-maze';
 import { shopRushGame } from '../games/shop-rush-battle';
 import { shadowCopyGame } from '../games/shadow-copy-battle';
+import { echoMazeGame } from '../games/echo-maze';
+import { fakeDoorGame } from '../games/fake-door-battle';
+import { movingIslandGame } from '../games/moving-island';
+import { magnetThiefGame } from '../games/magnet-thief';
+import { invisiblePathGame } from '../games/invisible-path';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -75,6 +80,11 @@ export class GameLoader {
       magnetMazeGame,
       shopRushGame,
       shadowCopyGame,
+      echoMazeGame,
+      fakeDoorGame,
+      movingIslandGame,
+      magnetThiefGame,
+      invisiblePathGame,
     ];
 
     for (const game of games) {

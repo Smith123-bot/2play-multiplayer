@@ -30,6 +30,11 @@ import { trafficControlClient } from '../traffic-control-battle';
 import { magnetMazeClient } from '../magnet-maze';
 import { shopRushClient } from '../shop-rush-battle';
 import { shadowCopyClient } from '../shadow-copy-battle';
+import { echoMazeClient } from '../echo-maze';
+import { fakeDoorClient } from '../fake-door-battle';
+import { movingIslandClient } from '../moving-island';
+import { magnetThiefClient } from '../magnet-thief';
+import { invisiblePathClient } from '../invisible-path';
 
 /**
  * Client game registry.
@@ -68,6 +73,11 @@ const modules: ClientGameModule[] = [
   magnetMazeClient,
   shopRushClient,
   shadowCopyClient,
+  echoMazeClient,
+  fakeDoorClient,
+  movingIslandClient,
+  magnetThiefClient,
+  invisiblePathClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

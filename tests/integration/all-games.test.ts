@@ -237,6 +237,38 @@ const CASES: GameCase[] = [
       typeof state.endsAt === 'number',
     action: { type: 'move', payload: { direction: 'right' } },
   },
+  {
+    id: 'castle-siege-2d',
+    expect: (state) =>
+      Boolean(state.commanders) &&
+      Array.isArray(state.nodes) &&
+      typeof state.cols === 'number' &&
+      typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { direction: 'down' } },
+  },
+  {
+    id: 'traffic-control-battle',
+    expect: (state) => Boolean(state.zones) && typeof state.stepMs === 'number' && typeof state.endsAt === 'number',
+    action: { type: 'switch' },
+  },
+  {
+    id: 'magnet-maze',
+    expect: (state) =>
+      Array.isArray(state.tiles) &&
+      Boolean(state.runners) &&
+      Boolean(state.finishCell) &&
+      typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'shop-rush-battle',
+    expect: (state) =>
+      Array.isArray(state.shelves) &&
+      Boolean(state.shoppers) &&
+      Boolean(state.till) &&
+      typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { direction: 'up' } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

@@ -25,6 +25,10 @@ import { territoryRushClient } from '../territory-rush';
 import { hexaConquestClient } from '../hexa-conquest';
 import { colorTrailsClient } from '../color-trails';
 import { coinHuntersClient } from '../coin-hunters-arena';
+import { castleSiegeClient } from '../castle-siege-2d';
+import { trafficControlClient } from '../traffic-control-battle';
+import { magnetMazeClient } from '../magnet-maze';
+import { shopRushClient } from '../shop-rush-battle';
 
 /**
  * Client game registry.
@@ -58,6 +62,10 @@ const modules: ClientGameModule[] = [
   hexaConquestClient,
   colorTrailsClient,
   coinHuntersClient,
+  castleSiegeClient,
+  trafficControlClient,
+  magnetMazeClient,
+  shopRushClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

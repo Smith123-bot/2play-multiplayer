@@ -812,3 +812,126 @@ export const COIN_HUNTERS_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
+
+
+export const CASTLE_SIEGE_METADATA = {
+  id: 'castle-siege-2d',
+  name: 'Castle Siege 2D',
+  description:
+    'Defend your keep, raise walls and towers, capture the midfield and bombard rival castles. Energy, damage and captures are all server owned.',
+  category: 'strategy' as const,
+  icon: '🏰',
+  thumbnail: '🏰',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 180,
+  difficulty: 'medium' as const,
+  controls: 'Move with WASD / arrows / D-pad. Build, upgrade, fire and capture with the action buttons.',
+  rules: [
+    'Each player owns a castle with 100 hit points and a commander on the 2D field.',
+    'Energy regenerates on the server clock. Spend it to build walls, upgrade towers or fire.',
+    'Towers auto-fire at nearby commanders. Walls block movement and shots.',
+    'Stand on a capture node to earn hold points. Destroy every rival castle, or lead when the clock ends.',
+    'The server validates range, cooldowns, cost, damage and captures — clients never set HP.',
+  ],
+  scoring: 'Damage dealt + capture holds + remaining castle HP. Last castle standing wins outright.',
+  winCondition: 'Destroy every other castle, or hold the highest score when time expires.',
+  tags: ['strategy', 'defense', 'arcade', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const TRAFFIC_CONTROL_METADATA = {
+  id: 'traffic-control-battle',
+  name: 'Traffic Control Battle',
+  description:
+    'Run your own intersection. Flip the lights, clear waves of cars and avoid jams — the server drives every vehicle.',
+  category: 'reflex' as const,
+  icon: '🚦',
+  thumbnail: '🚦',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'medium' as const,
+  controls: 'Tap Switch lights (or press Space / L) to flip north-south vs east-west green.',
+  rules: [
+    'Each player has a private crossroads. Cars spawn from four approaches.',
+    'Only one axis can be green. Cars wait on red and drive on green.',
+    'A car that exits scores. A jam (queue too long) is a penalty. Collisions in the box cost more.',
+    'Waves get faster as the match goes on. Highest valid score when the timer ends wins.',
+    'The server spawns, moves and scores every car. Clients only send light intents.',
+  ],
+  scoring: '+10 per cleared car, −15 per jam, −25 per collision. Equal scores are a draw.',
+  winCondition: 'Hold the highest score when the clock ends.',
+  tags: ['reflex', 'strategy', 'arcade', '2-4 players'],
+  featured: false,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const MAGNET_MAZE_METADATA = {
+  id: 'magnet-maze',
+  name: 'Magnet Maze',
+  description:
+    'A top-down 2D maze race with magnetic currents. Flip your polarity, ride or fight the pull, collect crystals and reach the finish.',
+  category: 'reflex' as const,
+  icon: '🧲',
+  thumbnail: '🧲',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'medium' as const,
+  controls: 'WASD / arrows / swipe / D-pad to step. Flip polarity with F or the polarity button.',
+  rules: [
+    'Everyone races the same seeded 2D maze. Walls are real — only the server moves you.',
+    'Magnet tiles pull you with your polarity, or push you if you flip it.',
+    'Collect crystals for points. Spikes freeze you briefly. The finish cell must be occupied on the server.',
+    'You cannot declare a finish yourself. First verified arrival ranks 1; timeout ranks by crystals then distance.',
+  ],
+  scoring: 'Crystals + finish bonus. Faster verified finishers rank higher.',
+  winCondition: 'Reach the finish first (or lead crystals/distance if nobody finishes).',
+  tags: ['reflex', 'puzzle', 'maze', '2-4 players'],
+  featured: false,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const SHOP_RUSH_METADATA = {
+  id: 'shop-rush-battle',
+  name: 'Shop Rush Battle',
+  description:
+    'Race the aisles with a private shopping list. Grab the right items, dump bonus candy and check out before the clock.',
+  category: 'strategy' as const,
+  icon: '🛒',
+  thumbnail: '🛒',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'easy' as const,
+  controls: 'Move with WASD / arrows / swipe / D-pad. Pick up on a shelf, check out on the till.',
+  rules: [
+    'Each shopper gets a private 3-item list. Inventory holds at most 3 items.',
+    'Stand on a shelf and pick to collect. Only the server grants the item.',
+    'Bonus candy is never on the list but pays extra at checkout.',
+    'Checkout scores matching list items and candy, then deals a fresh list. Wrong items stay in the basket.',
+    'Highest checkout score when time ends wins. Lists of other players never leave the server.',
+  ],
+  scoring: '+40 per listed item, +25 candy, +50 list-complete bonus.',
+  winCondition: 'Hold the highest checkout score when the shop closes.',
+  tags: ['strategy', 'collection', 'arcade', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;

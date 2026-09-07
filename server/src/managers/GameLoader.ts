@@ -24,6 +24,10 @@ import { territoryRushGame } from '../games/territory-rush';
 import { hexaConquestGame } from '../games/hexa-conquest';
 import { colorTrailsGame } from '../games/color-trails';
 import { coinHuntersGame } from '../games/coin-hunters-arena';
+import { castleSiegeGame } from '../games/castle-siege-2d';
+import { trafficControlGame } from '../games/traffic-control-battle';
+import { magnetMazeGame } from '../games/magnet-maze';
+import { shopRushGame } from '../games/shop-rush-battle';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -65,6 +69,10 @@ export class GameLoader {
       hexaConquestGame,
       colorTrailsGame,
       coinHuntersGame,
+      castleSiegeGame,
+      trafficControlGame,
+      magnetMazeGame,
+      shopRushGame,
     ];
 
     for (const game of games) {

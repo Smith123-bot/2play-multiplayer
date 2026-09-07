@@ -283,6 +283,10 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | ⬡ Hexa Conquest | strategy | 2–4 | yes | Turn-based hex expansion, Bridge special |
 | 🌀 Color Trails | reflex | 2–4 | yes | Fading trails, colour combos, zone bonuses |
 | 🪙 Coin Hunters Arena | reflex | 2–4 | yes | Server-spawned coins, multipliers, bonus zone |
+| 🏰 Castle Siege 2D | strategy | 2–4 | yes | Castle HP, energy, defenses, capture nodes |
+| 🚦 Traffic Control Battle | reflex | 2–4 | yes | Server-driven cars, lights, jam penalties |
+| 🧲 Magnet Maze | reflex | 2–4 | yes | Seeded maze, polarity, server-verified finish |
+| 🛒 Shop Rush Battle | strategy | 2–4 | yes | Private lists, limited inventory, server checkout |
 
 Every game is server-authoritative: clients send *intents*, the server decides
 legality, scores, winners and timers.

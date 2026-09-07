@@ -41,6 +41,10 @@ import { territoryRushGame } from '../games/territory-rush';
 import { hexaConquestGame } from '../games/hexa-conquest';
 import { colorTrailsGame } from '../games/color-trails';
 import { coinHuntersGame } from '../games/coin-hunters-arena';
+import { castleSiegeGame } from '../games/castle-siege-2d';
+import { trafficControlGame } from '../games/traffic-control-battle';
+import { magnetMazeGame } from '../games/magnet-maze';
+import { shopRushGame } from '../games/shop-rush-battle';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -170,6 +174,10 @@ export function createTestPlatform(
       hexaConquestGame,
       colorTrailsGame,
       coinHuntersGame,
+      castleSiegeGame,
+      trafficControlGame,
+      magnetMazeGame,
+      shopRushGame,
     ]) {
       platform.registry.register(game);
     }

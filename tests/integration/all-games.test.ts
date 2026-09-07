@@ -54,6 +54,109 @@ const CASES: GameCase[] = [
     expect: (state) => Boolean(state.phase) && typeof state.totalQuestions === 'number',
     action: { type: 'answer', payload: { questionId: 'stale', value: 1 } },
   },
+  {
+    id: '2048-battle',
+    expect: (state) =>
+      Boolean(state.phase) &&
+      Object.values(state.boards as Record<string, { tiles: unknown[] } | null>).every(
+        (board) => Array.isArray(board?.tiles) && board!.tiles.length === 16,
+      ) &&
+      typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { direction: 'left' } },
+  },
+  {
+    id: 'maze-race-2d',
+    settings: { gridSize: '11x11' },
+    expect: (state) =>
+      Array.isArray(state.walls) && state.walls.length === 121 && Boolean(state.goal),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'word-scramble-battle',
+    settings: { rounds: 1 },
+    expect: (state) =>
+      typeof state.scrambled === 'string' && state.scrambled.length > 0 && state.answer === null,
+    action: { type: 'submit', payload: { answer: 'ZZZZZZ' } },
+  },
+  {
+    id: 'shape-match-battle',
+    settings: { rounds: 3 },
+    expect: (state) =>
+      Boolean(state.target) && Array.isArray(state.options) && state.options.length === 4,
+    action: { type: 'select', payload: { optionId: 'shape-0' } },
+  },
+  {
+    id: 'snake-battle',
+    expect: (state) =>
+      Array.isArray(state.foods) &&
+      Boolean(state.snakes) &&
+      typeof state.stepMs === 'number' &&
+      typeof state.endsAt === 'number',
+    action: { type: 'turn', payload: { direction: 'up' } },
+  },
+  {
+    id: 'traffic-dodge-race',
+    expect: (state) =>
+      typeof state.lanes === 'number' &&
+      typeof state.trackLength === 'number' &&
+      Array.isArray(state.traffic) &&
+      Boolean(state.racers),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'target-rush',
+    settings: { rounds: 3 },
+    expect: (state) =>
+      typeof state.totalRounds === 'number' && Array.isArray(state.targets) && Boolean(state.scores),
+    action: { type: 'hit', payload: { targetId: 'target-0' } },
+  },
+  {
+    id: 'capture-the-flag-2d',
+    expect: (state) =>
+      Array.isArray(state.walls) &&
+      state.walls.length === 225 &&
+      Boolean(state.bases) &&
+      Boolean(state.flags) &&
+      Boolean(state.scores),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'paddle-duel',
+    expect: (state) =>
+      Boolean(state.paddles) &&
+      Boolean(state.ball) &&
+      typeof state.scoreLimit === 'number' &&
+      typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { direction: 'up' } },
+  },
+  {
+    id: 'brick-breaker-battle',
+    expect: (state) =>
+      typeof state.width === 'number' &&
+      Boolean(state.arenas) &&
+      Object.values(state.arenas as Record<string, { bricks: unknown[] } | null>).every(
+        (arena) => Array.isArray(arena?.bricks) && arena!.bricks.length === 28,
+      ),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'pattern-memory-battle',
+    expect: (state) =>
+      typeof state.totalRounds === 'number' &&
+      typeof state.patternLength === 'number' &&
+      Boolean(state.players) &&
+      typeof state.round === 'number',
+    action: { type: 'tap', payload: { tile: 0 } },
+  },
+  {
+    id: 'bomb-pass-2d',
+    expect: (state) =>
+      typeof state.totalRounds === 'number' &&
+      typeof state.fuseMs === 'number' &&
+      Boolean(state.players) &&
+      typeof state.round === 'number',
+    action: { type: 'pass', payload: { targetId: 'nobody' } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */
@@ -77,8 +180,15 @@ function firstLegalMove(
   return null;
 }
 
+let soloCounter = 0;
+
 async function playWithAI(game: GameCase): Promise<{ client: TestClient; room: RoomState }> {
-  const client = await createClient(server.url, `Solo${game.id.replace(/-/g, '')}`);
+  // Nicknames are capped at 20 characters — keep the derived name short & unique.
+  soloCounter += 1;
+  const client = await createClient(
+    server.url,
+    `Solo${soloCounter}${game.id.replace(/-/g, '').slice(0, 10)}`,
+  );
   const created = await emitAck<{ room: RoomState }>(client.socket, 'room:create', {
     gameId: game.id,
     maxPlayers: 2,
@@ -210,4 +320,82 @@ describe('every shipped game is playable', () => {
       guest.close();
     }
   }, 200_000);
+
+  it('plays a full Word Scramble Battle match, then rematches into a new match', async () => {
+    const host = await createClient(server.url, 'ScrambleHost');
+    const guest = await createClient(server.url, 'ScrambleGuest');
+
+    try {
+      const created = await emitAck<{ room: RoomState }>(host.socket, 'room:create', {
+        gameId: 'word-scramble-battle',
+        maxPlayers: 2,
+        isPrivate: false,
+        settings: { rounds: 1 },
+      });
+      expect(created.ok).toBe(true);
+      const roomId = created.data!.room.id;
+
+      await emitAck(guest.socket, 'room:join', { roomId });
+      await emitAck(host.socket, 'lobby:ready', { isReady: true });
+      await emitAck(guest.socket, 'lobby:ready', { isReady: true });
+      await emitAck(host.socket, 'game:start', {});
+      await once(host.socket, 'game:started', 25_000);
+
+      // The scrambled word is public; the answer never is.
+      const playing = await waitForRoom(host.socket, (current) => current.status === 'PLAYING', 25_000);
+      const scrambleState = playing.gameState as { scrambled: string; answer: string | null };
+      expect(scrambleState.scrambled).toMatch(/^[A-Z]+$/);
+      expect(scrambleState.answer).toBeNull();
+
+      // Both players submit one well-formed answer through the pipeline.
+      for (const client of [host, guest]) {
+        const response = await emitAck(client.socket, 'game:action', {
+          action: { type: 'submit', payload: { answer: 'GUESS' } },
+        });
+        expect(typeof response.ok).toBe('boolean');
+      }
+
+      // Round 1 of 1 ends (early once both solved, else via its timer) → result.
+      const resultRoom = await waitForRoom(
+        host.socket,
+        (current) => current.status === 'RESULT' || current.status === 'REMATCH_WAITING',
+        60_000,
+      );
+      expect(resultRoom.gameResult?.rankings).toHaveLength(2);
+      expect(resultRoom.gameResult?.gameId).toBe('word-scramble-battle');
+      expect(resultRoom.chat.length).toBeGreaterThan(0); // chat survives the finish
+      expect(host.socket.connected).toBe(true);
+      expect(guest.socket.connected).toBe(true);
+
+      // Both humans vote → rematch → new countdown → fresh match #2.
+      // (Listeners are registered BEFORE voting — rematch:started can fire
+      // while the vote acknowledgement is still in flight.)
+      const rematchStarted = once(host.socket, 'rematch:started', 15_000);
+      const secondStart = once(host.socket, 'game:started', 25_000);
+
+      const hostVote = await emitAck(host.socket, 'rematch:request', {});
+      expect(hostVote.ok).toBe(true);
+      const guestVote = await emitAck(guest.socket, 'rematch:request', {});
+      expect(guestVote.ok).toBe(true);
+
+      await rematchStarted;
+      await secondStart;
+      const rematch = await waitForRoom(
+        host.socket,
+        (current) => current.status === 'PLAYING' && current.matchNumber === 2,
+        25_000,
+      );
+      expect(rematch.matchNumber).toBe(2);
+      expect(rematch.id).toBe(roomId);
+      expect(rematch.players).toHaveLength(2);
+      expect(rematch.players.every((player) => player.isConnected)).toBe(true);
+
+      const secondScramble = rematch.gameState as { scrambled: string; answer: string | null };
+      expect(secondScramble.scrambled).toMatch(/^[A-Z]+$/);
+      expect(secondScramble.answer).toBeNull();
+    } finally {
+      host.close();
+      guest.close();
+    }
+  }, 150_000);
 });

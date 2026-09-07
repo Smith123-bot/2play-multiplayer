@@ -21,6 +21,10 @@ import { drawGuessClient } from '../draw-guess-battle';
 import { secretRoleClient } from '../secret-role';
 import { platformDashClient } from '../platform-dash-2d';
 import { colorClashClient } from '../color-clash';
+import { territoryRushClient } from '../territory-rush';
+import { hexaConquestClient } from '../hexa-conquest';
+import { colorTrailsClient } from '../color-trails';
+import { coinHuntersClient } from '../coin-hunters-arena';
 
 /**
  * Client game registry.
@@ -50,6 +54,10 @@ const modules: ClientGameModule[] = [
   secretRoleClient,
   platformDashClient,
   colorClashClient,
+  territoryRushClient,
+  hexaConquestClient,
+  colorTrailsClient,
+  coinHuntersClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

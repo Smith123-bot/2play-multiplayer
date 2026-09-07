@@ -688,3 +688,127 @@ export const COLOR_CLASH_METADATA = {
   defaultRounds: 12,
   version: '1.0.0',
 } satisfies GameMetadata;
+
+
+export const TERRITORY_RUSH_METADATA = {
+  id: 'territory-rush',
+  name: 'Territory Rush',
+  description:
+    'Claim the map. Leave your home, loop a trail and close it to paint the enclosed cells. Cut a rival trail to send them home. Largest territory when the clock ends wins.',
+  category: 'reflex' as const,
+  icon: '🗺️',
+  thumbnail: '🗺️',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 180,
+  difficulty: 'medium' as const,
+  controls: 'Steer with WASD / arrows, swipe or the D-pad. The server moves everyone on its clock.',
+  rules: [
+    'Everyone starts with a small home territory. You are safe on your own colour.',
+    'Leaving home lays a trail. Close a loop back to your land to capture the enclosed cells.',
+    'Your trail is vulnerable: a rival stepping on it sends you home. Hitting your own trail does the same.',
+    'You cannot leave the map. Homes cannot be stolen.',
+    'When the clock ends, the largest territory wins.',
+  ],
+  scoring: '1 point per owned cell. Ties broken by successful captures, then fewer deaths.',
+  winCondition: 'Own the most cells when the timer ends.',
+  tags: ['reflex', 'territory', 'arcade', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const HEXA_CONQUEST_METADATA = {
+  id: 'hexa-conquest',
+  name: 'Hexa Conquest',
+  description:
+    'Expand across a hex map one adjacent tile at a time. Bonus tiles score extra, energy tiles fuel a Bridge special, and blocked tiles stay empty. Most territory when the board or clock ends wins.',
+  category: 'strategy' as const,
+  icon: '⬡',
+  thumbnail: '⬡',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 240,
+  difficulty: 'medium' as const,
+  controls: 'Tap an adjacent hex on your turn. Use Bridge to claim one non-adjacent tile.',
+  rules: [
+    'Players take timed turns. Capture a hex adjacent to your territory.',
+    'Normal tiles score 1, bonus tiles score 2, energy tiles grant a Bridge charge.',
+    'Blocked tiles cannot be captured. Starting hexes cannot be stolen.',
+    'Bridge (limited) claims one unowned hex that is not adjacent.',
+    'If the turn timer expires the turn passes. Highest score when the board fills or the match clock ends wins.',
+  ],
+  scoring: 'Tile value: normal 1, bonus 2, energy 1. Highest total wins.',
+  winCondition: 'Hold the highest territory score when the match ends.',
+  tags: ['strategy', 'hex', 'turn-based', '2-4 players'],
+  featured: false,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const COLOR_TRAILS_METADATA = {
+  id: 'color-trails',
+  name: 'Color Trails',
+  description:
+    'A fast arcade dash: leave a fading coloured trail, scoop matching pickups, hit matching zones for combos, and avoid rival trails.',
+  category: 'reflex' as const,
+  icon: '🌀',
+  thumbnail: '🌀',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'easy' as const,
+  controls: 'Steer with WASD / arrows, swipe or the D-pad. Trails fade on the server clock.',
+  rules: [
+    'You always leave a short fading trail. Trails are not permanent territory.',
+    'Pick up a colour token: +10 and your combo colour updates.',
+    'Ride into a matching colour zone for +25 times your combo.',
+    'Clipping an opponent trail costs points, resets combo and briefly freezes you.',
+    'Highest score when the timer ends wins.',
+  ],
+  scoring: 'Pickup +10, matching zone +25 × combo. Trail hits −10.',
+  winCondition: 'Score the most points before the clock ends.',
+  tags: ['reflex', 'arcade', 'colour', '2-4 players'],
+  featured: false,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const COIN_HUNTERS_METADATA = {
+  id: 'coin-hunters-arena',
+  name: 'Coin Hunters Arena',
+  description:
+    'Dash around a shared arena vacuuming coins. Gold and rare coins pay more, multipliers and bonus zones juice the haul, and a roaming blocker keeps you honest.',
+  category: 'reflex' as const,
+  icon: '🪙',
+  thumbnail: '🪙',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'easy' as const,
+  controls: 'Move with WASD / arrows, swipe or the D-pad. Collection is confirmed by the server.',
+  rules: [
+    'The server spawns coins: normal +10, gold +25, rare +50, multiplier 2× for a few seconds.',
+    'Stand on a coin (or send collect) — distance and identity are checked server-side.',
+    'A 2× bonus zone doubles collections while you stand in it. Slow tiles double your step time.',
+    'A moving blocker occupies a cell; walking into it bounces you back.',
+    'Duplicate collects award nothing. Highest score when the timer ends wins.',
+  ],
+  scoring: 'Coin value × active multiplier (personal 2× and/or bonus zone 2×).',
+  winCondition: 'Hold the highest score when the arena clock ends.',
+  tags: ['reflex', 'arcade', 'collection', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;

@@ -20,6 +20,10 @@ import { drawGuessGame } from '../games/draw-guess-battle';
 import { secretRoleGame } from '../games/secret-role';
 import { platformDashGame } from '../games/platform-dash-2d';
 import { colorClashGame } from '../games/color-clash';
+import { territoryRushGame } from '../games/territory-rush';
+import { hexaConquestGame } from '../games/hexa-conquest';
+import { colorTrailsGame } from '../games/color-trails';
+import { coinHuntersGame } from '../games/coin-hunters-arena';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -57,6 +61,10 @@ export class GameLoader {
       secretRoleGame,
       platformDashGame,
       colorClashGame,
+      territoryRushGame,
+      hexaConquestGame,
+      colorTrailsGame,
+      coinHuntersGame,
     ];
 
     for (const game of games) {

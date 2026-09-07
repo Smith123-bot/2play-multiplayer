@@ -37,6 +37,10 @@ import { drawGuessGame } from '../games/draw-guess-battle';
 import { secretRoleGame } from '../games/secret-role';
 import { platformDashGame } from '../games/platform-dash-2d';
 import { colorClashGame } from '../games/color-clash';
+import { territoryRushGame } from '../games/territory-rush';
+import { hexaConquestGame } from '../games/hexa-conquest';
+import { colorTrailsGame } from '../games/color-trails';
+import { coinHuntersGame } from '../games/coin-hunters-arena';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -162,6 +166,10 @@ export function createTestPlatform(
       secretRoleGame,
       platformDashGame,
       colorClashGame,
+      territoryRushGame,
+      hexaConquestGame,
+      colorTrailsGame,
+      coinHuntersGame,
     ]) {
       platform.registry.register(game);
     }

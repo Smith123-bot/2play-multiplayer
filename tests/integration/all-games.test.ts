@@ -200,6 +200,43 @@ const CASES: GameCase[] = [
       state.correctOptionId === null,
     action: { type: 'pick', payload: { optionId: 'opt-0' } },
   },
+  {
+    id: 'territory-rush',
+    expect: (state) =>
+      typeof state.cols === 'number' &&
+      typeof state.rows === 'number' &&
+      typeof state.grid === 'string' &&
+      Boolean(state.runners) &&
+      typeof state.endsAt === 'number',
+    action: { type: 'turn', payload: { direction: 'down' } },
+  },
+  {
+    id: 'hexa-conquest',
+    expect: (state) =>
+      Array.isArray(state.tiles) &&
+      (state.tiles as unknown[]).length === 165 &&
+      Boolean(state.currentPlayerId) &&
+      Boolean(state.scores),
+    action: { type: 'capture', payload: { col: 2, row: 1 } },
+  },
+  {
+    id: 'color-trails',
+    expect: (state) =>
+      Array.isArray(state.tokens) &&
+      Boolean(state.runners) &&
+      typeof state.stepMs === 'number' &&
+      typeof state.endsAt === 'number',
+    action: { type: 'turn', payload: { direction: 'right' } },
+  },
+  {
+    id: 'coin-hunters-arena',
+    expect: (state) =>
+      Array.isArray(state.coins) &&
+      Boolean(state.hunters) &&
+      Boolean(state.bonus) &&
+      typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

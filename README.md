@@ -279,6 +279,10 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 🕵️ Secret Role | strategy | 3–4 | yes | Private roles, no identity leak |
 | 🏃 Platform Dash 2D | reflex | 2–4 | yes | Server-simulated 2D race |
 | 🌈 Color Clash | reflex | 2–4 | yes | Fast colour rounds, labelled buttons |
+| 🗺️ Territory Rush | reflex | 2–4 | yes | Grid capture, flood-fill loops, trail cuts |
+| ⬡ Hexa Conquest | strategy | 2–4 | yes | Turn-based hex expansion, Bridge special |
+| 🌀 Color Trails | reflex | 2–4 | yes | Fading trails, colour combos, zone bonuses |
+| 🪙 Coin Hunters Arena | reflex | 2–4 | yes | Server-spawned coins, multipliers, bonus zone |
 
 Every game is server-authoritative: clients send *intents*, the server decides
 legality, scores, winners and timers.

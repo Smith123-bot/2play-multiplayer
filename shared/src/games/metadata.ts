@@ -935,3 +935,37 @@ export const SHOP_RUSH_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
+
+
+export const SHADOW_COPY_METADATA = {
+  id: 'shadow-copy-battle',
+  name: 'Shadow Copy Battle',
+  description:
+    'Move, collect and flip plates — then your previous path returns as a Shadow Copy. Plan this round so last round’s ghost holds a switch for you.',
+  category: 'strategy' as const,
+  icon: '🌑',
+  thumbnail: '🌑',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'medium' as const,
+  controls: 'WASD / arrows / swipe / D-pad to step one cell. The server records every legal step.',
+  rules: [
+    'Each short round you walk a 2D arena collecting crystals and standing on plates.',
+    'The server stores your validated steps. Next round a Shadow Copy replays them on the same clock.',
+    'Plates stay active while you or your shadow stand on them. Gates open only when every plate is held.',
+    'Gold crystals are yours. Violet crystals can only be collected by a Shadow Copy.',
+    'Shadows skip a blocked step and stay put — they never teleport and clients cannot submit a path.',
+  ],
+  scoring: 'Player crystal +100, shadow crystal +50, exit +75, efficient route +20. Highest total wins.',
+  winCondition: 'Hold the highest score after three rounds.',
+  tags: ['strategy', 'puzzle', 'shadow', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 3,
+  gridOptions: ['twin-plates', 'shadow-vault', 'relay-gate', 'split-loops', 'hazard-run'],
+  version: '1.0.0',
+} satisfies GameMetadata;

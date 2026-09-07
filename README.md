@@ -287,6 +287,7 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 🚦 Traffic Control Battle | reflex | 2–4 | yes | Server-driven cars, lights, jam penalties |
 | 🧲 Magnet Maze | reflex | 2–4 | yes | Seeded maze, polarity, server-verified finish |
 | 🛒 Shop Rush Battle | strategy | 2–4 | yes | Private lists, limited inventory, server checkout |
+| 🌑 Shadow Copy Battle | strategy | 2–4 | yes | Server-recorded paths replay as Shadow Copies; plates open gates |
 
 Every game is server-authoritative: clients send *intents*, the server decides
 legality, scores, winners and timers.

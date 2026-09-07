@@ -45,6 +45,7 @@ import { castleSiegeGame } from '../games/castle-siege-2d';
 import { trafficControlGame } from '../games/traffic-control-battle';
 import { magnetMazeGame } from '../games/magnet-maze';
 import { shopRushGame } from '../games/shop-rush-battle';
+import { shadowCopyGame } from '../games/shadow-copy-battle';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -178,6 +179,7 @@ export function createTestPlatform(
       trafficControlGame,
       magnetMazeGame,
       shopRushGame,
+      shadowCopyGame,
     ]) {
       platform.registry.register(game);
     }

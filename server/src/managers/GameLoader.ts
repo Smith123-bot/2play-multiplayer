@@ -28,6 +28,7 @@ import { castleSiegeGame } from '../games/castle-siege-2d';
 import { trafficControlGame } from '../games/traffic-control-battle';
 import { magnetMazeGame } from '../games/magnet-maze';
 import { shopRushGame } from '../games/shop-rush-battle';
+import { shadowCopyGame } from '../games/shadow-copy-battle';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -73,6 +74,7 @@ export class GameLoader {
       trafficControlGame,
       magnetMazeGame,
       shopRushGame,
+      shadowCopyGame,
     ];
 
     for (const game of games) {

@@ -269,6 +269,16 @@ const CASES: GameCase[] = [
       typeof state.endsAt === 'number',
     action: { type: 'move', payload: { direction: 'up' } },
   },
+  {
+    id: 'shadow-copy-battle',
+    expect: (state) =>
+      Array.isArray(state.tiles) &&
+      Boolean(state.runners) &&
+      Array.isArray(state.shadows) &&
+      typeof state.arenaName === 'string' &&
+      typeof state.round === 'number',
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

@@ -29,6 +29,7 @@ import { castleSiegeClient } from '../castle-siege-2d';
 import { trafficControlClient } from '../traffic-control-battle';
 import { magnetMazeClient } from '../magnet-maze';
 import { shopRushClient } from '../shop-rush-battle';
+import { shadowCopyClient } from '../shadow-copy-battle';
 
 /**
  * Client game registry.
@@ -66,6 +67,7 @@ const modules: ClientGameModule[] = [
   trafficControlClient,
   magnetMazeClient,
   shopRushClient,
+  shadowCopyClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

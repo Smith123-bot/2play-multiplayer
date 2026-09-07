@@ -144,6 +144,7 @@ describe('room lifecycle over sockets', () => {
       'platform-dash-2d',
       'reaction-race',
       'secret-role',
+      'shadow-copy-battle',
       'shape-match-battle',
       'shop-rush-battle',
       'snake-battle',

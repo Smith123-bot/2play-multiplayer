@@ -23,7 +23,11 @@ export function CreateRoomScreen() {
   const loadGames = useGameStore((store) => store.load);
   const { createRoom } = useRoomActions();
 
-  const [gameId, setGameId] = useState(params.get('game') ?? '');
+  const preselectedGameId = params.get('game') ?? '';
+  // A game already chosen upstream (inline card on the Games page) must never
+  // be re-asked for here (spec: no "Choose a game" step after Create Room).
+  const gameLocked = preselectedGameId.length > 0;
+  const [gameId, setGameId] = useState(preselectedGameId);
   const [players, setPlayers] = useState(2);
   const [isPrivate, setIsPrivate] = useState(false);
   const [aiOpponents, setAiOpponents] = useState(0);
@@ -40,8 +44,10 @@ export function CreateRoomScreen() {
   const game = useMemo(() => games.find((entry) => entry.id === gameId), [games, gameId]);
 
   useEffect(() => {
-    if (!gameId && games.length > 0) setGameId(games[0].id);
-  }, [gameId, games]);
+    // Only fall back to the first game when nothing was pre-selected — a
+    // known gameId from the inline card flow must never be overridden.
+    if (!gameLocked && !gameId && games.length > 0) setGameId(games[0].id);
+  }, [gameLocked, gameId, games]);
 
   useEffect(() => {
     if (!game) return;
@@ -87,33 +93,35 @@ export function CreateRoomScreen() {
         </p>
       </header>
 
-      <Card>
-        <CardHeader title="Choose a game" subtitle="Every game supports 2–4 players" />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {games.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              onClick={() => setGameId(entry.id)}
-              aria-pressed={entry.id === gameId}
-              className={cn(
-                'flex items-center gap-3 rounded-xl border p-3 text-left transition',
-                entry.id === gameId
-                  ? 'border-primary-400 bg-primary-500/15'
-                  : 'border-white/10 bg-white/[0.03] hover:bg-white/10',
-              )}
-            >
-              <span className="text-2xl" aria-hidden>
-                {entry.icon}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-white">{entry.name}</span>
-                <span className="block truncate text-xs text-slate-400">{entry.category}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      </Card>
+      {!gameLocked ? (
+        <Card>
+          <CardHeader title="Choose a game" subtitle="Every game supports 2–4 players" />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {games.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => setGameId(entry.id)}
+                aria-pressed={entry.id === gameId}
+                className={cn(
+                  'flex items-center gap-3 rounded-xl border p-3 text-left transition',
+                  entry.id === gameId
+                    ? 'border-primary-400 bg-primary-500/15'
+                    : 'border-white/10 bg-white/[0.03] hover:bg-white/10',
+                )}
+              >
+                <span className="text-2xl" aria-hidden>
+                  {entry.icon}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-white">{entry.name}</span>
+                  <span className="block truncate text-xs text-slate-400">{entry.category}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       {game ? (
         <Card>

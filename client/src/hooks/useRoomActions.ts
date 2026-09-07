@@ -7,6 +7,7 @@ import type {
   CreateRoomPayload,
   JoinRoomPayload,
   KickPlayerPayload,
+  QuickPlayPayload,
   ReadyPayload,
   RemoveAIPayload,
   RoomCreatedPayload,
@@ -42,6 +43,14 @@ export function useRoomActions() {
 
   const createRoom = useCallback(async (payload: CreateRoomPayload) => {
     const response = await socketClient.emitAck<RoomCreatedPayload>(CLIENT_EVENTS.ROOM_CREATE, payload);
+    if (!response.ok || !response.data) return fail(response.error);
+    audioManager.play('roomCreated');
+    hapticsManager.trigger('success');
+    return response.data.room;
+  }, []);
+
+  const quickPlay = useCallback(async (payload: QuickPlayPayload) => {
+    const response = await socketClient.emitAck<RoomCreatedPayload>(CLIENT_EVENTS.ROOM_QUICK_PLAY, payload);
     if (!response.ok || !response.data) return fail(response.error);
     audioManager.play('roomCreated');
     hapticsManager.trigger('success');
@@ -169,6 +178,7 @@ export function useRoomActions() {
   return {
     listRooms,
     createRoom,
+    quickPlay,
     joinRoom,
     leaveRoom,
     kickPlayer,

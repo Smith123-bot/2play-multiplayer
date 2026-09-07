@@ -1,4 +1,4 @@
-import type { GameHistoryEntry, GameResult, GameStatistics, PlayerSummary } from '@2play/shared';
+import type { GameHistoryEntry, GamePopularity, GameResult, GameStatistics, PlayerSummary } from '@2play/shared';
 import type { Platform } from '../core/Platform';
 import type { GameRepositoryStats } from './types';
 import type { Room } from '../rooms/Room';
@@ -22,8 +22,19 @@ export interface StatisticsSummary {
 export class StatisticsManager {
   private readonly logger = createLogger('StatisticsManager');
 
+  /**
+   * Platform-wide "most played" ranking (spec: real usage, never fabricated).
+   *
+   * This is intentionally process-lifetime only — a lightweight, additive
+   * layer on top of the existing per-user persistence rather than a new
+   * database table. It never blocks or replaces `recordMatch`.
+   */
+  private readonly globalPlayCounts = new Map<string, { count: number; players: Set<string>; lastPlayedAt: number }>();
+
   constructor(private readonly platform: Platform) {
     this.platform.eventBus.on('game:finished', ({ room, result }) => {
+      this.recordGlobalPopularity(room.gameId, room.humanPlayers.map((player) => player.id), result.finishedAt);
+
       // Fire-and-forget: persistence must never block or break gameplay.
       void this.recordMatch(room, result).catch((error: unknown) => {
         this.logger.error('statistics persistence failed', {
@@ -32,6 +43,26 @@ export class StatisticsManager {
         });
       });
     });
+  }
+
+  private recordGlobalPopularity(gameId: string, playerIds: string[], finishedAt: number): void {
+    const entry = this.globalPlayCounts.get(gameId) ?? { count: 0, players: new Set<string>(), lastPlayedAt: 0 };
+    entry.count += 1;
+    for (const playerId of playerIds) entry.players.add(playerId);
+    entry.lastPlayedAt = Math.max(entry.lastPlayedAt, finishedAt);
+    this.globalPlayCounts.set(gameId, entry);
+  }
+
+  /** Real, non-fabricated "most played" ranking — highest completed-match count first. */
+  getGlobalPopularity(): GamePopularity[] {
+    return [...this.globalPlayCounts.entries()]
+      .map(([gameId, entry]) => ({
+        gameId,
+        playCount: entry.count,
+        uniquePlayers: entry.players.size,
+        lastPlayedAt: entry.lastPlayedAt,
+      }))
+      .sort((a, b) => b.playCount - a.playCount || b.lastPlayedAt - a.lastPlayedAt);
   }
 
   async recordMatch(room: Room, result: GameResult): Promise<void> {

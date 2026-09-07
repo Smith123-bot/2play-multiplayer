@@ -10,6 +10,7 @@ export const CLIENT_EVENTS = {
   RECONNECT_ATTEMPT: 'reconnect:attempt',
   ROOM_LIST: 'room:list',
   ROOM_CREATE: 'room:create',
+  ROOM_QUICK_PLAY: 'room:quick-play',
   ROOM_JOIN: 'room:join',
   ROOM_LEAVE: 'room:leave',
   ROOM_KICK: 'room:kick',

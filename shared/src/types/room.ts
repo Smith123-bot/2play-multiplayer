@@ -69,6 +69,8 @@ export interface RoomState {
   updatedAt: number;
   /** Monotonic counter used by clients to drop stale snapshots. */
   stateVersion: number;
+  /** Solo "Quick Play vs AI" match: no room code UX, never publicly listed. */
+  isQuickPlay: boolean;
 }
 
 /** Compact room representation for the public room browser. */

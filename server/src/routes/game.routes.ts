@@ -12,6 +12,11 @@ export function createGameRouter(platform: Platform): Router {
     res.json({ games: platform.registry.getAllMetadata() });
   });
 
+  /** Real, platform-wide "most played" ranking — never fabricated (spec §14). */
+  router.get('/games/popularity', (_req: Request, res: Response) => {
+    res.json({ popularity: platform.statisticsManager.getGlobalPopularity() });
+  });
+
   router.get('/games/:gameId', (req: Request, res: Response) => {
     const gameId = parseOrThrow(gameIdSchema, req.params.gameId, 'game id');
     const game = platform.registry.get(gameId);

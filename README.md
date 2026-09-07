@@ -263,6 +263,22 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 🔤 Word Race | word | 2–4 | yes | Server-owned dictionary, unique words score, 3 rounds |
 | 🔲 Dots and Boxes | strategy | 2–4 | yes | Server-tracked lines/boxes, greedy + safety heuristics |
 | 🧮 Math Rush | math | 2–4 | yes | Server questions/answers, speed bonus, difficulty scaling |
+| 🔢 2048 Battle | strategy | 2 | yes | Private boards, server-owned tiles |
+| 🧩 Maze Race 2D | reflex | 2–4 | yes | Seeded maze, first to the flag |
+| 🔀 Word Scramble Battle | word | 2–4 | yes | Hidden word until reveal |
+| 🔶 Shape Match Battle | reflex | 2–4 | yes | Server-owned matching target |
+| 🐍 Snake Battle | reflex | 2 | yes | Shared grid, server-stepped snakes |
+| 🏎️ Traffic Dodge Race | reflex | 2 | yes | Seeded traffic, first to the finish |
+| 🎯 Target Rush | reflex | 2 | yes | First correct tap, combos |
+| 🚩 Capture the Flag 2D | strategy | 2/4 | yes | Team captures, no spawn camping |
+| 🏓 Paddle Duel | reflex | 2 | yes | Server-simulated ball |
+| 🧱 Brick Breaker Battle | reflex | 2 | yes | Mirrored walls, combos |
+| 🔮 Pattern Memory Battle | memory | 2 | yes | Hidden sequence until reveal |
+| 🧨 Bomb Pass 2D | reflex | 2–4 | yes | Server-timed fuse |
+| 🎨 Draw & Guess Battle | word | 2–4 | yes | Secret word, stroke sync, guess scoring |
+| 🕵️ Secret Role | strategy | 3–4 | yes | Private roles, no identity leak |
+| 🏃 Platform Dash 2D | reflex | 2–4 | yes | Server-simulated 2D race |
+| 🌈 Color Clash | reflex | 2–4 | yes | Fast colour rounds, labelled buttons |
 
 Every game is server-authoritative: clients send *intents*, the server decides
 legality, scores, winners and timers.

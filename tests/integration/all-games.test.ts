@@ -18,6 +18,8 @@ interface GameCase {
   settings?: Record<string, unknown>;
   expect: (state: Record<string, unknown>) => boolean;
   action?: { type: string; payload?: Record<string, unknown> };
+  maxPlayers?: number;
+  extraAi?: number;
 }
 
 const CASES: GameCase[] = [
@@ -157,6 +159,47 @@ const CASES: GameCase[] = [
       typeof state.round === 'number',
     action: { type: 'pass', payload: { targetId: 'nobody' } },
   },
+  {
+    id: 'draw-guess-battle',
+    settings: { rounds: 2 },
+    expect: (state) =>
+      typeof state.round === 'number' &&
+      Array.isArray(state.strokes) &&
+      typeof state.drawerId === 'string' &&
+      (state.word === null || typeof state.word === 'string'),
+    action: { type: 'guess', payload: { text: 'cat' } },
+  },
+  {
+    id: 'secret-role',
+    settings: { rounds: 1 },
+    maxPlayers: 3,
+    extraAi: 2,
+    expect: (state) =>
+      typeof state.round === 'number' &&
+      Array.isArray(state.topics) &&
+      state.agentId === null &&
+      (state.myRole === 'citizen' || state.myRole === 'agent'),
+    action: { type: 'clue', payload: { text: 'busy place' } },
+  },
+  {
+    id: 'platform-dash-2d',
+    expect: (state) =>
+      typeof state.width === 'number' &&
+      Array.isArray(state.platforms) &&
+      Boolean(state.runners) &&
+      typeof state.courseName === 'string',
+    action: { type: 'input', payload: { left: false, right: true, jump: true } },
+  },
+  {
+    id: 'color-clash',
+    settings: { rounds: 4 },
+    expect: (state) =>
+      typeof state.totalRounds === 'number' &&
+      typeof state.round === 'number' &&
+      Boolean(state.scores) &&
+      state.correctOptionId === null,
+    action: { type: 'pick', payload: { optionId: 'opt-0' } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */
@@ -191,14 +234,17 @@ async function playWithAI(game: GameCase): Promise<{ client: TestClient; room: R
   );
   const created = await emitAck<{ room: RoomState }>(client.socket, 'room:create', {
     gameId: game.id,
-    maxPlayers: 2,
+    maxPlayers: game.maxPlayers ?? 2,
     isPrivate: false,
     ...(game.settings ? { settings: game.settings } : {}),
   });
   expect(created.ok).toBe(true);
 
-  const ai = await emitAck<{ playerId: string }>(client.socket, 'room:add-ai', { difficulty: 'hard' });
-  expect(ai.ok).toBe(true);
+  const aiCount = game.extraAi ?? 1;
+  for (let i = 0; i < aiCount; i += 1) {
+    const ai = await emitAck<{ playerId: string }>(client.socket, 'room:add-ai', { difficulty: 'hard' });
+    expect(ai.ok).toBe(true);
+  }
 
   await emitAck(client.socket, 'lobby:ready', { isReady: true });
   const started = await emitAck(client.socket, 'game:start', {});
@@ -215,7 +261,7 @@ describe('every shipped game is playable', () => {
       const { client, room } = await playWithAI(game);
       try {
         expect(room.gameId).toBe(game.id);
-        expect(room.players).toHaveLength(2);
+        expect(room.players).toHaveLength(1 + (game.extraAi ?? 1));
         const state = room.gameState as Record<string, unknown>;
         expect(game.expect(state)).toBe(true);
 

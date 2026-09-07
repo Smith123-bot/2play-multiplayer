@@ -33,6 +33,10 @@ import { paddleDuelGame } from '../games/paddle-duel';
 import { brickBreakerGame } from '../games/brick-breaker-battle';
 import { patternMemoryGame } from '../games/pattern-memory-battle';
 import { bombPassGame } from '../games/bomb-pass-2d';
+import { drawGuessGame } from '../games/draw-guess-battle';
+import { secretRoleGame } from '../games/secret-role';
+import { platformDashGame } from '../games/platform-dash-2d';
+import { colorClashGame } from '../games/color-clash';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -154,6 +158,10 @@ export function createTestPlatform(
       brickBreakerGame,
       patternMemoryGame,
       bombPassGame,
+      drawGuessGame,
+      secretRoleGame,
+      platformDashGame,
+      colorClashGame,
     ]) {
       platform.registry.register(game);
     }

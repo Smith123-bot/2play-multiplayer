@@ -64,6 +64,27 @@ describe('TimerManager', () => {
     expect(timers.has('R', 'rematch', 'vote')).toBe(false);
   });
 
+  it('keeps interval timers running until cancelled when durationMs is omitted', async () => {
+    const onTick = vi.fn();
+    const onComplete = vi.fn();
+    timers.create({
+      roomId: 'R',
+      type: 'turn',
+      delayMs: 25,
+      intervalMs: 25,
+      key: 'update-loop',
+      onTick,
+      onComplete,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(onTick.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(timers.activeCount).toBe(1);
+    expect(timers.cancelByKey('R', 'turn', 'update-loop')).toBe(true);
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(timers.activeCount).toBe(0);
+  });
+
   it('ticks interval timers and completes at the deadline', async () => {
     const onTick = vi.fn();
     const onComplete = vi.fn();

@@ -17,6 +17,10 @@ import { paddleDuelClient } from '../paddle-duel';
 import { brickBreakerClient } from '../brick-breaker-battle';
 import { patternMemoryClient } from '../pattern-memory-battle';
 import { bombPassClient } from '../bomb-pass-2d';
+import { drawGuessClient } from '../draw-guess-battle';
+import { secretRoleClient } from '../secret-role';
+import { platformDashClient } from '../platform-dash-2d';
+import { colorClashClient } from '../color-clash';
 
 /**
  * Client game registry.
@@ -42,6 +46,10 @@ const modules: ClientGameModule[] = [
   brickBreakerClient,
   patternMemoryClient,
   bombPassClient,
+  drawGuessClient,
+  secretRoleClient,
+  platformDashClient,
+  colorClashClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

@@ -58,6 +58,8 @@ interface InternalTimer {
   createdAt: number;
   deadline: number;
   durationMs: number;
+  /** Interval timers with no durationMs tick until cancelled. */
+  openEnded: boolean;
   tickIndex: number;
   onTick?: (info: TimerTickInfo) => void;
   onComplete?: (info: TimerCompleteInfo) => void;
@@ -94,7 +96,11 @@ export class TimerManager {
     this.cancelByKey(roomId, type, key);
 
     const kind: 'timeout' | 'interval' = intervalMs && intervalMs > 0 ? 'interval' : 'timeout';
-    const total = Math.max(1, durationMs ?? delayMs);
+    // Repeating timers without an explicit lifetime (game update loops, the
+    // room-sweep) must keep ticking until cancelled — otherwise the first
+    // interval fire sees remainingMs === 0 and completes without onTick.
+    const openEnded = kind === 'interval' && durationMs === undefined;
+    const total = openEnded ? Number.MAX_SAFE_INTEGER : Math.max(1, durationMs ?? delayMs);
     sequence += 1;
     const id = `t${sequence}_${roomId}_${type}_${key}`;
     const createdAt = Date.now();
@@ -111,6 +117,7 @@ export class TimerManager {
       createdAt,
       deadline: createdAt + total,
       durationMs: total,
+      openEnded,
       tickIndex: 0,
       onTick,
       onComplete,

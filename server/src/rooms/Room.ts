@@ -17,6 +17,8 @@ export interface RoomOptions {
   isPrivate: boolean;
   hostPlayerId: string;
   settings?: Partial<RoomSettings>;
+  /** Solo "Quick Play vs AI" match — never listed publicly, no room code UX. */
+  isQuickPlay?: boolean;
 }
 
 /**
@@ -55,6 +57,8 @@ export class Room {
 
   public settings: RoomSettings;
   public stateVersion = 0;
+  /** True for a "Quick Play vs AI" match: no room code UX, never publicly listed. */
+  public readonly isQuickPlay: boolean;
 
   private aiCounter = 0;
 
@@ -64,6 +68,7 @@ export class Room {
     this.maxPlayers = options.maxPlayers;
     this.isPrivate = options.isPrivate;
     this.hostPlayerId = options.hostPlayerId;
+    this.isQuickPlay = options.isQuickPlay ?? false;
     this.settings = {
       playerCount: options.settings?.playerCount ?? options.maxPlayers,
       aiOpponents: options.settings?.aiOpponents ?? 0,
@@ -252,6 +257,7 @@ export class Room {
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       stateVersion: this.stateVersion,
+      isQuickPlay: this.isQuickPlay,
     };
   }
 

@@ -50,6 +50,13 @@ export const createRoomSchema = z
   })
   .strict();
 
+export const quickPlaySchema = z
+  .object({
+    gameId: gameIdSchema,
+    aiDifficulty: aiDifficultySchema.default('medium'),
+  })
+  .strict();
+
 export const joinRoomSchema = z
   .object({
     roomId: roomCodeSchema,

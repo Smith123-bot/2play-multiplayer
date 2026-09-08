@@ -22,6 +22,14 @@ export interface CreateRoomInput {
   isPrivate: boolean;
   settings?: Partial<RoomSettings>;
   host: PlayerIdentity;
+  /** Solo "Quick Play vs AI" match — never listed publicly, no room code UX. */
+  isQuickPlay?: boolean;
+}
+
+export interface QuickPlayInput {
+  gameId: string;
+  aiDifficulty: 'easy' | 'medium' | 'hard';
+  host: PlayerIdentity;
 }
 
 export interface JoinRoomInput {
@@ -82,6 +90,7 @@ export class RoomManager {
       maxPlayers: input.maxPlayers,
       isPrivate: input.isPrivate,
       hostPlayerId: input.host.playerId,
+      isQuickPlay: input.isQuickPlay ?? false,
       settings: {
         playerCount: input.maxPlayers,
         aiOpponents: input.settings?.aiOpponents ?? 0,
@@ -115,6 +124,42 @@ export class RoomManager {
       maxPlayers: room.maxPlayers,
       isPrivate: room.isPrivate,
     });
+    return room;
+  }
+
+  /**
+   * "Quick Play vs AI" — the fast path from the spec: no room code, no lobby,
+   * no visible multiplayer room. Reuses the exact same room/game lifecycle as
+   * a normal match (RoomManager + LobbyManager + GameLifecycleManager) so
+   * every existing rule (validation, timers, rematch, statistics) still
+   * applies; the room is simply private and flagged `isQuickPlay`.
+   */
+  createQuickPlayMatch(input: QuickPlayInput): Room {
+    const game = this.platform.registry.get(input.gameId);
+    if (!game.metadata.hasAI) {
+      throw AppError.invalidAction(`${game.metadata.name} has no AI opponent available.`);
+    }
+
+    const maxPlayers = game.metadata.supportedPlayerCounts.includes(2)
+      ? 2
+      : game.metadata.minPlayers;
+
+    const room = this.createRoom({
+      gameId: input.gameId,
+      maxPlayers,
+      isPrivate: true,
+      isQuickPlay: true,
+      settings: { aiOpponents: maxPlayers - 1, aiDifficulty: input.aiDifficulty },
+      host: input.host,
+    });
+
+    for (let seat = room.players.size; seat < maxPlayers; seat += 1) {
+      this.addAI(room, input.host.playerId, input.aiDifficulty);
+    }
+
+    const host = room.getPlayer(input.host.playerId);
+    if (host) host.isReady = true;
+
     return room;
   }
 

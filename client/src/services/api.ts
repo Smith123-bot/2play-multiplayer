@@ -3,6 +3,7 @@ import type {
   FavoriteGame,
   GameHistoryEntry,
   GameMetadata,
+  GamePopularity,
   GameStatistics,
   RoomSummary,
 } from '@2play/shared';
@@ -72,6 +73,11 @@ export const api = {
   async rooms(gameId?: string): Promise<ApiResult<{ rooms: RoomSummary[] }>> {
     const query = gameId ? `?gameId=${encodeURIComponent(gameId)}` : '';
     return request(`/api/rooms${query}`);
+  },
+
+  /** Real, platform-wide "most played" ranking — never fabricated. */
+  async popularity(): Promise<ApiResult<{ popularity: GamePopularity[] }>> {
+    return request('/api/games/popularity');
   },
 
   async statistics(userId: string, token?: string | null) {

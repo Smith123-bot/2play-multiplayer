@@ -54,6 +54,11 @@ export interface CreateRoomPayload {
   settings?: RoomSettingsPayload;
 }
 
+export interface QuickPlayPayload {
+  gameId: string;
+  aiDifficulty?: AIDifficulty;
+}
+
 export interface JoinRoomPayload {
   roomId: string;
 }
@@ -323,6 +328,7 @@ export interface ClientToServerEvents {
   ) => void;
   'room:list': (payload: RoomListPayload, ack?: Ack<RoomListResultPayload>) => void;
   'room:create': (payload: CreateRoomPayload, ack?: Ack<RoomCreatedPayload>) => void;
+  'room:quick-play': (payload: QuickPlayPayload, ack?: Ack<RoomCreatedPayload>) => void;
   'room:join': (payload: JoinRoomPayload, ack?: Ack<RoomJoinedPayload>) => void;
   'room:leave': (payload: Record<string, never>, ack?: Ack<{ left: boolean }>) => void;
   'room:kick': (payload: KickPlayerPayload, ack?: Ack<{ kicked: boolean }>) => void;

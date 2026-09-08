@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, BarChart3, Heart, Plus, Sparkles, Users, Zap } from 'lucide-react';
 import { GameCard } from '../components/game/GameCard';
+import { ActiveRoomPrompt } from '../components/room/ActiveRoomPrompt';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -63,6 +64,8 @@ export function HomeScreen() {
 
   return (
     <div className="space-y-10">
+      <ActiveRoomPrompt />
+
       <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary-600/25 via-surface/70 to-accent-500/20 p-6 sm:p-10">
         <div className="grid-glow absolute inset-0 opacity-40" aria-hidden />
         <div className="relative max-w-2xl">

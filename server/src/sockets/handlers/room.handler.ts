@@ -3,6 +3,7 @@ import type {
   CreateRoomPayload,
   JoinRoomPayload,
   KickPlayerPayload,
+  QuickPlayPayload,
   RemoveAIPayload,
   RoomCreatedPayload,
   RoomJoinedPayload,
@@ -18,6 +19,7 @@ import {
   createRoomSchema,
   joinRoomSchema,
   kickPlayerSchema,
+  quickPlaySchema,
   removeAISchema,
   roomListSchema,
 } from '@2play/shared';
@@ -75,6 +77,48 @@ const create = safeHandler<CreateRoomPayload, RoomCreatedPayload>(async function
   });
 
   joinSocketRoom(this, room.id);
+  this.platform.socketManager?.broadcastRoomState(room, true);
+
+  return {
+    room: room.toState(session.playerId, this.platform.gameManager.getPublicState(room, session.playerId)),
+    playerId: session.playerId,
+  };
+});
+
+/**
+ * `room:quick-play` — instant AI match: no room code, no lobby, no visible
+ * multiplayer room. Reuses the exact same room/game lifecycle as a normal
+ * match (spec: Quick Play must be real, not faked, and must stay separate
+ * from the public/private room flow).
+ */
+const quickPlay = safeHandler<QuickPlayPayload, RoomCreatedPayload>(async function (
+  this: HandlerContext,
+  payload,
+) {
+  const input = parseOrThrow(quickPlaySchema, payload, 'quick play payload');
+  const session = requireSession(this);
+  rateLimit(
+    this.platform,
+    `room-create:${this.socket.data.clientKey}`,
+    ROOM_CREATE_RATE_LIMIT_PER_MIN,
+    'You are creating matches too quickly. Try again shortly.',
+  );
+
+  const room = this.platform.roomManager.createQuickPlayMatch({
+    gameId: input.gameId,
+    aiDifficulty: input.aiDifficulty ?? 'medium',
+    host: {
+      playerId: session.playerId,
+      sessionToken: session.token,
+      nickname: session.nickname,
+      avatar: session.avatar,
+      userId: session.userId,
+      socketId: this.socket.id,
+    },
+  });
+
+  joinSocketRoom(this, room.id);
+  this.platform.multiplayerManager.startGame(room, session.playerId);
   this.platform.socketManager?.broadcastRoomState(room, true);
 
   return {
@@ -200,6 +244,7 @@ const removeAI = safeHandler<RemoveAIPayload, { removed: boolean }>(async functi
 export function registerRoomHandlers(context: HandlerContext): void {
   context.socket.on('room:list', list.bind(context));
   context.socket.on('room:create', create.bind(context));
+  context.socket.on('room:quick-play', quickPlay.bind(context));
   context.socket.on('room:join', join.bind(context));
   context.socket.on('room:leave', leave.bind(context));
   context.socket.on('room:kick', kick.bind(context));

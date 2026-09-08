@@ -106,3 +106,14 @@ export interface FavoriteGame {
   gameId: string;
   createdAt: string;
 }
+
+/**
+ * Real, platform-wide "most played" signal (spec: never fabricated numbers).
+ * Tracked for the lifetime of the server process from completed matches.
+ */
+export interface GamePopularity {
+  gameId: string;
+  playCount: number;
+  uniquePlayers: number;
+  lastPlayedAt: number;
+}

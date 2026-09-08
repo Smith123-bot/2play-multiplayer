@@ -4,7 +4,9 @@ import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
   blockedByTruth,
+  buildWorld,
   finishSplit,
+  TOTAL_ROUNDS,
   GOAL_SCORE,
   splitWorldGame,
   SWITCH_SCORE,
@@ -64,6 +66,13 @@ describe('Split World', () => {
     room = extra;
     players = platform.gameManager.playerViews(room);
   }
+
+  it('provides five distinct authored arenas and a five-round match budget', () => {
+    expect(TOTAL_ROUNDS).toBe(5);
+    const arenas = Array.from({ length: TOTAL_ROUNDS }, (_, index) => buildWorld(index));
+    expect(new Set(arenas.map((arena) => JSON.stringify(arena.tiles))).size).toBe(TOTAL_ROUNDS);
+    expect(arenas.every((arena) => arena.switches.length >= 2)).toBe(true);
+  });
 
   it('starts a shared world with opposite roles and a live clock', () => {
     expect(state().phase).toBe('playing');

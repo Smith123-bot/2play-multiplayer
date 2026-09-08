@@ -10,6 +10,10 @@ export type ViewTile = 'wall' | 'floor' | 'switch' | 'door' | 'goal' | 'unknown'
 
 export interface SplitWorldPublicState {
   phase: 'idle' | 'playing' | 'finished';
+  currentRound: number;
+  totalRounds: number;
+  roundsWon: Record<string, number>;
+  arenaIndex: number;
   cols: number;
   rows: number;
   role: 'alpha' | 'beta';
@@ -130,6 +134,7 @@ function SplitWorldGame({
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="primary">{state.role === 'alpha' ? 'You see switches' : 'You see the door'}</Badge>
         <Badge tone={state.doorOpen ? 'success' : 'warning'}>{state.doorOpen ? 'Door open' : 'Door closed'}</Badge>
+        <Badge tone="default">Round {state.currentRound}/{state.totalRounds} · Arena {state.arenaIndex + 1}</Badge>
         {me?.finished ? <Badge tone="success">Goal</Badge> : null}
       </div>
       <div

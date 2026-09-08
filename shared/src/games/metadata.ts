@@ -1222,8 +1222,7 @@ export const ONE_BUTTON_METADATA = {
 export const SPLIT_WORLD_METADATA = {
   id: 'split-world',
   name: 'Split World',
-  description:
-    'One shared 2D world, different eyes. You see switches, your partner sees the door — talk it out and finish together.',
+  description: 'See different versions of the same world. Share clues, work together, and find the way out.',
   category: 'strategy' as const,
   icon: '🌍',
   thumbnail: '🌍',
@@ -1245,6 +1244,8 @@ export const SPLIT_WORLD_METADATA = {
   winCondition: 'Hold the highest score when time expires (goal finishers rank first on a tie).',
   tags: ['strategy', 'coop', 'puzzle', '2-4 players'],
   featured: true,
+  hasRounds: true,
+  defaultRounds: 5,
   version: '1.0.0',
 } satisfies GameMetadata;
 

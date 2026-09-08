@@ -48,11 +48,18 @@ export interface SplitState {
   finishReason: GameFinishReason | null;
   lastEvent: string | null;
   nextAIRequestAt: Record<string, number>;
+  currentRound: number;
+  totalRounds: number;
+  roundsWon: Record<string, number>;
+  arenaIndex: number;
 }
 
 export const SPLIT_COLS = 11;
 export const SPLIT_ROWS = 7;
-export const MATCH_MS = 90_000;
+export const TOTAL_ROUNDS = 5;
+export const ROUND_MS = 18_000;
+/** Kept as the public match budget for compatibility with older clients. */
+export const MATCH_MS = ROUND_MS * TOTAL_ROUNDS;
 export const SWITCH_SCORE = 30;
 export const GOAL_SCORE = 100;
 
@@ -91,7 +98,7 @@ export function viewTiles(trueTiles: TrueTile[][], role: SplitRole): ViewTile[][
   return trueTiles.map((row) => row.map((tile) => viewTile(tile, role)));
 }
 
-export function buildWorld(): {
+export function buildWorld(arenaIndex = 0): {
   tiles: TrueTile[][];
   switches: Array<{ x: number; y: number; held: boolean }>;
   door: { x: number; y: number };
@@ -106,20 +113,26 @@ export function buildWorld(): {
     }
     tiles.push(row);
   }
-  tiles[2]![4] = 'wall';
-  tiles[4]![4] = 'wall';
-  tiles[3]![6] = 'wall';
-  const switches = [
-    { x: 3, y: 2, held: false },
-    { x: 3, y: 4, held: false },
-  ];
+  // Five deliberately authored layouts. Arena zero is the onboarding layout;
+  // later arenas move the landmarks and add a small amount of real geometry.
+  const layouts = [
+    { walls: [[4, 2], [4, 4], [6, 3]], switches: [[3, 2], [3, 4]], door: [8, 3], goal: [9, 3] },
+    { walls: [[4, 1], [4, 2], [6, 4], [6, 5]], switches: [[2, 2], [3, 5]], door: [8, 2], goal: [9, 2] },
+    { walls: [[3, 3], [4, 3], [5, 3], [7, 2], [7, 4]], switches: [[2, 1], [2, 5]], door: [8, 3], goal: [9, 3] },
+    { walls: [[5, 1], [5, 2], [5, 4], [5, 5], [7, 3]], switches: [[3, 1], [3, 5]], door: [8, 3], goal: [9, 3] },
+    { walls: [[3, 2], [3, 3], [3, 4], [6, 2], [6, 4], [7, 3]], switches: [[2, 1], [2, 5]], door: [8, 3], goal: [9, 3] },
+  ] as const;
+  const layout = layouts[arenaIndex % layouts.length]!;
+  for (const [x, y] of layout.walls) tiles[y]![x] = 'wall';
+  const switches = layout.switches.map(([x, y]) => ({ x, y, held: false }));
   for (const entry of switches) tiles[entry.y]![entry.x] = 'switch';
-  const door = { x: 8, y: 3 };
-  const goal = { x: 9, y: 3 };
+  const door = { x: layout.door[0], y: layout.door[1] };
+  const goal = { x: layout.goal[0], y: layout.goal[1] };
   tiles[door.y]![door.x] = 'door';
   tiles[goal.y]![goal.x] = 'goal';
-  tiles[1]![5] = 'decoy';
-  tiles[5]![5] = 'decoy';
+  for (const [x, y] of [[5, 1], [5, 5]] as const) {
+    if (tiles[y]![x] === 'floor') tiles[y]![x] = 'decoy';
+  }
   return { tiles, switches, door, goal };
 }
 
@@ -178,6 +191,36 @@ function viewerRole(state: SplitState, viewerId: string | undefined, ctx: GameCo
   return 'alpha';
 }
 
+function completeRound(state: SplitState, ctx: GameContext, reason: 'completed' | 'timeout'): void {
+  if (state.phase !== 'playing') return;
+  for (const [id, player] of Object.entries(state.players)) {
+    if (player.finished) state.roundsWon[id] = (state.roundsWon[id] ?? 0) + 1;
+  }
+  if (state.currentRound >= state.totalRounds) {
+    finishSplit(state, ctx, reason);
+    return;
+  }
+  state.currentRound += 1;
+  const world = buildWorld(state.currentRound - 1);
+  state.arenaIndex = state.currentRound - 1;
+  state.trueTiles = world.tiles;
+  state.switches = world.switches;
+  state.door = world.door;
+  state.goal = world.goal;
+  state.doorOpen = false;
+  for (const player of Object.values(state.players)) {
+    const start = STARTS[Object.keys(state.players).indexOf(Object.keys(state.players).find((id) => state.players[id] === player) ?? '') % STARTS.length]!;
+    player.x = start.x;
+    player.y = start.y;
+    player.heldSwitch = false;
+    player.finished = false;
+  }
+  state.lastEvent = `round:${state.currentRound}`;
+  state.endsAt = ctx.now() + ROUND_MS;
+  ctx.markStateChanged();
+  ctx.schedule(ROUND_MS, () => completeRound(state, ctx, 'timeout'), 'gameDuration', 'round-timeout');
+}
+
 export const splitWorldGame: GameModule<SplitState> = {
   metadata: SPLIT_WORLD_METADATA,
 
@@ -186,7 +229,7 @@ export const splitWorldGame: GameModule<SplitState> = {
   },
 
   createInitialState(players): SplitState {
-    const world = buildWorld();
+    const world = buildWorld(0);
     const state: SplitState = {
       phase: 'idle',
       cols: SPLIT_COLS,
@@ -202,6 +245,10 @@ export const splitWorldGame: GameModule<SplitState> = {
       finishReason: null,
       lastEvent: null,
       nextAIRequestAt: {},
+      currentRound: 1,
+      totalRounds: TOTAL_ROUNDS,
+      roundsWon: Object.fromEntries(players.map((player) => [player.id, 0])),
+      arenaIndex: 0,
     };
     refreshSwitches(state);
     return state;
@@ -235,7 +282,8 @@ export const splitWorldGame: GameModule<SplitState> = {
 
   start(state, ctx): void {
     if (state.phase === 'playing') return;
-    const world = buildWorld();
+    const world = buildWorld(state.currentRound - 1);
+    state.arenaIndex = state.currentRound - 1;
     state.trueTiles = world.tiles;
     state.switches = world.switches;
     state.door = world.door;
@@ -246,10 +294,10 @@ export const splitWorldGame: GameModule<SplitState> = {
     refreshSwitches(state);
     state.phase = 'playing';
     state.startedAt = ctx.now();
-    state.endsAt = ctx.now() + MATCH_MS;
+    state.endsAt = ctx.now() + ROUND_MS;
     state.lastEvent = 'start';
     ctx.markStateChanged();
-    ctx.schedule(MATCH_MS, () => finishSplit(state, ctx, 'timeout'), 'gameDuration', 'match-timeout');
+    ctx.schedule(ROUND_MS, () => completeRound(state, ctx, 'timeout'), 'gameDuration', 'round-timeout');
     for (const player of ctx.players) {
       if (player.isAI) ctx.requestAI(player.id, 160);
     }
@@ -301,7 +349,7 @@ export const splitWorldGame: GameModule<SplitState> = {
     }
     ctx.markStateChanged();
     const living = Object.values(state.players).filter((entry) => !entry.left);
-    if (living.length > 0 && living.every((entry) => entry.finished)) finishSplit(state, ctx, 'completed');
+    if (living.length > 0 && living.every((entry) => entry.finished)) completeRound(state, ctx, 'completed');
     return actionAccepted();
   },
 
@@ -333,8 +381,13 @@ export const splitWorldGame: GameModule<SplitState> = {
     if (state.phase !== 'finished') return null;
     const entries = Object.entries(state.players).filter(([, player]) => !player.left);
     if (entries.length === 0) return [];
-    const best = Math.max(...entries.map(([, player]) => player.score));
-    return entries.filter(([, player]) => player.score === best).map(([id]) => id);
+    const bestRounds = Math.max(...entries.map(([id]) => state.roundsWon[id] ?? 0));
+    const bestScore = Math.max(
+      ...entries.filter(([id]) => (state.roundsWon[id] ?? 0) === bestRounds).map(([, player]) => player.score),
+    );
+    return entries
+      .filter(([id, player]) => (state.roundsWon[id] ?? 0) === bestRounds && player.score === bestScore)
+      .map(([id]) => id);
   },
 
   checkDrawCondition(state): boolean {
@@ -354,15 +407,12 @@ export const splitWorldGame: GameModule<SplitState> = {
       const left = state.players[a.id];
       const right = state.players[b.id];
       if ((left?.finished ?? false) !== (right?.finished ?? false)) return left?.finished ? -1 : 1;
-      return (right?.score ?? 0) - (left?.score ?? 0);
+      return (state.roundsWon[b.id] ?? 0) - (state.roundsWon[a.id] ?? 0) || (right?.score ?? 0) - (left?.score ?? 0);
     });
-    const best = ranked[0] ? state.players[ranked[0].id]?.score ?? 0 : 0;
-    const topFinished = ranked[0] ? Boolean(state.players[ranked[0].id]?.finished) : false;
+    const bestRounds = ranked[0] ? state.roundsWon[ranked[0].id] ?? 0 : 0;
+    const bestScore = ranked[0] ? state.players[ranked[0].id]?.score ?? 0 : 0;
     const winners = ranked
-      .filter((player) => {
-        const entry = state.players[player.id];
-        return (entry?.score ?? 0) === best && Boolean(entry?.finished) === topFinished;
-      })
+      .filter((player) => (state.roundsWon[player.id] ?? 0) === bestRounds && (state.players[player.id]?.score ?? 0) === bestScore)
       .map((player) => player.id);
     const rankings: RankingDraft[] = ranked.map((player, index) => {
       const entry = state.players[player.id];
@@ -372,7 +422,7 @@ export const splitWorldGame: GameModule<SplitState> = {
         score: entry?.score ?? 0,
         isWinner: winners.includes(player.id),
         isDraw: winners.length > 1,
-        stats: { finished: entry?.finished ? 1 : 0 },
+        stats: { finished: entry?.finished ? 1 : 0, roundsWon: state.roundsWon[player.id] ?? 0 },
       };
     });
     return { winners, isDraw: winners.length > 1, rankings, reason: state.finishReason ?? 'completed' };
@@ -380,7 +430,7 @@ export const splitWorldGame: GameModule<SplitState> = {
 
   reset(state): SplitState {
     const ids = Object.keys(state.players);
-    const world = buildWorld();
+    const world = buildWorld(0);
     const next: SplitState = {
       ...state,
       phase: 'idle',
@@ -395,6 +445,10 @@ export const splitWorldGame: GameModule<SplitState> = {
       finishReason: null,
       lastEvent: null,
       nextAIRequestAt: {},
+      currentRound: 1,
+      totalRounds: TOTAL_ROUNDS,
+      roundsWon: Object.fromEntries(ids.map((id) => [id, 0])),
+      arenaIndex: 0,
     };
     refreshSwitches(next);
     return next;
@@ -411,6 +465,10 @@ export const splitWorldGame: GameModule<SplitState> = {
     const tiles = viewTiles(state.trueTiles, role);
     return {
       phase: state.phase,
+      currentRound: state.currentRound,
+      totalRounds: state.totalRounds,
+      roundsWon: { ...state.roundsWon },
+      arenaIndex: state.arenaIndex,
       cols: state.cols,
       rows: state.rows,
       role,

@@ -1219,6 +1219,18 @@ export const ONE_BUTTON_METADATA = {
 } satisfies GameMetadata;
 
 
+export const LUDO_METADATA = {
+  id: 'ludo', name: 'Ludo', description: 'Race four tokens around a classic board, capture opponents, and bring your team home.', category: 'strategy' as const, icon: '🎲', thumbnail: '🎲', minPlayers: 2, maxPlayers: 4, supportedPlayerCounts: [2, 3, 4], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 300, difficulty: 'medium' as const, controls: 'Roll, then tap a legal token. Six launches a token and grants another turn.', rules: ['Four tokens per player.', 'A six launches a token from the yard.', 'Exact movement is required for home.', 'Safe cells prevent captures.'], scoring: '10 per move, 25 per capture, 100 per token home.', winCondition: 'Bring all four tokens home first.', tags: ['board', 'turn-based', 'classic', '2-4 players'], featured: true, version: '1.0.0',
+} satisfies GameMetadata;
+
+export const ARROW_PUZZLE_METADATA = {
+  id: 'arrow-puzzle', name: 'Arrow Puzzle', description: 'Clear a directional grid by choosing arrows only when their path is unlocked.', category: 'memory' as const, icon: '↗️', thumbnail: '↗️', minPlayers: 2, maxPlayers: 4, supportedPlayerCounts: [2, 3, 4], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 180, difficulty: 'medium' as const, controls: 'Tap an unlocked arrow tile to clear it.', rules: ['Everyone solves the same seeded board.', 'An arrow is available when it points outside the grid or at a cleared tile.', 'Clear every tile before the clock expires.'], scoring: 'Points increase for each valid clear and finishing quickly.', winCondition: 'Complete the board first.', tags: ['puzzle', 'logic', 'race', '2-4 players'], featured: true, version: '1.0.0',
+} satisfies GameMetadata;
+
+export const BLACK_BLAST_METADATA = {
+  id: 'black-blast', name: 'Black Blast', description: 'Place abstract energy blasts, trigger chain reactions, and score more than your rivals.', category: 'reflex' as const, icon: '●', thumbnail: '●', minPlayers: 2, maxPlayers: 4, supportedPlayerCounts: [2, 3, 4], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 150, difficulty: 'medium' as const, controls: 'WASD, arrows, or directional buttons to move. Tap Blast to trigger energy.', rules: ['Move around the arena to line up targets.', 'Blast zones are temporary and have a cooldown.', 'Chain streaks award bonus points.'], scoring: 'Collectible energy values plus combo bonuses.', winCondition: 'Highest score when the arena clock ends.', tags: ['arcade', 'action', 'chain-reaction', '2-4 players'], featured: true, version: '1.0.0',
+} satisfies GameMetadata;
+
 export const SPLIT_WORLD_METADATA = {
   id: 'split-world',
   name: 'Split World',

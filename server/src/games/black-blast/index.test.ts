@@ -1,0 +1,8 @@
+import { describe, expect, it } from 'vitest';
+import { createGameFixture, createTestPlatform } from '../../test/harness';
+
+describe('Black Blast', () => {
+  it('initializes an arena and keeps score server-owned', async () => { const h=createTestPlatform(); const f=await createGameFixture(h.platform,'black-blast'); const s=f.room.gameState as any; expect(s.objects.length).toBe(18); const id=Object.keys(s.players)[0]!; const before=s.players[id].score; expect(h.platform.gameManager.handleAction(f.room,id,{type:'score',payload:{value:999}}).accepted).toBe(false); expect(s.players[id].score).toBe(before); h.destroy(); });
+  it('validates movement and computes blast results from positions', async () => { const h=createTestPlatform(); const f=await createGameFixture(h.platform,'black-blast'); const s=f.room.gameState as any; const id=Object.keys(s.players)[0]!; expect(h.platform.gameManager.handleAction(f.room,id,{type:'move',payload:{dx:1,dy:0}}).accepted).toBe(true); expect(h.platform.gameManager.handleAction(f.room,id,{type:'blast'}).accepted).toBe(true); expect(s.blasts).toHaveLength(1); const score=s.players[id].score; expect(h.platform.gameManager.handleAction(f.room,id,{type:'blast'}).accepted).toBe(false); expect(s.players[id].score).toBe(score); h.destroy(); });
+  it('finishes on timeout and produces a ranked result', async () => { const h=createTestPlatform(); const f=await createGameFixture(h.platform,'black-blast'); const s=f.room.gameState as any; s.players[Object.keys(s.players)[0]!].score=40; const ctx=h.platform.gameManager.getContext(f.room); (await import('./index')).blackBlastGame.finish(s,ctx); expect((await import('./index')).blackBlastGame.getResult(s,ctx).rankings.length).toBe(2); h.destroy(); });
+});

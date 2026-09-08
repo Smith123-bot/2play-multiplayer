@@ -1,0 +1,38 @@
+import type { AIDifficulty, GameFinishReason } from '@2play/shared';
+import { ARROW_PUZZLE_METADATA } from '@2play/shared';
+import type { ActionResult, GameContext, GameModule, GameResultDraft, ValidationResult } from '../GameModule';
+import { actionAccepted, actionRejected } from '../GameModule';
+
+export type ArrowDirection = 'up' | 'down' | 'left' | 'right';
+export interface ArrowTile { direction: ArrowDirection; cleared: boolean; }
+export interface ArrowPlayer { cleared: number; clearedTiles: boolean[]; score: number; completedAt: number | null; disconnected: boolean; left: boolean; }
+export interface ArrowPuzzleState { phase: 'idle' | 'playing' | 'finished'; size: number; difficulty: string; seed: number; tiles: ArrowTile[]; players: Record<string, ArrowPlayer>; endsAt: number | null; winnerId: string | null; finishReason: GameFinishReason | null; lastEvent: string | null; }
+
+export const ARROW_SIZE = 5;
+export const ARROW_TIME_MS = 120_000;
+const DELTA: Record<ArrowDirection, [number, number]> = { up: [0, -1], right: [1, 0], down: [0, 1], left: [-1, 0] };
+function at(index: number) { return [index % ARROW_SIZE, Math.floor(index / ARROW_SIZE)] as const; }
+function target(index: number, dir: ArrowDirection): number | null { const [x, y] = at(index); const [dx, dy] = DELTA[dir]; const nx = x + dx, ny = y + dy; return nx < 0 || ny < 0 || nx >= ARROW_SIZE || ny >= ARROW_SIZE ? null : ny * ARROW_SIZE + nx; }
+export function createArrowPuzzle(seed: number, difficulty = 'medium'): ArrowTile[] { let value = (seed >>> 0) || 1; const next = () => { value = (value * 1664525 + 1013904223) >>> 0; return value / 4294967296; }; return Array.from({ length: ARROW_SIZE * ARROW_SIZE }, (_, i) => { const x = i % ARROW_SIZE, y = Math.floor(i / ARROW_SIZE); const choices: ArrowDirection[] = x === ARROW_SIZE - 1 && y === ARROW_SIZE - 1 ? ['up', 'left'] : x === ARROW_SIZE - 1 ? ['up', 'left'] : y === ARROW_SIZE - 1 ? ['up', 'left'] : ['up', 'left']; const direction = choices[Math.floor(next() * choices.length + (difficulty === 'easy' ? 0 : 0)) % choices.length]!; return { direction, cleared: false }; }); }
+export function arrowUnlocked(index: number, tiles: ArrowTile[]): boolean { const nextIndex = target(index, tiles[index]!.direction); return nextIndex === null || tiles[nextIndex]!.cleared; }
+export function playerUnlocked(index: number, state: ArrowPuzzleState, player: ArrowPlayer) { const nextIndex = target(index, state.tiles[index]!.direction); return nextIndex === null || player.clearedTiles[nextIndex] === true; }
+function finish(state: ArrowPuzzleState, ctx: GameContext, winnerId: string | null, reason: GameFinishReason) { if (state.phase === 'finished') return; state.phase = 'finished'; state.winnerId = winnerId; state.finishReason = reason; state.endsAt = null; ctx.markStateChanged(); ctx.finish(reason); }
+
+export const arrowPuzzleGame: GameModule<ArrowPuzzleState> = {
+  metadata: ARROW_PUZZLE_METADATA,
+  initialize(): void {},
+  createInitialState(players, config): ArrowPuzzleState { const seed = config.seed ?? 1; return { phase: 'idle', size: ARROW_SIZE, difficulty: 'medium', seed, tiles: createArrowPuzzle(seed, 'medium'), players: Object.fromEntries(players.map((p) => [p.id, { cleared: 0, clearedTiles: Array(ARROW_SIZE * ARROW_SIZE).fill(false), score: 0, completedAt: null, disconnected: false, left: false }])), endsAt: null, winnerId: null, finishReason: null, lastEvent: null }; },
+  playerJoined(player, state): void { state.players[player.id] ??= { cleared: 0, clearedTiles: Array(ARROW_SIZE * ARROW_SIZE).fill(false), score: 0, completedAt: null, disconnected: false, left: false }; state.players[player.id]!.disconnected = false; },
+  playerReady(): void {},
+  playerLeft(id, state, ctx, reason): void { const p = state.players[id]; if (!p) return; if (reason === 'disconnect') p.disconnected = true; else { p.left = true; if (Object.values(state.players).filter((x) => !x.left).length < 2 && state.phase === 'playing') finish(state, ctx, null, 'abandoned'); } },
+  start(state, ctx): void { if (state.phase === 'playing') return; state.seed = ctx.seed; state.tiles = createArrowPuzzle(state.seed, state.difficulty); state.phase = 'playing'; state.endsAt = ctx.now() + ARROW_TIME_MS; ctx.schedule(ARROW_TIME_MS, () => finish(state, ctx, state.winnerId, 'timeout'), 'gameDuration', 'arrow-timeout'); ctx.markStateChanged(); },
+  validateAction(id, action, state): ValidationResult { const p = state.players[id]; if (state.phase !== 'playing' || !p || p.left || p.disconnected) return { valid: false, reason: 'Puzzle is not accepting actions.' }; if (action.type !== 'activate-arrow') return { valid: false, reason: 'Select an arrow tile.' }; const index = action.payload?.index; if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= state.tiles.length) return { valid: false, reason: 'Invalid arrow.' }; if (state.tiles[index]!.cleared || !playerUnlocked(index, state, p)) return { valid: false, reason: 'That arrow is blocked.' }; return { valid: true }; },
+  handlePlayerAction(id, action, state, ctx): ActionResult { if (action.type !== 'activate-arrow') return actionRejected('Invalid puzzle action.'); const index = action.payload?.index as number; const p = state.players[id]!; p.clearedTiles[index] = true; p.cleared += 1; p.score += 10 + p.cleared; state.lastEvent = `clear:${id}:${index}`; if (p.cleared === state.tiles.length) { p.completedAt = ctx.now(); p.score += Math.max(0, Math.floor(((state.endsAt ?? ctx.now()) - ctx.now()) / 100)); finish(state, ctx, id, 'completed'); } ctx.markStateChanged(); return actionAccepted(); },
+  update(): void {}, tick(): void {}, calculateScore(id, state) { return state.players[id]?.score ?? 0; }, checkWinCondition(state) { return state.winnerId ? [state.winnerId] : null; }, checkDrawCondition(): boolean { return false; }, isGameFinished(state) { return state.phase === 'finished'; }, finish(state) { state.phase = 'finished'; },
+  getResult(state, ctx): GameResultDraft { const rankings = ctx.players.map((p) => ({ playerId: p.id, rank: 0, score: state.players[p.id]?.score ?? 0, isWinner: p.id === state.winnerId, isDraw: false, stats: { cleared: state.players[p.id]?.cleared ?? 0 } })).sort((a, b) => b.score - a.score).map((p, i) => ({ ...p, rank: i + 1 })); return { winners: state.winnerId ? [state.winnerId] : rankings[0] ? [rankings[0].playerId] : [], isDraw: false, rankings, reason: state.finishReason ?? 'completed' }; },
+  reset(state) { return { ...state, phase: 'idle', tiles: state.tiles.map((t) => ({ ...t, cleared: false })), players: Object.fromEntries(Object.keys(state.players).map((id) => [id, { cleared: 0, clearedTiles: Array(ARROW_SIZE * ARROW_SIZE).fill(false), score: 0, completedAt: null, disconnected: false, left: false }])), endsAt: null, winnerId: null, finishReason: null, lastEvent: null }; },
+  cleanup(state) { state.players = {}; state.tiles = []; },
+  getPublicState(state, viewerId, ctx) { const own = viewerId ? state.players[viewerId]?.clearedTiles : undefined; return { ...state, tiles: state.tiles.map((tile, index) => ({ ...tile, cleared: own?.[index] ?? false })), players: Object.fromEntries(Object.entries(state.players).map(([id, p]) => [id, { cleared: p.cleared, score: p.score, completedAt: p.completedAt, disconnected: p.disconnected, left: p.left }])), serverTime: ctx.now() }; },
+  getAIMove(id, _difficulty: AIDifficulty, state) { const p = state.players[id]; if (!p) return null; const index = state.tiles.findIndex((_tile, i) => !p.clearedTiles[i] && playerUnlocked(i, state, p)); return index >= 0 ? { type: 'activate-arrow', payload: { index } } : null; },
+  maxDurationMs: 3 * 60 * 1000,
+};

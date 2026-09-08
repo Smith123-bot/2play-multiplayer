@@ -366,6 +366,21 @@ const CASES: GameCase[] = [
     action: { type: 'tap' },
   },
   {
+    id: 'ludo',
+    expect: (state) => Boolean(state.players) && state.phase === 'playing' && typeof state.currentPlayerId === 'string',
+    action: { type: 'roll-dice' },
+  },
+  {
+    id: 'arrow-puzzle',
+    expect: (state) => Array.isArray(state.tiles) && Boolean(state.players) && typeof state.endsAt === 'number',
+    action: { type: 'activate-arrow', payload: { index: 0 } },
+  },
+  {
+    id: 'black-blast',
+    expect: (state) => Array.isArray(state.objects) && Boolean(state.players) && typeof state.endsAt === 'number',
+    action: { type: 'move', payload: { dx: 1, dy: 0 } },
+  },
+  {
     id: 'split-world',
     expect: (state) =>
       Array.isArray(state.tiles) &&

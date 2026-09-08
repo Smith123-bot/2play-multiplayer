@@ -8,6 +8,7 @@ import { Input } from './ui/Input';
 import { Toggle } from './ui/Toggle';
 import { GameCard } from './game/GameCard';
 import { PlayerList } from './room/PlayerList';
+import { HostControls } from './room/HostControls';
 import { RematchPanel } from './rematch/RematchPanel';
 import { REACTION_RACE_METADATA, type Player, type RoomState } from '@2play/shared';
 
@@ -86,6 +87,72 @@ describe('UI components', () => {
       screen.getByRole('button', { name: 'Remove Reaction Race from favorites' }),
     );
     expect(onToggle).toHaveBeenCalledWith('reaction-race');
+  });
+
+  it('GameCard (inline mode) expands to show Play with AI, Create Room and Join Room', async () => {
+    const onToggleExpand = vi.fn();
+    const onQuickPlay = vi.fn();
+    const onCreateRoom = vi.fn();
+    const onJoinRoom = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <GameCard
+          game={REACTION_RACE_METADATA}
+          expanded
+          onToggleExpand={onToggleExpand}
+          onQuickPlay={onQuickPlay}
+          onCreateRoom={onCreateRoom}
+          onJoinRoom={onJoinRoom}
+        />
+      </MemoryRouter>,
+    );
+
+    const playWithAI = screen.getByRole('button', { name: /Play with AI/i });
+    await userEvent.click(playWithAI);
+    expect(onQuickPlay).toHaveBeenCalledWith('reaction-race');
+
+    await userEvent.click(screen.getByRole('button', { name: /Create Room/i }));
+    expect(onCreateRoom).toHaveBeenCalledWith('reaction-race');
+
+    await userEvent.click(screen.getByRole('button', { name: /Join Room/i }));
+    expect(onJoinRoom).toHaveBeenCalledWith('reaction-race');
+  });
+
+  it('GameCard (inline mode) hides Play with AI for a game without AI support', () => {
+    render(
+      <MemoryRouter>
+        <GameCard
+          game={{ ...REACTION_RACE_METADATA, hasAI: false }}
+          expanded
+          onToggleExpand={vi.fn()}
+          onQuickPlay={vi.fn()}
+          onCreateRoom={vi.fn()}
+          onJoinRoom={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole('button', { name: /Play with AI/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/Play with AI unavailable/i)).toBeInTheDocument();
+  });
+
+  it('HostControls (Create Room lobby) has no AI difficulty selector or Add AI control', () => {
+    render(
+      <HostControls
+        game={REACTION_RACE_METADATA}
+        settings={{ playerCount: 2, aiOpponents: 0, aiDifficulty: 'medium' }}
+        maxPlayers={2}
+        playerCount={2}
+        canStart
+        startBlockedReason={null}
+      />,
+    );
+
+    expect(screen.queryByLabelText(/AI difficulty/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/AI opponents/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add AI opponent/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start match' })).toBeInTheDocument();
   });
 
   it('PlayerList shows host, readiness and disconnect state', () => {

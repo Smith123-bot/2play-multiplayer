@@ -18,6 +18,7 @@ import { useRoomStore } from '../stores/roomStore';
 import { useSessionStore } from '../stores/sessionStore';
 import { useGameStore } from '../stores/gameStore';
 import { useRoomActions } from '../hooks/useRoomActions';
+import { useLeaveRoomOnBackNavigation } from '../hooks/useLeaveRoomOnBackNavigation';
 import { getLocalPlayerId } from '../stores/roomStore';
 import { cn } from '../utils/cn';
 
@@ -104,6 +105,23 @@ export function RoomScreen() {
     setBusy(false);
     navigate('/');
   }, [leaveRoom, navigate]);
+
+  // Phone/browser BACK while inside an active room is an INTENTIONAL leave
+  // (spec: "PHONE BACK BUTTON MUST LEAVE ACTIVE ROOM"). This is separate from
+  // a network disconnect, which keeps using the existing 120s
+  // ReconnectionManager grace period untouched — this only fires on a real
+  // popstate (back navigation), never on connection loss.
+  const leaveOnBack = useCallback(() => {
+    // Clear the client's own room state immediately so the UI (e.g. the
+    // Home "you are in a room" popup) never flashes while the leave request
+    // is in flight. The server remains authoritative: if this request is
+    // ever lost, the next `authenticate` re-attaches the session to its
+    // still-active room and the popup correctly reappears (spec §9).
+    useRoomStore.getState().clearRoom();
+    void leaveRoom();
+  }, [leaveRoom]);
+
+  useLeaveRoomOnBackNavigation(Boolean(room && room.id === roomId), leaveOnBack);
 
   const game = useMemo(() => games.find((entry) => entry.id === room?.gameId), [games, room?.gameId]);
   const myPlayerId = session?.playerId ?? getLocalPlayerId();
@@ -203,8 +221,6 @@ export function RoomScreen() {
                     settings={room.settings}
                     maxPlayers={room.maxPlayers}
                     playerCount={room.players.length}
-                    aiCount={room.players.filter((player) => player.isAI).length}
-                    aiPlayerIds={room.players.filter((player) => player.isAI).map((player) => player.id)}
                     canStart={canStart}
                     startBlockedReason={startBlockedReason}
                   />

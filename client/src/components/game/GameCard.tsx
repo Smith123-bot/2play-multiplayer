@@ -137,7 +137,7 @@ export function GameCard({
               icon={<Zap className="h-5 w-5" />}
               className="mb-3 text-base font-bold shadow-primary-500/40"
             >
-              ⚡ QUICK PLAY
+              ⚡ PLAY WITH AI
             </Button>
           ) : (
             <div
@@ -145,7 +145,7 @@ export function GameCard({
               aria-disabled="true"
               title={`${game.name} does not have an AI opponent yet.`}
             >
-              <Zap className="h-4 w-4" /> Quick Play unavailable
+              <Zap className="h-4 w-4" /> Play with AI unavailable
             </div>
           )}
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, Crown, Gamepad2, Heart, Plus, Users } from 'lucide-react';
+import { ArrowLeft, Clock, Crown, Gamepad2, Heart, KeyRound, Users, Zap } from 'lucide-react';
 import { GameCard } from '../components/game/GameCard';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -10,6 +10,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { useGameStore } from '../stores/gameStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useIdentityGate } from '../hooks/useIdentityGate';
+import { useRoomActions } from '../hooks/useRoomActions';
 import { formatDuration } from '../utils/format';
 
 export function GameDetailsScreen() {
@@ -20,7 +21,9 @@ export function GameDetailsScreen() {
   const load = useGameStore((store) => store.load);
   const favorites = useFavoritesStore((store) => store.favorites);
   const toggleFavorite = useFavoritesStore((store) => store.toggle);
+  const { quickPlay } = useRoomActions();
   const [loading, setLoading] = useState(true);
+  const [startingAI, setStartingAI] = useState(false);
 
   useEffect(() => {
     void load().finally(() => setLoading(false));
@@ -46,6 +49,14 @@ export function GameDetailsScreen() {
   }
 
   const similar = games.filter((entry) => entry.id !== game.id && entry.category === game.category).slice(0, 3);
+
+  const playWithAI = () =>
+    gate(async () => {
+      setStartingAI(true);
+      const room = await quickPlay({ gameId: game.id });
+      setStartingAI(false);
+      if (room) navigate(`/room/${room.id}`);
+    });
 
   return (
     <div className="space-y-6">
@@ -81,33 +92,64 @@ export function GameDetailsScreen() {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Button
-            size="lg"
-            onClick={() => gate(() => navigate(`/create?game=${game.id}`))}
-            icon={<Plus className="h-4 w-4" />}
-          >
-            Create room
-          </Button>
-          <Button
-            size="lg"
-            variant="secondary"
-            onClick={() => gate(() => navigate(`/join?game=${game.id}`))}
-          >
-            Join room
-          </Button>
-          <Button
-            size="lg"
-            variant="ghost"
-            onClick={() => void toggleFavorite(game.id)}
-            icon={
-              <Heart
-                className={favorites.includes(game.id) ? 'h-4 w-4 fill-accent text-accent' : 'h-4 w-4'}
-              />
-            }
-          >
-            {favorites.includes(game.id) ? 'Favorited' : 'Favorite'}
-          </Button>
+        {/*
+          Button hierarchy (spec §3/§14): Play with AI is the primary,
+          visually strongest action; Create Room and Join Room are secondary.
+          Play with AI never routes through Create Room — it starts a real AI
+          match directly via the same architecture as Quick Play.
+        */}
+        <div className="mt-6 flex flex-col gap-3">
+          {game.hasAI ? (
+            <Button
+              size="lg"
+              fullWidth
+              onClick={playWithAI}
+              loading={startingAI}
+              icon={<Zap className="h-5 w-5" />}
+              className="text-base font-bold shadow-primary-500/40 sm:w-auto"
+            >
+              ⚡ Play with AI
+            </Button>
+          ) : (
+            <div
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-500 sm:w-auto"
+              aria-disabled="true"
+              title={`${game.name} does not have an AI opponent yet.`}
+            >
+              <Zap className="h-4 w-4" /> Play with AI unavailable
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            <Button
+              size="lg"
+              variant="secondary"
+              onClick={() => gate(() => navigate(`/create?game=${game.id}`))}
+              icon={<Users className="h-4 w-4" />}
+            >
+              🏠 Create room
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => gate(() => navigate(`/join?game=${game.id}`))}
+              icon={<KeyRound className="h-4 w-4" />}
+            >
+              🔗 Join room
+            </Button>
+            <Button
+              size="lg"
+              variant="ghost"
+              onClick={() => void toggleFavorite(game.id)}
+              icon={
+                <Heart
+                  className={favorites.includes(game.id) ? 'h-4 w-4 fill-accent text-accent' : 'h-4 w-4'}
+                />
+              }
+            >
+              {favorites.includes(game.id) ? 'Favorited' : 'Favorite'}
+            </Button>
+          </div>
         </div>
       </section>
 

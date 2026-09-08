@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Play } from 'lucide-react';
-import type { AIDifficulty, GameMetadata, RoomSettings } from '@2play/shared';
+import type { GameMetadata, RoomSettings } from '@2play/shared';
 import { MAX_PLAYERS_PER_ROOM, MIN_PLAYERS_PER_ROOM } from '@2play/shared';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
@@ -11,24 +11,27 @@ export interface HostControlsProps {
   settings: RoomSettings;
   maxPlayers: number;
   playerCount: number;
-  aiCount: number;
-  aiPlayerIds: string[];
   canStart: boolean;
   startBlockedReason: string | null;
 }
 
-/** Host only: player count, AI opponents, difficulty, grid size, start. */
+/**
+ * Host only: player count, grid size, start.
+ *
+ * Create Room is human-multiplayer only (spec: "2PLAY — UX + ROOM LIFECYCLE
+ * FIX" §1) — there is intentionally no AI difficulty selector or "Add AI"
+ * control here. AI matches are started directly through the separate
+ * "Play with AI" flow, which never passes through this lobby.
+ */
 export function HostControls({
   game,
   settings,
   maxPlayers,
   playerCount,
-  aiCount,
-  aiPlayerIds,
   canStart,
   startBlockedReason,
 }: HostControlsProps) {
-  const { updateSettings, addAI, removeAI, startGame } = useRoomActions();
+  const { updateSettings, startGame } = useRoomActions();
   const [busy, setBusy] = useState(false);
 
   const counts = (game?.supportedPlayerCounts ?? [2, 3, 4]).filter(
@@ -56,22 +59,6 @@ export function HostControls({
           disabled={busy}
         />
 
-        {game?.hasAI ? (
-          <Select
-            id="host-ai-difficulty"
-            label="AI difficulty"
-            value={settings.aiDifficulty}
-            options={(game.aiDifficulties ?? []).map((difficulty: AIDifficulty) => ({
-              value: difficulty,
-              label: difficulty.charAt(0).toUpperCase() + difficulty.slice(1),
-            }))}
-            onChange={(event) =>
-              void run(() => updateSettings({ aiDifficulty: event.target.value as AIDifficulty }))
-            }
-            disabled={busy}
-          />
-        ) : null}
-
         {game?.gridOptions && game.gridOptions.length > 0 ? (
           <Select
             id="host-grid-size"
@@ -82,47 +69,13 @@ export function HostControls({
             disabled={busy}
           />
         ) : null}
-
-        {game ? (
-          <div className="flex flex-col justify-end">
-            <div className="rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-slate-300">AI opponents</span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy || aiCount === 0}
-                    onClick={() => {
-                      const last = aiPlayerIds[aiPlayerIds.length - 1];
-                      if (last) void run(() => removeAI({ playerId: last }));
-                    }}
-                    aria-label="Remove one AI opponent"
-                  >
-                    −
-                  </Button>
-                  <span className="w-8 text-center tabular-nums text-white">{aiCount}</span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy || playerCount >= maxPlayers}
-                    onClick={() => void run(() => addAI({ difficulty: settings.aiDifficulty }))}
-                    aria-label="Add AI opponent"
-                  >
-                    +
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <Button
           size="lg"
           onClick={() => void startGame()}
-          disabled={!canStart || busy}
+          disabled={!canStart || busy || playerCount === 0}
           icon={<Play className="h-4 w-4" />}
         >
           Start match

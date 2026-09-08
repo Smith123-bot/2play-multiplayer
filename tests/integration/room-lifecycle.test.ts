@@ -112,6 +112,72 @@ describe('room lifecycle over sockets', () => {
     }
   });
 
+  it('leave-room is idempotent and immediately frees the player to create/join again (fixes the "already in a room" bug)', async () => {
+    const socket = connect(server.url);
+    try {
+      await once(socket, 'connect');
+      await authenticate(socket, 'LeaveTwice');
+
+      const created = await emitAck<{ room: RoomState }>(socket, 'room:create', {
+        gameId: 'reaction-race',
+        maxPlayers: 2,
+        isPrivate: false,
+      });
+      expect(created.ok).toBe(true);
+
+      // Creating a second room while still in the first must be rejected —
+      // this is the exact "Already in a room" state the bug fix targets.
+      const blocked = await emitAck(socket, 'room:create', {
+        gameId: 'reaction-race',
+        maxPlayers: 2,
+        isPrivate: false,
+      });
+      expect(blocked.ok).toBe(false);
+
+      // Intentional leave (what the phone/browser BACK button now triggers).
+      const firstLeave = await emitAck<{ left: boolean }>(socket, 'room:leave', {});
+      expect(firstLeave.ok).toBe(true);
+      expect(firstLeave.data?.left).toBe(true);
+
+      // A duplicate leave request must be safe (idempotent), never an error.
+      const secondLeave = await emitAck<{ left: boolean }>(socket, 'room:leave', {});
+      expect(secondLeave.ok).toBe(true);
+
+      // Immediately afterwards the player must be free to create another room.
+      const recreated = await emitAck<{ room: RoomState }>(socket, 'room:create', {
+        gameId: 'memory-match',
+        maxPlayers: 2,
+        isPrivate: false,
+      });
+      expect(recreated.ok).toBe(true);
+      expect(recreated.data?.room.gameId).toBe('memory-match');
+    } finally {
+      socket.close();
+    }
+  });
+
+  it('room:quick-play starts a real AI match directly with no room-code UX and no "choose a game" step', async () => {
+    const socket = connect(server.url);
+    try {
+      await once(socket, 'connect');
+      await authenticate(socket, 'QuickPlayer');
+
+      const result = await emitAck<{ room: RoomState; playerId: string }>(socket, 'room:quick-play', {
+        gameId: 'reaction-race',
+        aiDifficulty: 'medium',
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.data?.room.isPrivate).toBe(true);
+      expect(result.data?.room.isQuickPlay).toBe(true);
+      expect(result.data?.room.players.some((player) => player.isAI)).toBe(true);
+      // Real AI match starts right away — no lobby wait, no manual "start".
+      expect(['COUNTDOWN', 'PLAYING']).toContain(result.data?.room.status);
+    } finally {
+      socket.close();
+    }
+  });
+
   it('exposes health and the game catalogue over HTTP', async () => {
     const health = (await fetch(`${server.url}/api/health`).then((res) => res.json())) as {
       status: string;

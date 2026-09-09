@@ -31,10 +31,14 @@ describe('chat', () => {
     const { host, guest } = await lobbyPair();
     try {
       const messagePromise = once<{ message: ChatMessage }>(guest.socket, 'chat:message', 10_000);
+      const sentAt = performance.now();
       const sent = await emitAck(host.socket, 'chat:send', { text: 'hello team' });
       expect(sent.ok).toBe(true);
 
       const received = await messagePromise;
+      const chatRoundTripMs = performance.now() - sentAt;
+      expect(chatRoundTripMs).toBeLessThan(1000);
+      console.info(`[audit] chat ack-to-peer delivery: ${chatRoundTripMs.toFixed(1)}ms`);
       expect(received.message.text).toBe('hello team');
       expect(received.message.nickname).toBe('ChatHost');
 

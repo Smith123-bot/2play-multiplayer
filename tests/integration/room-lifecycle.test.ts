@@ -186,6 +186,14 @@ describe('room lifecycle over sockets', () => {
     expect(health.status).toBe('ok');
     expect(health.database.mode).toBeDefined();
 
+    const detailedResponse = await fetch(`${server.url}/api/health/detailed`);
+    expect(detailedResponse.status).toBe(200);
+    const detailed = (await detailedResponse.json()) as { status: string; rooms: number; timers: number; memory: { heapUsedBytes: number } };
+    expect(detailed.status).toBe('ok');
+    expect(detailed.rooms).toBeGreaterThanOrEqual(0);
+    expect(detailed.timers).toBeGreaterThanOrEqual(0);
+    expect(detailed.memory.heapUsedBytes).toBeGreaterThan(0);
+
     const games = (await fetch(`${server.url}/api/games`).then((res) => res.json())) as {
       games: Array<{ id: string }>;
     };

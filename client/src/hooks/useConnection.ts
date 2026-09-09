@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import type {
+  ChatMessagePayload,
   ChatMutedPayload,
+  ChatSystemPayload,
   ConnectionEstablishedPayload,
   GameFinishedPayload,
   GameStartedPayload,
@@ -108,6 +110,15 @@ export function useConnection(): { ensureSession: (nickname?: string, avatar?: s
       toast.error('The room was closed.');
     });
 
+    // Chat is broadcast as a dedicated event for low latency. Append it
+    // directly instead of waiting for the next room snapshot.
+    const appendChat = (payload: ChatMessagePayload | ChatSystemPayload) => {
+      useRoomStore.getState().appendChatMessage(payload.roomId, payload.message);
+    };
+    const offChatMessage = socketClient.on<ChatMessagePayload>(SERVER_EVENTS.CHAT_MESSAGE, appendChat);
+    const offChatEmote = socketClient.on<ChatMessagePayload>(SERVER_EVENTS.CHAT_EMOTE, appendChat);
+    const offChatSystem = socketClient.on<ChatSystemPayload>(SERVER_EVENTS.CHAT_SYSTEM, appendChat);
+
     const offMuted = socketClient.on<ChatMutedPayload>(SERVER_EVENTS.CHAT_MUTED, (payload) => {
       if (payload.playerId === getLocalPlayerId()) {
         useChatStore.getState().setMutedUntil(payload.until);
@@ -188,6 +199,9 @@ export function useConnection(): { ensureSession: (nickname?: string, avatar?: s
       offRoomJoined();
       offRoomUpdated();
       offRoomClosed();
+      offChatMessage();
+      offChatEmote();
+      offChatSystem();
       offMuted();
       offDisconnected();
       offReconnected();

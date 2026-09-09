@@ -9,6 +9,7 @@ export interface RoomStoreState {
   roomClosedReason: string | null;
   setRoom: (room: RoomState) => void;
   updateRoom: (room: RoomState) => void;
+  appendChatMessage: (roomId: string, message: ChatMessage) => void;
   setLastResult: (result: GameResult | null) => void;
   setKicked: (value: boolean) => void;
   setRoomClosed: (reason: string | null) => void;
@@ -40,6 +41,12 @@ export const useRoomStore = create<RoomStoreState>((set, get) => ({
     // Ignore stale snapshots (out-of-order delivery).
     if (current && room.stateVersion < current.stateVersion && room.id === current.id) return;
     set({ room });
+  },
+
+  appendChatMessage: (roomId, message) => {
+    const current = get().room;
+    if (!current || current.id !== roomId || current.chat.some((entry) => entry.id === message.id)) return;
+    set({ room: { ...current, chat: [...current.chat.slice(-99), message] } });
   },
 
   setLastResult: (lastResult) => set({ lastResult }),

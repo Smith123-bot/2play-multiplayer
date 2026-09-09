@@ -383,13 +383,14 @@ const CASES: GameCase[] = [
   {
     id: 'split-world',
     expect: (state) =>
-      Array.isArray(state.tiles) &&
-      Boolean(state.players) &&
-      Boolean(state.goal) &&
-      typeof state.role === 'string' &&
-      state.trueTiles === undefined,
+      Array.isArray(state.tiles) && Boolean(state.players) && Boolean(state.goal) && typeof state.role === 'string' && state.trueTiles === undefined,
     action: { type: 'move', payload: { direction: 'right' } },
   },
+  { id: 'love-maze', expect: (state) => state.phase === 'playing' && Boolean(state.objectives) && Boolean(state.players), action: { type: 'move', payload: { dx: 1, dy: 0 } } },
+  { id: 'sync-jump', expect: (state) => state.phase === 'playing' && typeof state.syncScore === 'number' && Boolean(state.players), action: { type: 'jump' } },
+  { id: 'couple-sync', expect: (state) => state.phase === 'playing' && typeof state.round === 'number' && typeof state.roundTarget === 'number', action: { type: 'press', payload: { value: 0 } } },
+  { id: 'couple-memory', expect: (state) => state.phase === 'playing' && Array.isArray(state.cards) && state.cards.length === 16, action: { type: 'reveal', payload: { cardId: 0 } } },
+  { id: 'build-together', expect: (state) => state.phase === 'playing' && Array.isArray(state.pieces) && state.pieces.length > 0, action: { type: 'place', payload: { pieceId: 0, x: 0, y: 0, rotation: 0 } } },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

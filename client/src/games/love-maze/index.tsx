@@ -1,0 +1,1 @@
+export { loveMazeClient } from '../coopGame';

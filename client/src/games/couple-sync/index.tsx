@@ -1,0 +1,1 @@
+export { coupleSyncClient } from '../coopGame';

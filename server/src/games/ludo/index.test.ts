@@ -18,6 +18,17 @@ describe('Ludo', () => {
     h.platform.gameManager.handleAction(f.room, first, { type: 'roll-dice' });
     expect(state.dice === null || [1,2,3,4,5,6].includes(state.dice)).toBe(true); h.destroy();
   });
+  it('captures an opponent token and sends it back to its yard', async () => {
+    const h = createTestPlatform(); const f = await createGameFixture(h.platform, 'ludo'); const state = f.room.gameState as any;
+    const ids = Object.keys(state.players); const attacker = state.players[ids[0]!]; const defender = state.players[ids[1]!];
+    attacker.tokens[0].progress = 13; defender.tokens[0].progress = 1;
+    state.currentPlayerId = ids[0]; state.dice = 1; state.canRoll = false;
+    expect(h.platform.gameManager.handleAction(f.room, ids[0]!, { type: 'move-token', payload: { tokenIndex: 0 } }).accepted).toBe(true);
+    expect(defender.tokens[0].progress).toBe(-1);
+    expect(attacker.captures).toBe(1);
+    h.destroy();
+  });
+
   it('exposes safe cells and rejects movement after a turn is over', async () => {
     const h = createTestPlatform(); const f = await createGameFixture(h.platform, 'ludo'); const state = f.room.gameState as any;
     expect(LUDO_SAFE_CELLS.length).toBe(8); expect(state.phase).toBe('playing');

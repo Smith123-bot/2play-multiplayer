@@ -5,7 +5,7 @@ import { actionAccepted, actionRejected } from '../GameModule';
 
 export type LudoPhase = 'idle' | 'playing' | 'finished';
 export interface LudoToken { progress: number; }
-export interface LudoPlayer { color: number; tokens: LudoToken[]; score: number; finished: boolean; disconnected: boolean; left: boolean; }
+export interface LudoPlayer { color: number; tokens: LudoToken[]; score: number; captures: number; finished: boolean; disconnected: boolean; left: boolean; }
 export interface LudoState {
   phase: LudoPhase; players: Record<string, LudoPlayer>; currentPlayerId: string | null;
   dice: number | null; canRoll: boolean; turnEndsAt: number | null; winnerId: string | null;
@@ -51,9 +51,9 @@ export const ludoGame: GameModule<LudoState> = {
   metadata: LUDO_METADATA,
   initialize(): void {},
   createInitialState(players): LudoState {
-    return { phase: 'idle', players: Object.fromEntries(players.map((p, i) => [p.id, { color: i % 4, tokens: Array.from({ length: 4 }, () => ({ progress: -1 })), score: 0, finished: false, disconnected: false, left: false }])), currentPlayerId: null, dice: null, canRoll: false, turnEndsAt: null, winnerId: null, lastEvent: null, startedAt: null, finishReason: null };
+    return { phase: 'idle', players: Object.fromEntries(players.map((p, i) => [p.id, { color: i % 4, tokens: Array.from({ length: 4 }, () => ({ progress: -1 })), score: 0, captures: 0, finished: false, disconnected: false, left: false }])), currentPlayerId: null, dice: null, canRoll: false, turnEndsAt: null, winnerId: null, lastEvent: null, startedAt: null, finishReason: null };
   },
-  playerJoined(player, state): void { state.players[player.id] ??= { color: Object.keys(state.players).length % 4, tokens: Array.from({ length: 4 }, () => ({ progress: -1 })), score: 0, finished: false, disconnected: false, left: false }; state.players[player.id]!.disconnected = false; },
+  playerJoined(player, state): void { state.players[player.id] ??= { color: Object.keys(state.players).length % 4, tokens: Array.from({ length: 4 }, () => ({ progress: -1 })), score: 0, captures: 0, finished: false, disconnected: false, left: false }; state.players[player.id]!.disconnected = false; },
   playerReady(): void {},
   playerLeft(id, state, ctx, reason): void { const p = state.players[id]; if (!p) return; if (reason === 'disconnect') p.disconnected = true; else { p.left = true; if (state.currentPlayerId === id) startTurn(state, ctx, nextPlayer(state, id)); if (activeIds(state).length < 2 && state.phase === 'playing') finishGame(state, ctx, 'abandoned'); } },
   start(state, ctx): void { if (state.phase === 'playing') return; state.phase = 'playing'; state.startedAt = ctx.now(); state.finishReason = null; state.winnerId = null; startTurn(state, ctx, activeIds(state)[0] ?? null); ctx.markStateChanged(); for (const p of ctx.players) if (p.isAI) ctx.requestAI(p.id, 500); },
@@ -71,7 +71,7 @@ export const ludoGame: GameModule<LudoState> = {
     const index = action.payload?.tokenIndex as number; const token = p.tokens[index]!; const roll = state.dice;
     token.progress = token.progress < 0 ? 0 : token.progress + roll; p.score += token.progress === HOME_PROGRESS ? 100 : 10;
     const cell = routeCell(p, token);
-    if (cell !== null && !LUDO_SAFE_CELLS.includes(cell as (typeof LUDO_SAFE_CELLS)[number])) for (const [otherId, other] of Object.entries(state.players)) if (otherId !== id && !other.left) for (const enemy of other.tokens) if (routeCell(other, enemy) === cell) { enemy.progress = -1; p.score += 25; state.lastEvent = `capture:${id}`; }
+    if (cell !== null && !LUDO_SAFE_CELLS.includes(cell as (typeof LUDO_SAFE_CELLS)[number])) for (const [otherId, other] of Object.entries(state.players)) if (otherId !== id && !other.left) for (const enemy of other.tokens) if (routeCell(other, enemy) === cell) { enemy.progress = -1; p.score += 25; p.captures += 1; state.lastEvent = `capture:${id}`; }
     if (p.tokens.every((t) => t.progress === HOME_PROGRESS)) { p.finished = true; finishGame(state, ctx, 'completed', id); return actionAccepted(); }
     state.lastEvent = `move:${id}:${index}`; startTurn(state, ctx, roll === 6 ? id : nextPlayer(state, id)); ctx.markStateChanged(); return actionAccepted();
   },
@@ -80,7 +80,7 @@ export const ludoGame: GameModule<LudoState> = {
   checkWinCondition(state) { return state.winnerId ? [state.winnerId] : null; },
   checkDrawCondition(): boolean { return false; }, isGameFinished(state) { return state.phase === 'finished'; },
   finish(state) { state.phase = 'finished'; state.canRoll = false; },
-  getResult(state, ctx): GameResultDraft { const rankings = ctx.players.map((p, i) => ({ playerId: p.id, rank: i + 1, score: state.players[p.id]?.score ?? 0, isWinner: p.id === state.winnerId, isDraw: false, stats: { captures: Math.floor((state.players[p.id]?.score ?? 0) / 25) } })).sort((a, b) => b.score - a.score).map((r, i) => ({ ...r, rank: i + 1 })); return { winners: state.winnerId ? [state.winnerId] : rankings[0] ? [rankings[0].playerId] : [], isDraw: false, rankings, reason: state.finishReason ?? 'completed' }; },
+  getResult(state, ctx): GameResultDraft { const rankings = ctx.players.map((p, i) => ({ playerId: p.id, rank: i + 1, score: state.players[p.id]?.score ?? 0, isWinner: p.id === state.winnerId, isDraw: false, stats: { captures: state.players[p.id]?.captures ?? 0, tokensHome: state.players[p.id]?.tokens.filter((token) => token.progress === HOME_PROGRESS).length ?? 0 } })).sort((a, b) => b.score - a.score).map((r, i) => ({ ...r, rank: i + 1 })); return { winners: state.winnerId ? [state.winnerId] : rankings[0] ? [rankings[0].playerId] : [], isDraw: false, rankings, reason: state.finishReason ?? 'completed' }; },
   reset(state) { const ids = Object.keys(state.players); return ludoGame.createInitialState(ids.map((id) => ({ id, nickname: '', avatar: '', isAI: false, aiDifficulty: null, isConnected: true, seatIndex: state.players[id]!.color, isHost: false })), { playerCount: ids.length, humanCount: ids.length, aiOpponents: 0, aiDifficulty: 'medium' }); },
   cleanup(state) { state.players = {}; },
   getPublicState(state, viewerId, ctx) { return { ...state, players: Object.fromEntries(Object.entries(state.players).map(([id, p]) => [id, { ...p, tokens: p.tokens.map((t) => ({ ...t })), color: COLORS[p.color] }])), safeCells: LUDO_SAFE_CELLS, serverTime: ctx.now(), viewerId }; },

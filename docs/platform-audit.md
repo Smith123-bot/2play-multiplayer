@@ -109,7 +109,7 @@ The chat number measures the test client's send-to-peer event round trip on loca
 
 ## Verification totals
 
-- Server tests: 51 files, 493 tests passed
+- Server tests: 51 files, 494 tests passed
 - Client tests: 7 files, 42 tests passed
 - Integration tests: 6 files, 66 tests passed
 - Typecheck: passed from a clean generated-shared state

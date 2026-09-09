@@ -8,6 +8,7 @@ import { HostControls } from '../components/room/HostControls';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { CountdownOverlay } from '../components/game/CountdownOverlay';
 import { GameRenderer } from '../components/game/GameRenderer';
+import { HowToPlayModal } from '../components/game/HowToPlayModal';
 import { ResultPanel } from '../components/result/ResultPanel';
 import { RematchPanel } from '../components/rematch/RematchPanel';
 import { Button } from '../components/ui/Button';
@@ -47,6 +48,8 @@ export function RoomScreen() {
 
   const [reconnecting, setReconnecting] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [rulesFirstVisit, setRulesFirstVisit] = useState(false);
   const attempted = useRef<string | null>(null);
 
   useEffect(() => {
@@ -124,6 +127,24 @@ export function RoomScreen() {
   useLeaveRoomOnBackNavigation(Boolean(room && room.id === roomId), leaveOnBack);
 
   const game = useMemo(() => games.find((entry) => entry.id === room?.gameId), [games, room?.gameId]);
+
+  const activeRoomId = room?.id;
+
+  useEffect(() => {
+    if (!game || !activeRoomId || typeof window === 'undefined') return;
+    const key = `2play:how-to-play:${game.id}`;
+    if (!window.localStorage.getItem(key)) {
+      setRulesFirstVisit(true);
+      setRulesOpen(true);
+    }
+  }, [game, activeRoomId]);
+
+  const closeRules = useCallback(() => {
+    if (game && typeof window !== 'undefined') window.localStorage.setItem(`2play:how-to-play:${game.id}`, 'seen');
+    setRulesOpen(false);
+    setRulesFirstVisit(false);
+  }, [game]);
+
   const myPlayerId = session?.playerId ?? getLocalPlayerId();
   const me = room?.players.find((player) => player.id === myPlayerId) ?? null;
   const isHost = Boolean(me?.isHost);
@@ -165,6 +186,7 @@ export function RoomScreen() {
         </Link>
         <div className="flex items-center gap-2">
           <Badge tone={status === 'PLAYING' ? 'success' : 'default'}>{status}</Badge>
+          {game ? <Button size="sm" variant="ghost" onClick={() => setRulesOpen(true)}>Rules</Button> : null}
           {playing ? (
             <Button size="sm" variant="ghost" onClick={() => void leaveMatch()} disabled={busy}>
               End match
@@ -316,6 +338,7 @@ export function RoomScreen() {
           ) : null}
         </div>
       </div>
+      {game ? <HowToPlayModal game={game} open={rulesOpen} onClose={closeRules} firstVisit={rulesFirstVisit} /> : null}
     </div>
   );
 }

@@ -43,6 +43,11 @@ import { splitWorldClient } from '../split-world';
 import { ludoClient } from '../ludo';
 import { arrowPuzzleClient } from '../arrow-puzzle';
 import { blackBlastClient } from '../black-blast';
+import { loveMazeClient } from '../love-maze';
+import { syncJumpClient } from '../sync-jump';
+import { coupleSyncClient } from '../couple-sync';
+import { coupleMemoryClient } from '../couple-memory';
+import { buildTogetherClient } from '../build-together';
 
 /**
  * Client game registry.
@@ -94,6 +99,11 @@ const modules: ClientGameModule[] = [
   ludoClient,
   arrowPuzzleClient,
   blackBlastClient,
+  loveMazeClient,
+  syncJumpClient,
+  coupleSyncClient,
+  coupleMemoryClient,
+  buildTogetherClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

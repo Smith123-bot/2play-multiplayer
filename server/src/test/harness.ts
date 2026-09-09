@@ -59,6 +59,11 @@ import { splitWorldGame } from '../games/split-world';
 import { ludoGame } from '../games/ludo';
 import { arrowPuzzleGame } from '../games/arrow-puzzle';
 import { blackBlastGame } from '../games/black-blast';
+import { loveMazeGame } from '../games/love-maze';
+import { syncJumpGame } from '../games/sync-jump';
+import { coupleSyncGame } from '../games/couple-sync';
+import { coupleMemoryGame } from '../games/couple-memory';
+import { buildTogetherGame } from '../games/build-together';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -206,6 +211,11 @@ export function createTestPlatform(
       ludoGame,
       arrowPuzzleGame,
       blackBlastGame,
+      loveMazeGame,
+      syncJumpGame,
+      coupleSyncGame,
+      coupleMemoryGame,
+      buildTogetherGame,
     ]) {
       platform.registry.register(game);
     }

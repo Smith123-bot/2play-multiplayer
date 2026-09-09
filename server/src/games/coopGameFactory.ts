@@ -32,6 +32,12 @@ function validate(id: string, action: GameAction, state: CoopState): ValidationR
   if (state.kind === 'build') { if (action.type === 'place') { const pieceId = action.payload?.pieceId, x = action.payload?.x, y = action.payload?.y, rotation = action.payload?.rotation ?? 0; const piece = state.pieces.find((entry) => entry.id === pieceId); return piece && piece.placedBy === null && Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(rotation) && Number(x) === piece.x && Number(y) === piece.y && Number(rotation) === piece.targetRotation ? { valid: true } : { valid: false, reason: 'That piece or placement is invalid.' }; } if (action.type === 'complete') return { valid: state.pieces.every((entry) => entry.placedBy !== null), reason: 'The target is not complete yet.' }; if (action.type === 'remove') return { valid: state.pieces.some((piece) => piece.id === action.payload?.pieceId && piece.placedBy === id), reason: 'You can only remove your own placed piece.' }; }
   return { valid: false, reason: 'Unknown co-op action.' };
 }
+function advanceLevel(state: CoopState, ctx: GameContext) {
+  if (state.level >= state.maxLevel) { finish(state, ctx, 'completed', null); return; }
+  state.level += 1; state.teamScore += 100; state.objectives = { switches: [false, false], keys: [false, false], doorOpen: false, exitPlayers: [] }; state.selection = []; state.pairsFound = 0; state.combo = 0; state.piecesUsed = 0; state.cards = state.kind === 'memory' ? cards(ctx.seed + state.level) : []; state.pieces = state.kind === 'build' ? pieces(state.level) : [];
+  for (const player of Object.values(state.players)) { player.finished = false; player.x = 1; player.y = 1; }
+  state.lastEvent = `level:${state.level}`; ctx.markStateChanged();
+}
 function handle(id: string, action: GameAction, state: CoopState, ctx: GameContext): ActionResult {
   const p = state.players[id]!; p.actions += 1;
   if (state.kind === 'maze') {
@@ -41,20 +47,20 @@ function handle(id: string, action: GameAction, state: CoopState, ctx: GameConte
     else if (action.type === 'checkpoint') p.checkpoints += 1;
     else if (action.type === 'exit' && p.x >= 8 && p.y >= 8) { if (!state.objectives.exitPlayers.includes(id)) state.objectives.exitPlayers.push(id); }
     state.teamScore += action.type === 'checkpoint' ? 15 : 2; state.lastEvent = `maze:${action.type}`;
-    if (state.objectives.doorOpen && state.objectives.exitPlayers.length === 2 && state.objectives.keys.every(Boolean)) finish(state, ctx, 'completed', null);
+    if (state.objectives.doorOpen && state.objectives.exitPlayers.length === 2 && state.objectives.keys.every(Boolean)) advanceLevel(state, ctx);
   } else if (state.kind === 'jump') {
     if (allowedMove(action)) { p.x = Math.max(0, Math.min(10, p.x + Number(action.payload?.dx))); p.y = Math.max(0, Math.min(5, p.y + Number(action.payload?.dy))); }
     else if (action.type === 'jump') { p.y = Math.max(0, p.y - 1); }
     else if (action.type === 'checkpoint') p.checkpoints += 1;
-    else if (action.type === 'finish') { p.finished = true; if (playerIds(state).every((pid) => state.players[pid]!.finished)) finish(state, ctx, 'completed', null); }
+    else if (action.type === 'finish') { p.finished = true; if (playerIds(state).every((pid) => state.players[pid]!.finished)) advanceLevel(state, ctx); }
     state.syncScore = Math.max(0, Math.min(100, state.syncScore + (Math.abs(state.players[playerIds(state)[0]!]!.x - state.players[playerIds(state)[1]!]!.x) <= 2 ? 3 : -2))); state.teamScore += 5; state.lastEvent = `jump:${action.type}`;
   } else if (state.kind === 'sync') {
     if (action.type === 'press' || action.type === 'select') { const value = Number(action.payload?.value ?? action.payload?.symbol ?? -1); if (value === state.roundTarget) { state.roundActions[id] = value; } else { p.mistakes += 1; state.roundFailures += 1; } if (Object.keys(state.roundActions).length === 2) { state.roundSuccesses += 1; state.teamScore += 100; state.round += 1; state.roundTarget = state.round % 4; state.roundActions = {}; if (state.round > 10) finish(state, ctx, 'completed', null); } state.lastEvent = `sync:${action.type}`; }
   } else if (state.kind === 'memory') {
     const cardId = Number(action.payload?.cardId); state.selection.push(cardId); state.lastEvent = `memory:reveal:${cardId}`;
-    if (state.selection.length === 2) { const [a, b] = state.selection.map((n) => state.cards[n]!); if (a?.symbol === b?.symbol) { a.matched = true; b.matched = true; state.pairsFound += 1; state.combo += 1; state.teamScore += 100 + state.combo * 10; } else { p.mistakes += 1; state.combo = 0; } state.selection = []; if (state.pairsFound === state.cards.length / 2 && Object.values(state.players).filter((x) => x.actions > 0).length === 2) finish(state, ctx, 'completed', null); }
+    if (state.selection.length === 2) { const [a, b] = state.selection.map((n) => state.cards[n]!); if (a?.symbol === b?.symbol) { a.matched = true; b.matched = true; state.pairsFound += 1; state.combo += 1; state.teamScore += 100 + state.combo * 10; } else { p.mistakes += 1; state.combo = 0; } state.selection = []; if (state.pairsFound === state.cards.length / 2 && Object.values(state.players).filter((x) => x.actions > 0).length === 2) advanceLevel(state, ctx); }
   } else if (state.kind === 'build') {
-    const pieceId = Number(action.payload?.pieceId); const piece = state.pieces.find((entry) => entry.id === pieceId); if (action.type === 'place' && piece) { piece.x = Number(action.payload?.x); piece.y = Number(action.payload?.y); piece.rotation = Number(action.payload?.rotation ?? 0); piece.placedBy = id; state.piecesUsed += 1; state.teamScore += 10; } else if (action.type === 'remove' && piece) { piece.placedBy = null; state.piecesUsed = Math.max(0, state.piecesUsed - 1); p.mistakes += 1; } else if (action.type === 'complete' && state.pieces.every((entry) => entry.placedBy !== null) && Object.values(state.players).filter((x) => x.actions > 0).length === 2) finish(state, ctx, 'completed', null); state.lastEvent = `build:${action.type}`;
+    const pieceId = Number(action.payload?.pieceId); const piece = state.pieces.find((entry) => entry.id === pieceId); if (action.type === 'place' && piece) { piece.x = Number(action.payload?.x); piece.y = Number(action.payload?.y); piece.rotation = Number(action.payload?.rotation ?? 0); piece.placedBy = id; state.piecesUsed += 1; state.teamScore += 10; } else if (action.type === 'remove' && piece) { piece.placedBy = null; state.piecesUsed = Math.max(0, state.piecesUsed - 1); p.mistakes += 1; } else if (action.type === 'complete' && state.pieces.every((entry) => entry.placedBy !== null) && Object.values(state.players).filter((x) => x.actions > 0).length === 2) advanceLevel(state, ctx); state.lastEvent = `build:${action.type}`;
   }
   ctx.markStateChanged(); const ai = ctx.players.find((player) => player.isAI && player.id !== id); if (ai && state.phase === 'playing') ctx.requestAI(ai.id, 350); return actionAccepted();
 }

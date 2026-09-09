@@ -84,11 +84,20 @@ export const isTest = env.NODE_ENV === 'test';
 
 export function parseCorsOrigins(): string[] | '*' {
   const raw = (env.CORS_ORIGIN ?? '').trim();
-  if (!raw || raw === '*') return '*';
-  return raw
+  if (!raw || raw === '*') {
+    if (isProduction) {
+      throw new Error('CORS_ORIGIN must be an explicit origin allowlist in production.');
+    }
+    return '*';
+  }
+  const origins = raw
     .split(',')
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
+  if (isProduction && origins.length === 0) {
+    throw new Error('CORS_ORIGIN must contain at least one origin in production.');
+  }
+  return origins;
 }
 
 /** True when Supabase credentials are (at least partially) configured. */

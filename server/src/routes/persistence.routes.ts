@@ -5,6 +5,7 @@ import type { Platform } from '../core/Platform';
 import type { Session } from '../managers/ConnectionManager';
 import { AppError } from '../utils/errors';
 import { parseOrThrow } from '../utils/validate';
+import { asyncHandler } from '../middleware';
 
 const userIdSchema = z.string().uuid('Invalid user id.');
 const favoriteBodySchema = z
@@ -22,66 +23,63 @@ function sessionFromRequest(platform: Platform, req: Request): Session | null {
 /** Resolve the caller: a valid `x-session-token` header wins. */
 function resolveUserId(platform: Platform, req: Request, routeUserId?: string): string {
   const session = sessionFromRequest(platform, req);
-  if (session) {
-    if (routeUserId && routeUserId !== session.userId) {
-      throw AppError.unauthorized('You can only access your own data.');
-    }
-    return session.userId;
-  }
+  // User IDs are not credentials. Every persistence read/write requires the
+  // caller's valid bearer session; accepting a route ID anonymously is an IDOR.
+  if (!session) throw AppError.unauthorized('Authenticate to use this endpoint.');
   if (routeUserId) {
     parseOrThrow(userIdSchema, routeUserId, 'user id');
-    return routeUserId;
+    if (routeUserId !== session.userId) throw AppError.unauthorized('You can only access your own data.');
   }
-  throw AppError.unauthorized('Authenticate to use this endpoint.');
+  return session.userId;
 }
 
 /** Persistent (REST) features: statistics, history and favorites. */
 export function createPersistenceRouter(platform: Platform): Router {
   const router = Router();
 
-  router.get('/statistics/:userId', async (req: Request, res: Response) => {
+  router.get('/statistics/:userId', asyncHandler(async (req: Request, res: Response) => {
     const userId = resolveUserId(platform, req, req.params.userId);
     const [statistics, summary] = await Promise.all([
       platform.statisticsManager.getStatistics(userId),
       platform.statisticsManager.getSummary(userId),
     ]);
     res.json({ userId, statistics, summary });
-  });
+  }));
 
-  router.get('/statistics/:userId/:gameId', async (req: Request, res: Response) => {
+  router.get('/statistics/:userId/:gameId', asyncHandler(async (req: Request, res: Response) => {
     const userId = resolveUserId(platform, req, req.params.userId);
     const gameId = parseOrThrow(gameIdSchema, req.params.gameId, 'game id');
     const statistic = await platform.statisticsManager.getStatistic(userId, gameId);
     res.json({ statistic });
-  });
+  }));
 
-  router.get('/history/:userId', async (req: Request, res: Response) => {
+  router.get('/history/:userId', asyncHandler(async (req: Request, res: Response) => {
     const userId = resolveUserId(platform, req, req.params.userId);
     const limitRaw = Number(req.query.limit ?? 20);
     const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 20;
     const history = await platform.statisticsManager.getHistory(userId, limit);
     res.json({ userId, history });
-  });
+  }));
 
-  router.get('/favorites/:userId', async (req: Request, res: Response) => {
+  router.get('/favorites/:userId', asyncHandler(async (req: Request, res: Response) => {
     const userId = resolveUserId(platform, req, req.params.userId);
     const favorites = await platform.favoriteManager.list(userId);
     res.json({ userId, favorites });
-  });
+  }));
 
-  router.post('/favorites', async (req: Request, res: Response) => {
+  router.post('/favorites', asyncHandler(async (req: Request, res: Response) => {
     const body = parseOrThrow(favoriteBodySchema, req.body, 'favorite payload');
     const userId = resolveUserId(platform, req);
     const favorite = await platform.favoriteManager.add(userId, body.gameId);
     res.status(201).json({ favorite });
-  });
+  }));
 
-  router.delete('/favorites/:gameId', async (req: Request, res: Response) => {
+  router.delete('/favorites/:gameId', asyncHandler(async (req: Request, res: Response) => {
     const gameId = parseOrThrow(gameIdSchema, req.params.gameId, 'game id');
     const userId = resolveUserId(platform, req);
     await platform.favoriteManager.remove(userId, gameId);
     res.status(204).send();
-  });
+  }));
 
   return router;
 }

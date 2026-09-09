@@ -66,8 +66,11 @@ export class ConnectionManager {
         });
         return { session: this.toSessionInfo(existing), restored: true };
       }
-      // Unknown token: treat as a new session rather than failing the user.
-      this.logger.warn('unknown session token supplied — minting a new session');
+      // A presented credential that is not known must not silently become a
+      // new identity. Otherwise stale or attacker-supplied tokens are hidden
+      // and session lifecycle auditing becomes ambiguous.
+      this.logger.warn('unknown session token supplied — rejecting authentication');
+      throw AppError.unauthorized('Your session is invalid or expired.');
     }
 
     const token = createSessionToken();

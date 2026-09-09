@@ -54,6 +54,42 @@ describe('security & validation', () => {
     }
   }, 30_000);
 
+  it('requires a session for persistence endpoints and blocks cross-user access', async () => {
+    const first = await createClient(server.url, 'PersistOne');
+    const second = await createClient(server.url, 'PersistTwo');
+    try {
+      const anonymous = await fetch(`${server.url}/api/statistics/${first.session.userId}`);
+      expect(anonymous.status).toBe(401);
+      const crossUser = await fetch(`${server.url}/api/statistics/${first.session.userId}`, { headers: { 'x-session-token': second.session.sessionToken } });
+      expect(crossUser.status).toBe(401);
+      const own = await fetch(`${server.url}/api/statistics/${first.session.userId}`, { headers: { 'x-session-token': first.session.sessionToken } });
+      expect(own.status).toBe(200);
+    } finally {
+      first.close();
+      second.close();
+    }
+  }, 30_000);
+
+  it('does not allow session identity switching or unknown-token minting', async () => {
+    const host = await createClient(server.url, 'BoundHost');
+    const attacker = raw();
+    await once(attacker, 'connect');
+    try {
+      const created = await emitAck<{ room: RoomState }>(host.socket, 'room:create', { gameId: 'reaction-race', maxPlayers: 2, isPrivate: false });
+      const auth = await emitAck<{ session: { sessionToken: string } }>(attacker, 'authenticate', { nickname: 'BoundAttacker' });
+      expect(auth.ok).toBe(true);
+      const switched = await emitAck(attacker, 'reconnect:attempt', { roomId: created.data!.room.id, sessionToken: host.session.sessionToken });
+      expect(switched.ok).toBe(false);
+      expect(switched.error?.code).toBe('E002');
+      const unknown = await emitAck(attacker, 'authenticate', { nickname: 'BoundAttacker', sessionToken: 'a'.repeat(40) });
+      expect(unknown.ok).toBe(false);
+      expect(unknown.error?.code).toBe('E002');
+    } finally {
+      host.close();
+      attacker.close();
+    }
+  }, 30_000);
+
   it('rejects malformed and unknown room codes', async () => {
     const client = await createClient(server.url, 'CodeTester');
     try {

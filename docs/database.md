@@ -74,8 +74,10 @@ live in server memory only (spec §8). Live multiplayer is never persisted.
   data.
 * `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_DB_URL` are read from the server
   environment only and are never exposed through Vite variables.
-* REST endpoints accept an optional `x-session-token` header; when present, the
-  requested `userId` must match the session, and mutations (favorites) require it.
+* REST persistence endpoints require an `x-session-token` header; the requested
+  `userId` must match the session, and mutations (favorites) require it.
+* Migration `003_security_hardening.sql` revokes the statistics-writing RPC from
+  `anon` and `authenticated`; only the server service role may execute it.
 * Input is validated with Zod before it reaches the database; nicknames are length
   and character checked.
 
@@ -95,6 +97,7 @@ Supabase SQL editor:
 ```
 server/src/database/migrations/001_init.sql
 server/src/database/migrations/002_functions.sql
+server/src/database/migrations/003_security_hardening.sql
 ```
 
 ## Graceful degradation

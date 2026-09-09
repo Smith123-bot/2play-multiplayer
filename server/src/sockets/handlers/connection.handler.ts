@@ -71,6 +71,13 @@ const authenticate = safeHandler<
 const reconnectAttempt = safeHandler<unknown, { room: RoomState; playerId: string }>(
   async function (this: HandlerContext, payload) {
   const input = parseOrThrow(reconnectSchema, payload, 'reconnect payload');
+  // A socket that already authenticated cannot switch identities by submitting
+  // another player's bearer token. A fresh refresh socket may still present
+  // its valid token through this event before the authenticate event runs.
+  const boundToken = this.socket.data.sessionToken;
+  if (boundToken && boundToken !== input.sessionToken) {
+    throw AppError.unauthorized('The reconnect identity does not match this session.');
+  }
   const { room, player } = this.platform.reconnectionManager.attemptReconnect({
     roomId: input.roomId,
     sessionToken: input.sessionToken,

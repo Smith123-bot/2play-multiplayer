@@ -125,4 +125,4 @@ export const COLORS = {
 } as const;
 
 export const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
-export const GAME_CATEGORIES = ['reflex', 'memory', 'word', 'strategy', 'math'] as const;
+export const GAME_CATEGORIES = ['reflex', 'memory', 'word', 'strategy', 'math', 'coop'] as const;

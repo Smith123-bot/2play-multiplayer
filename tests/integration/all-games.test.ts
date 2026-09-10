@@ -411,6 +411,60 @@ const CASES: GameCase[] = [
       typeof state.cols === 'number',
     action: { type: 'pulse' },
   },
+  {
+    id: 'love-maze',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.tiles) &&
+      (state.tiles as unknown[]).length > 0 &&
+      typeof state.levelName === 'string' &&
+      state.totalLevels === 10 &&
+      Boolean(state.players),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'sync-jump',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.course) &&
+      (state.course as unknown[]).length > 0 &&
+      typeof state.syncMeter === 'number' &&
+      state.totalLevels === 10 &&
+      Boolean(state.players),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'couple-sync',
+    maxPlayers: 2,
+    expect: (state) =>
+      typeof state.totalRounds === 'number' &&
+      Boolean(state.current) &&
+      Boolean(state.players) &&
+      typeof state.teamScore === 'number',
+    action: { type: 'act' },
+  },
+  {
+    id: 'couple-memory',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.cards) &&
+      (state.cards as Array<{ symbol: string | null }>).length > 0 &&
+      // Face-down symbols must never reach a client.
+      (state.cards as Array<{ symbol: string | null }>).every((card) => card.symbol === null) &&
+      Boolean(state.players),
+    action: { type: 'hint' },
+  },
+  {
+    id: 'build-together',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.blueprint) &&
+      (state.blueprint as unknown[]).length > 0 &&
+      Boolean(state.inventory) &&
+      state.totalLevels === 10 &&
+      Boolean(state.players),
+    action: { type: 'place', payload: { x: 0, y: 0, kind: 'a' } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

@@ -39,6 +39,11 @@ import { mirrorArenaGame } from '../games/mirror-arena';
 import { chainReactionGame } from '../games/chain-reaction-battle';
 import { oneButtonGame } from '../games/one-button-battle';
 import { splitWorldGame } from '../games/split-world';
+import { loveMazeGame } from '../games/love-maze';
+import { syncJumpGame } from '../games/sync-jump';
+import { coupleSyncGame } from '../games/couple-sync';
+import { coupleMemoryGame } from '../games/couple-memory';
+import { buildTogetherGame } from '../games/build-together';
 import { ludoGame } from '../games/ludo';
 import { arrowPuzzleGame } from '../games/arrow-puzzle';
 import { blackBlastGame } from '../games/black-blast';
@@ -101,6 +106,11 @@ export class GameLoader {
       ludoGame,
       arrowPuzzleGame,
       blackBlastGame,
+      loveMazeGame,
+      syncJumpGame,
+      coupleSyncGame,
+      coupleMemoryGame,
+      buildTogetherGame,
     ];
 
     for (const game of games) {

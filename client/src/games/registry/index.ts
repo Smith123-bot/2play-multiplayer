@@ -48,6 +48,7 @@ import { syncJumpClient } from '../sync-jump';
 import { coupleSyncClient } from '../couple-sync';
 import { coupleMemoryClient } from '../couple-memory';
 import { buildTogetherClient } from '../build-together';
+import { connectFourClient, hangmanClient, sosGameClient, chessClient } from '../classic';
 
 /**
  * Client game registry.
@@ -104,6 +105,10 @@ const modules: ClientGameModule[] = [
   coupleSyncClient,
   coupleMemoryClient,
   buildTogetherClient,
+  connectFourClient,
+  hangmanClient,
+  sosGameClient,
+  chessClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

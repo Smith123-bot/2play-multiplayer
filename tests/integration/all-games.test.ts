@@ -23,6 +23,10 @@ interface GameCase {
 }
 
 const CASES: GameCase[] = [
+  { id: 'connect-four', expect: (state) => Array.isArray(state.board) && state.board.length === 42, action: { type: 'drop', payload: { column: 0 } } },
+  { id: 'hangman', expect: (state) => typeof state.word === 'string' && !state.word.includes('PLANET'), action: { type: 'guess', payload: { letter: 'E' } } },
+  { id: 'sos-game', expect: (state) => Array.isArray(state.board) && state.board.length === 25, action: { type: 'place', payload: { index: 0, letter: 'S' } } },
+  { id: 'chess', expect: (state) => Array.isArray(state.board) && state.board.length === 64, action: { type: 'move', payload: { from: 52, to: 44 } } },
   {
     id: 'reaction-race',
     settings: { rounds: 1 },

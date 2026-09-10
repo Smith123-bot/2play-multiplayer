@@ -47,6 +47,10 @@ import { syncJumpGame } from '../games/sync-jump';
 import { coupleSyncGame } from '../games/couple-sync';
 import { coupleMemoryGame } from '../games/couple-memory';
 import { buildTogetherGame } from '../games/build-together';
+import { connectFourGame } from '../games/connect-four';
+import { hangmanGame } from '../games/hangman';
+import { sosGame } from '../games/sos-game';
+import { chessGame } from '../games/chess';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -111,6 +115,10 @@ export class GameLoader {
       coupleSyncGame,
       coupleMemoryGame,
       buildTogetherGame,
+      connectFourGame,
+      hangmanGame,
+      sosGame,
+      chessGame,
     ];
 
     for (const game of games) {

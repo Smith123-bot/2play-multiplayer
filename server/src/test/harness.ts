@@ -64,6 +64,10 @@ import { syncJumpGame } from '../games/sync-jump';
 import { coupleSyncGame } from '../games/couple-sync';
 import { coupleMemoryGame } from '../games/couple-memory';
 import { buildTogetherGame } from '../games/build-together';
+import { connectFourGame } from '../games/connect-four';
+import { hangmanGame } from '../games/hangman';
+import { sosGame } from '../games/sos-game';
+import { chessGame } from '../games/chess';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -216,6 +220,10 @@ export function createTestPlatform(
       coupleSyncGame,
       coupleMemoryGame,
       buildTogetherGame,
+      connectFourGame,
+      hangmanGame,
+      sosGame,
+      chessGame,
     ]) {
       platform.registry.register(game);
     }

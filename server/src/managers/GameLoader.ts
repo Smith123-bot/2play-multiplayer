@@ -39,6 +39,9 @@ import { mirrorArenaGame } from '../games/mirror-arena';
 import { chainReactionGame } from '../games/chain-reaction-battle';
 import { oneButtonGame } from '../games/one-button-battle';
 import { splitWorldGame } from '../games/split-world';
+import { ludoGame } from '../games/ludo';
+import { arrowPuzzleGame } from '../games/arrow-puzzle';
+import { blackBlastGame } from '../games/black-blast';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -95,6 +98,9 @@ export class GameLoader {
       chainReactionGame,
       oneButtonGame,
       splitWorldGame,
+      ludoGame,
+      arrowPuzzleGame,
+      blackBlastGame,
     ];
 
     for (const game of games) {

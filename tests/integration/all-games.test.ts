@@ -379,6 +379,38 @@ const CASES: GameCase[] = [
       state.keys === undefined,
     action: { type: 'move', payload: { direction: 'right' } },
   },
+  {
+    id: 'ludo',
+    expect: (state) =>
+      Boolean(state.players) &&
+      Array.isArray(state.trackCells) &&
+      (state.trackCells as unknown[]).length === 52 &&
+      typeof state.phase === 'string' &&
+      Array.isArray(state.turnOrder),
+    action: { type: 'roll' },
+  },
+  {
+    id: 'arrow-puzzle',
+    expect: (state) =>
+      Array.isArray(state.board) &&
+      (state.board as unknown[]).length > 0 &&
+      typeof state.difficulty === 'string' &&
+      Boolean(state.players) &&
+      // The generator solution must never reach a client.
+      state.layout === undefined &&
+      state.seed === undefined,
+    action: { type: 'hint' },
+  },
+  {
+    id: 'black-blast',
+    expect: (state) =>
+      Array.isArray(state.nodes) &&
+      (state.nodes as unknown[]).length > 0 &&
+      Array.isArray(state.pulses) &&
+      Boolean(state.players) &&
+      typeof state.cols === 'number',
+    action: { type: 'pulse' },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

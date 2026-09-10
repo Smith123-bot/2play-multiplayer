@@ -56,6 +56,9 @@ import { mirrorArenaGame } from '../games/mirror-arena';
 import { chainReactionGame } from '../games/chain-reaction-battle';
 import { oneButtonGame } from '../games/one-button-battle';
 import { splitWorldGame } from '../games/split-world';
+import { ludoGame } from '../games/ludo';
+import { arrowPuzzleGame } from '../games/arrow-puzzle';
+import { blackBlastGame } from '../games/black-blast';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -200,6 +203,9 @@ export function createTestPlatform(
       chainReactionGame,
       oneButtonGame,
       splitWorldGame,
+      ludoGame,
+      arrowPuzzleGame,
+      blackBlastGame,
     ]) {
       platform.registry.register(game);
     }

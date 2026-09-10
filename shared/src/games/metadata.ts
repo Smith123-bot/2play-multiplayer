@@ -1284,3 +1284,98 @@ export const INVISIBLE_PATH_METADATA = {
   defaultRounds: 3,
   version: '1.0.0',
 } satisfies GameMetadata;
+
+
+export const LUDO_METADATA = {
+  id: 'ludo',
+  name: 'Ludo',
+  description:
+    'The classic board race. Roll the dice, bring all four tokens home and knock your rivals back to the start.',
+  category: 'strategy' as const,
+  icon: '🎲',
+  thumbnail: '🎲',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 420,
+  difficulty: 'easy' as const,
+  controls: 'Tap the dice to roll, then tap a highlighted token to move it.',
+  rules: [
+    'Every player has four tokens. Roll a six to bring one out of the yard.',
+    'The server rolls the dice — the result is never decided on your device.',
+    'Landing on a lone enemy token sends it back to its yard. Safe squares and pairs are protected.',
+    'A six, a capture or bringing a token home earns you another roll. Three sixes in a row forfeits the turn.',
+    'You need the exact roll to enter the final home cell. First to bring every token home wins.',
+  ],
+  scoring: 'Capture +50, token home +100, finishing bonus up to +150, plus a point per cell advanced.',
+  winCondition: 'Be the first to bring all your tokens home.',
+  tags: ['board', 'classic', 'turn-based', 'family', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const ARROW_PUZZLE_METADATA = {
+  id: 'arrow-puzzle',
+  name: 'Arrow Puzzle',
+  description:
+    'Everyone gets the same board of arrows. Fire the ones with a clear path, unlock the rest and clear it first.',
+  category: 'strategy' as const,
+  icon: '➡️',
+  thumbnail: '➡️',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 240,
+  difficulty: 'medium' as const,
+  controls: 'Tap or click an arrow to fire it. Highlighted arrows have a clear path.',
+  rules: [
+    'An arrow can only be fired when every cell between it and the board edge is empty.',
+    'Firing an arrow removes it, which opens the path for the arrows behind it.',
+    'Every player races on an identical board — the server generates it and guarantees it is solvable.',
+    'Firing a blocked arrow costs points, so look before you tap.',
+    'Boards get bigger and denser each round: easy, medium, then hard.',
+  ],
+  scoring: 'Arrow cleared +10, board solved +200, placement and speed bonuses, blocked tap −5.',
+  winCondition: 'Hold the highest score after the final round (fastest solve breaks a tie).',
+  tags: ['puzzle', 'logic', 'race', 'brain', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 3,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const BLACK_BLAST_METADATA = {
+  id: 'black-blast',
+  name: 'Black Blast',
+  description:
+    'Drop black energy pulses in an abstract arena, catch the rich nodes and set off huge chain reactions.',
+  category: 'reflex' as const,
+  icon: '⚫',
+  thumbnail: '⚫',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 180,
+  difficulty: 'medium' as const,
+  controls: 'WASD / arrows / D-pad to move. Tap the pulse button or press Space to drop energy.',
+  rules: [
+    'Move your marker and drop a pulse. It charges briefly, then expands into a circular zone.',
+    'Every energy node caught in the zone is collected and scores points.',
+    'Rich nodes detonate too, chaining into new pulses — deep chains multiply your score.',
+    'Land pulses back to back to build a combo multiplier up to 4x. A pulse that hits nothing resets it.',
+    'Nodes respawn, so the arena never runs dry. Highest score when the clock ends wins.',
+  ],
+  scoring: 'Energy +20, rich node +60, chain depth bonus per hit, combo multiplier up to 4x.',
+  winCondition: 'Hold the highest score when the three minute clock expires.',
+  tags: ['arcade', 'reflex', 'chain-reaction', 'combo', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;

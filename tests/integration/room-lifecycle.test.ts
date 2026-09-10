@@ -191,6 +191,8 @@ describe('room lifecycle over sockets', () => {
     };
     expect(games.games.map((game: { id: string }) => game.id).sort()).toEqual([
       '2048-battle',
+      'arrow-puzzle',
+      'black-blast',
       'bomb-pass-2d',
       'brick-breaker-battle',
       'capture-the-flag-2d',
@@ -205,6 +207,7 @@ describe('room lifecycle over sockets', () => {
       'fake-door-battle',
       'hexa-conquest',
       'invisible-path',
+      'ludo',
       'magnet-maze',
       'magnet-thief',
       'math-rush',

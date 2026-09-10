@@ -40,6 +40,9 @@ import { mirrorArenaClient } from '../mirror-arena';
 import { chainReactionClient } from '../chain-reaction-battle';
 import { oneButtonClient } from '../one-button-battle';
 import { splitWorldClient } from '../split-world';
+import { ludoClient } from '../ludo';
+import { arrowPuzzleClient } from '../arrow-puzzle';
+import { blackBlastClient } from '../black-blast';
 
 /**
  * Client game registry.
@@ -88,6 +91,9 @@ const modules: ClientGameModule[] = [
   chainReactionClient,
   oneButtonClient,
   splitWorldClient,
+  ludoClient,
+  arrowPuzzleClient,
+  blackBlastClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

@@ -1223,7 +1223,7 @@ export const SPLIT_WORLD_METADATA = {
   id: 'split-world',
   name: 'Split World',
   description:
-    'One shared 2D world, different eyes. You see switches, your partner sees the door — talk it out and finish together.',
+    'See different versions of the same world. Share clues, work together, and find the way out.',
   category: 'strategy' as const,
   icon: '🌍',
   thumbnail: '🌍',
@@ -1232,20 +1232,24 @@ export const SPLIT_WORLD_METADATA = {
   supportedPlayerCounts: [2, 3, 4],
   hasAI: true,
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 160,
-  difficulty: 'medium' as const,
+  estimatedDuration: 260,
+  difficulty: 'hard' as const,
   controls: 'WASD / arrows / swipe / D-pad. Chat is part of the puzzle.',
   rules: [
-    'The true layout lives on the server. Each seat gets a different view of the same world.',
-    'Alpha seats see switches. Beta seats see the door. Decoys are visual only.',
-    'Real walls still block everyone. The door opens only when every switch is held.',
-    'Reach the goal after the door opens. Hidden true tiles never leave the server.',
+    'Five rounds, five arenas: a gate, a key vault, a switch order, pressure plates and an extraction.',
+    'The true layout lives on the server. Each seat gets a different lens on the same world.',
+    'Wardens see switches and the exit, Gatekeepers see hazards and the gate, Scouts see keys and traps.',
+    'Decoy tiles look real to some lenses but are plain floor — only chat separates truth from bait.',
+    'Real walls and closed gates block everyone. Hidden tiles and secret orders never leave the server.',
   ],
-  scoring: 'Switch hold +30, goal +100. Highest total when the clock ends wins.',
-  winCondition: 'Hold the highest score when time expires (goal finishers rank first on a tie).',
-  tags: ['strategy', 'coop', 'puzzle', '2-4 players'],
+  scoring:
+    'Switch +30, key +25, plate +20, exit +100 plus a speed bonus, round win +25. Hazards and wrong order cost points.',
+  winCondition: 'Hold the highest total score after five rounds (rounds won breaks a tie).',
+  tags: ['strategy', 'coop', 'puzzle', 'communication', '2-4 players'],
   featured: true,
-  version: '1.0.0',
+  hasRounds: true,
+  defaultRounds: 5,
+  version: '2.0.0',
 } satisfies GameMetadata;
 
 

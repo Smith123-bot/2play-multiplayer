@@ -370,9 +370,13 @@ const CASES: GameCase[] = [
     expect: (state) =>
       Array.isArray(state.tiles) &&
       Boolean(state.players) &&
-      Boolean(state.goal) &&
-      typeof state.role === 'string' &&
-      state.trueTiles === undefined,
+      typeof state.lens === 'string' &&
+      typeof state.objective === 'string' &&
+      state.totalRounds === 5 &&
+      // Hidden information must never reach a client.
+      state.trueTiles === undefined &&
+      state.switches === undefined &&
+      state.keys === undefined,
     action: { type: 'move', payload: { direction: 'right' } },
   },
 ];

@@ -248,8 +248,19 @@ const CASES: GameCase[] = [
   },
   {
     id: 'traffic-control-battle',
-    expect: (state) => Boolean(state.zones) && typeof state.stepMs === 'number' && typeof state.endsAt === 'number',
-    action: { type: 'switch' },
+    expect: (state) => {
+      const junction = state.junction as { signals?: unknown[]; queues?: unknown[] } | null;
+      return (
+        Boolean(junction) &&
+        Array.isArray(junction!.signals) &&
+        // Four approaches, two lanes each.
+        Array.isArray(junction!.queues) &&
+        (junction!.queues as unknown[]).length === 8 &&
+        typeof state.endsAt === 'number' &&
+        Boolean(state.players)
+      );
+    },
+    action: { type: 'phase', payload: { phase: 'ew' } },
   },
   {
     id: 'magnet-maze',

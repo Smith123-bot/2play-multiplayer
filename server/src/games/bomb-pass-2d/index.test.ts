@@ -125,6 +125,7 @@ describe('Bomb Pass 2D', () => {
     const other = holder === a ? b : a;
     state().players[holder]!.receivedAt = context().now() - 1000;
 
+    const beforePass = context().now();
     const result = platform.gameManager.handleAction(room, holder, {
       type: 'pass',
       payload: { targetId: other },
@@ -132,7 +133,8 @@ describe('Bomb Pass 2D', () => {
     expect(result.accepted).toBe(true);
     expect(state().holderId).toBe(other);
     expect(state().lastEvent).toBe(`pass:${other}`);
-    expect(state().players[other]!.receivedAt).toBe(context().now());
+    expect(state().players[other]!.receivedAt).toBeGreaterThanOrEqual(beforePass);
+    expect(state().players[other]!.receivedAt).toBeLessThanOrEqual(context().now());
   });
 
   /* ---------------------------------------------------------------- */

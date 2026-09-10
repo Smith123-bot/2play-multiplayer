@@ -268,9 +268,15 @@ describe('2048 Battle', () => {
     ];
     state().boards[a]!.locked = true;
 
+    const boardB = state().boards[b]!;
+    const direction = (['up', 'down', 'left', 'right'] as MoveDirection[]).find((candidate) => {
+      const probe = { ...boardB, tiles: [...boardB.tiles] } as typeof boardB;
+      return applyMove(probe, candidate).moved;
+    });
+    expect(direction).toBeDefined();
     const result = platform.gameManager.handleAction(room, b, {
       type: 'move',
-      payload: { direction: 'up' },
+      payload: { direction },
     });
     expect(result.accepted).toBe(true);
     expect(state().phase).toBe('playing'); // B may continue

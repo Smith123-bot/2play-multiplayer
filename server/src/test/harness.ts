@@ -60,6 +60,9 @@ import { connectFourGame } from '../games/connect-four';
 import { hangmanGame } from '../games/hangman';
 import { sosGame } from '../games/sos-game';
 import { chessGame } from '../games/chess';
+import { unoGame } from '../games/uno';
+import { simGame } from '../games/sim';
+import { dominoesGame } from '../games/dominoes';
 import { loveMazeGame } from '../games/love-maze';
 import { syncJumpGame } from '../games/sync-jump';
 import { coupleSyncGame } from '../games/couple-sync';
@@ -224,6 +227,9 @@ export function createTestPlatform(
       hangmanGame,
       sosGame,
       chessGame,
+      unoGame,
+      simGame,
+      dominoesGame,
     ]) {
       platform.registry.register(game);
     }

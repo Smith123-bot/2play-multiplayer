@@ -1853,3 +1853,173 @@ export const CHESS_METADATA = {
   },
   version: '1.0.0',
 } satisfies GameMetadata;
+
+
+export const UNO_METADATA = {
+  id: 'uno',
+  name: 'Uno',
+  description:
+    'The classic colour-and-number shedding card game. Match, block with action cards, and be first to empty your hand.',
+  category: 'strategy' as const,
+  icon: '🃏',
+  thumbnail: '🃏',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 480,
+  difficulty: 'easy' as const,
+  controls: 'Tap a card to play it, or tap the draw pile.',
+  rules: [
+    'Everyone is dealt 7 cards from a server-shuffled 108 card deck.',
+    'Play a card matching the active colour or the top card\u2019s value, or play a wild.',
+    'No legal card? Draw one. If it is playable you may play it straight away, otherwise your turn ends.',
+    'Skip misses the next player, Reverse flips direction, Draw Two and Wild Draw Four force cards on the next player.',
+    'Stacking is NOT allowed \u2014 a draw card cannot be countered with another one.',
+    'Empty your hand to win the round and score the value of every opponent\u2019s remaining cards.',
+  ],
+  scoring:
+    'Round winner scores all opponents\u2019 remaining cards: numbers at face value, action cards 20, wilds 50.',
+  winCondition: 'Highest score after the final round, or the first player to reach 200 points.',
+  tags: ['cards', 'classic', 'family', 'turn-based', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 3,
+  howToPlay: {
+    objective: 'Be the first to get rid of all your cards, then score the cards left in everyone else\u2019s hands.',
+    steps: [
+      'You are dealt 7 cards. Only you can see them.',
+      'On your turn, play a card that matches the active COLOUR or the top card\u2019s NUMBER/SYMBOL.',
+      'A wild can be played at any time \u2014 you then choose the next colour.',
+      'If you have no legal card, draw one from the pile. If it is playable you may play it immediately.',
+      'Play your last card to win the round.',
+    ],
+    controls: {
+      mobile: 'Tap a highlighted card to play it. Tap the draw pile when you cannot move.',
+      desktop: 'Click a card to play it; playable cards are highlighted on hover.',
+    },
+    scoring:
+      'The round winner scores the total of every opponent\u2019s remaining cards \u2014 number cards at face value, Skip/Reverse/Draw Two 20 each, and wilds 50 each.',
+    winCondition: 'The highest total score after the last round wins. Reaching 200 points ends the match early.',
+    timeLimit: '30 seconds per turn. Time out and you draw a card and your turn passes.',
+    specialRules: [
+      'Skip: the next player loses their turn.',
+      'Reverse: play changes direction. With only two players it acts as a Skip, so you play again.',
+      'Draw Two / Wild Draw Four: the next player draws and loses their turn. Stacking is not allowed.',
+      'Reaching one card shows UNO! automatically \u2014 there is no call button and no penalty.',
+      'When the draw pile runs out the discard pile is reshuffled, keeping the top card in play.',
+    ],
+    playerCount: '2\u20134 players',
+  },
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const SIM_METADATA = {
+  id: 'sim',
+  name: 'Sim',
+  description:
+    'A deceptively deep game of nerve on six dots. Claim edges \u2014 but build a triangle in your own colour and you LOSE.',
+  category: 'strategy' as const,
+  icon: '🔺',
+  thumbnail: '🔺',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 240,
+  difficulty: 'hard' as const,
+  controls: 'Tap or click an empty line between two dots.',
+  rules: [
+    'Six dots, and every pair can be joined \u2014 fifteen possible lines in total.',
+    'Players take turns claiming one empty line in their own colour.',
+    'You LOSE the moment three of YOUR OWN lines form a triangle.',
+    'This is the reverse of most games: you are trying to avoid making a triangle, not to make one.',
+    'With six dots a filled board always contains a triangle, so the game always produces a loser.',
+  ],
+  scoring: 'Win 100, draw 50. The losing triangle is highlighted on the final board.',
+  winCondition: 'Your opponent loses by completing a triangle in their own colour.',
+  tags: ['strategy', 'abstract', 'graph', 'classic', '2 players'],
+  featured: true,
+  howToPlay: {
+    objective: 'Avoid ever joining three dots into a triangle using your own colour. Force your opponent to do it first.',
+    steps: [
+      'The board shows six dots and every possible line between them.',
+      'On your turn, tap any line that has not been claimed yet.',
+      'It becomes your colour permanently.',
+      'Watch your own lines carefully \u2014 three of yours forming a triangle ends the game.',
+      'Lines of mixed colours are completely safe; only same-colour triangles count.',
+    ],
+    controls: { mobile: 'Tap an empty line.', desktop: 'Click an empty line; it highlights on hover.' },
+    scoring: 'A win scores 100 and a draw 50.',
+    winCondition: 'You win when your OPPONENT completes a triangle in their own colour.',
+    timeLimit: '30 seconds per turn. Time out and a safe line is claimed for you where possible.',
+    specialRules: [
+      'This is a misere game: making a triangle LOSES, it does not win.',
+      'Only triangles of a single colour count \u2014 mixed triangles are harmless.',
+      'By a mathematical result (Ramsey R(3,3)=6) a full board must contain a same-colour triangle, so a draw is effectively impossible.',
+    ],
+    playerCount: '2 players',
+  },
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const DOMINOES_METADATA = {
+  id: 'dominoes',
+  name: 'Dominoes',
+  description:
+    'Classic double-six draw dominoes. Match the open ends, empty your hand, and catch your opponents holding heavy tiles.',
+  category: 'strategy' as const,
+  icon: '🁫',
+  thumbnail: '🁫',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 420,
+  difficulty: 'medium' as const,
+  controls: 'Tap a tile, then tap the end of the chain you want to play it on.',
+  rules: [
+    'A full double-six set: 28 unique tiles from 0|0 to 6|6, shuffled by the server.',
+    'Two players get 7 tiles each; three or four players get 5 each. The rest form the boneyard.',
+    'The highest double opens the game. If nobody holds a double, the heaviest tile opens.',
+    'Place a tile whose value matches one of the two open ends \u2014 it is rotated for you automatically.',
+    'No legal tile? Draw from the boneyard until you can play, or until it is empty and you must pass.',
+    'Play your last tile to win, or win a blocked game by holding the fewest pips.',
+  ],
+  scoring:
+    'Emptying your hand scores every opponent\u2019s remaining pips. A blocked game is won by the lowest pip total, scoring the difference.',
+  winCondition: 'Empty your hand, or hold the fewest pips when the game is blocked.',
+  tags: ['tiles', 'classic', 'family', 'turn-based', '2-4 players'],
+  featured: true,
+  howToPlay: {
+    objective: 'Be the first to play all of your tiles \u2014 or be left holding the fewest pips if nobody can move.',
+    steps: [
+      'You are dealt a hand of tiles that only you can see.',
+      'The highest double opens the chain.',
+      'On your turn, tap one of your highlighted tiles, then tap the end of the chain it fits.',
+      'If nothing fits, draw from the boneyard until it does, or until the boneyard is empty.',
+      'Play your final tile to win the hand.',
+    ],
+    controls: {
+      mobile: 'Tap a tile to select it, then tap the left or right end of the chain.',
+      desktop: 'Click a tile, then click the end you want. Legal ends are highlighted.',
+    },
+    scoring:
+      'Emptying your hand scores the total pips left in every opponent\u2019s hand. In a blocked game, the lowest pip total wins and scores the difference against the others.',
+    winCondition: 'Empty your hand, or hold the fewest pips when the game blocks. An exact tie is a draw.',
+    timeLimit: '30 seconds per turn. Time out and a legal tile is played for you if one exists.',
+    specialRules: [
+      'Tiles are rotated automatically \u2014 you never have to flip one yourself.',
+      'Drawing continues until you have a playable tile or the boneyard is empty.',
+      'You may only pass when you have no legal tile AND the boneyard is empty.',
+      'When everyone passes in a row the game is blocked and scored on pips.',
+    ],
+    playerCount: '2\u20134 players',
+  },
+  version: '1.0.0',
+} satisfies GameMetadata;

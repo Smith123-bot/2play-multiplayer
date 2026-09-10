@@ -206,6 +206,7 @@ describe('room lifecycle over sockets', () => {
       'connect-four',
       'couple-memory',
       'couple-sync',
+      'dominoes',
       'dots-and-boxes',
       'draw-guess-battle',
       'echo-maze',
@@ -232,6 +233,7 @@ describe('room lifecycle over sockets', () => {
       'shadow-copy-battle',
       'shape-match-battle',
       'shop-rush-battle',
+      'sim',
       'snake-battle',
       'sos-game',
       'split-world',
@@ -240,6 +242,7 @@ describe('room lifecycle over sockets', () => {
       'territory-rush',
       'traffic-control-battle',
       'traffic-dodge-race',
+      'uno',
       'word-race',
       'word-scramble-battle',
     ]);

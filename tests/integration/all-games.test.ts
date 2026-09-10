@@ -510,6 +510,42 @@ const CASES: GameCase[] = [
     // e2-e4: from index 52 to index 36.
     action: { type: 'move', payload: { from: 52, to: 36 } },
   },
+  {
+    id: 'uno',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.myHand) &&
+      (state.myHand as unknown[]).length === 7 &&
+      Boolean(state.topCard) &&
+      typeof state.activeColor === 'string' &&
+      typeof state.drawPileCount === 'number' &&
+      // The deck and other hands must never reach a client.
+      state.drawPile === undefined &&
+      Boolean(state.players),
+    action: { type: 'draw' },
+  },
+  {
+    id: 'sim',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.edges) &&
+      (state.edges as unknown[]).length === 15 &&
+      state.nodes === 6 &&
+      Boolean(state.players),
+    action: { type: 'claim', payload: { edgeId: 'e01' } },
+  },
+  {
+    id: 'dominoes',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.myHand) &&
+      (state.myHand as unknown[]).length === 7 &&
+      typeof state.boneyardCount === 'number' &&
+      // The boneyard contents must never reach a client.
+      state.boneyard === undefined &&
+      Boolean(state.players),
+    action: { type: 'pass' },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

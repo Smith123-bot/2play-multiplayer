@@ -44,6 +44,9 @@ import { connectFourClient } from '../connect-four';
 import { hangmanClient } from '../hangman';
 import { sosGameClient } from '../sos-game';
 import { chessClient } from '../chess';
+import { unoClient } from '../uno';
+import { simClient } from '../sim';
+import { dominoesClient } from '../dominoes';
 import { loveMazeClient } from '../love-maze';
 import { syncJumpClient } from '../sync-jump';
 import { coupleSyncClient } from '../couple-sync';
@@ -112,6 +115,9 @@ const modules: ClientGameModule[] = [
   hangmanClient,
   sosGameClient,
   chessClient,
+  unoClient,
+  simClient,
+  dominoesClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

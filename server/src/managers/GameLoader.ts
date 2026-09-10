@@ -51,6 +51,9 @@ import { connectFourGame } from '../games/connect-four';
 import { hangmanGame } from '../games/hangman';
 import { sosGame } from '../games/sos-game';
 import { chessGame } from '../games/chess';
+import { unoGame } from '../games/uno';
+import { simGame } from '../games/sim';
+import { dominoesGame } from '../games/dominoes';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -119,6 +122,9 @@ export class GameLoader {
       hangmanGame,
       sosGame,
       chessGame,
+      unoGame,
+      simGame,
+      dominoesGame,
     ];
 
     for (const game of games) {

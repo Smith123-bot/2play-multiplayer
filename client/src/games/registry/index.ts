@@ -49,6 +49,7 @@ import { coupleSyncClient } from '../couple-sync';
 import { coupleMemoryClient } from '../couple-memory';
 import { buildTogetherClient } from '../build-together';
 import { connectFourClient, hangmanClient, sosGameClient, chessClient } from '../classic';
+import { unoClient, simClient, dominoesClient } from '../card-board';
 
 /**
  * Client game registry.
@@ -109,9 +110,14 @@ const modules: ClientGameModule[] = [
   hangmanClient,
   sosGameClient,
   chessClient,
+  unoClient,
+  simClient,
+  dominoesClient,
 ];
 
-const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));
+const registry = new Map<string, ClientGameModule>(
+  modules.map((module) => [module.metadata.id, module]),
+);
 
 export function getGameComponent(gameId: string): ClientGameModule | undefined {
   return registry.get(gameId);

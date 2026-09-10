@@ -40,7 +40,6 @@ export const REACTION_RACE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const MEMORY_MATCH_METADATA = {
   id: 'memory-match',
   name: 'Memory Match',
@@ -71,7 +70,6 @@ export const MEMORY_MATCH_METADATA = {
   gridOptions: ['4x4', '6x4', '6x6'],
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const WORD_RACE_METADATA = {
   id: 'word-race',
@@ -105,7 +103,6 @@ export const WORD_RACE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const DOTS_AND_BOXES_METADATA = {
   id: 'dots-and-boxes',
   name: 'Dots and Boxes',
@@ -135,7 +132,6 @@ export const DOTS_AND_BOXES_METADATA = {
   gridOptions: ['4x4', '6x6', '8x8'],
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const MATH_RUSH_METADATA = {
   id: 'math-rush',
@@ -167,7 +163,6 @@ export const MATH_RUSH_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const BATTLE_2048_METADATA = {
   id: '2048-battle',
   name: '2048 Battle',
@@ -183,7 +178,8 @@ export const BATTLE_2048_METADATA = {
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
   estimatedDuration: 200,
   difficulty: 'medium' as const,
-  controls: 'Arrow keys, swipe on your board or use the on-screen D-pad. Both players play at the same time.',
+  controls:
+    'Arrow keys, swipe on your board or use the on-screen D-pad. Both players play at the same time.',
   rules: [
     'Each player gets their own private 4x4 board playing standard 2048.',
     'Swipe or press a direction: every tile slides and equal neighbours merge once per move.',
@@ -198,7 +194,6 @@ export const BATTLE_2048_METADATA = {
   featured: false,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const MAZE_RACE_METADATA = {
   id: 'maze-race-2d',
@@ -230,7 +225,6 @@ export const MAZE_RACE_METADATA = {
   gridOptions: ['11x11', '15x15', '19x19'],
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const WORD_SCRAMBLE_METADATA = {
   id: 'word-scramble-battle',
@@ -265,7 +259,6 @@ export const WORD_SCRAMBLE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const SHAPE_MATCH_METADATA = {
   id: 'shape-match-battle',
   name: 'Shape Match Battle',
@@ -298,7 +291,6 @@ export const SHAPE_MATCH_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const SNAKE_BATTLE_METADATA = {
   id: 'snake-battle',
   name: 'Snake Battle',
@@ -330,7 +322,6 @@ export const SNAKE_BATTLE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const TRAFFIC_DODGE_METADATA = {
   id: 'traffic-dodge-race',
   name: 'Traffic Dodge Race',
@@ -360,7 +351,6 @@ export const TRAFFIC_DODGE_METADATA = {
   featured: false,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const TARGET_RUSH_METADATA = {
   id: 'target-rush',
@@ -394,7 +384,6 @@ export const TARGET_RUSH_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const CAPTURE_THE_FLAG_METADATA = {
   id: 'capture-the-flag-2d',
   name: 'Capture the Flag 2D',
@@ -426,7 +415,6 @@ export const CAPTURE_THE_FLAG_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const PADDLE_DUEL_METADATA = {
   id: 'paddle-duel',
   name: 'Paddle Duel',
@@ -442,7 +430,8 @@ export const PADDLE_DUEL_METADATA = {
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
   estimatedDuration: 180,
   difficulty: 'medium' as const,
-  controls: 'Slide your paddle with W/S, the up/down arrow keys, or drag on your side of the arena.',
+  controls:
+    'Slide your paddle with W/S, the up/down arrow keys, or drag on your side of the arena.',
   rules: [
     'Both paddles live on the server — the ball is simulated there on a fixed clock.',
     'The ball bounces off the top and bottom walls; returning it speeds it up a little.',
@@ -459,7 +448,6 @@ export const PADDLE_DUEL_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const BRICK_BREAKER_METADATA = {
   id: 'brick-breaker-battle',
   name: 'Brick Breaker Battle',
@@ -475,7 +463,8 @@ export const BRICK_BREAKER_METADATA = {
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
   estimatedDuration: 180,
   difficulty: 'medium' as const,
-  controls: 'Slide your paddle with A/D, the left/right arrow keys, mouse or by dragging on your arena.',
+  controls:
+    'Slide your paddle with A/D, the left/right arrow keys, mouse or by dragging on your arena.',
   rules: [
     'Each player breaks their own identical wall — the server simulates both balls.',
     'Bricks are worth more the higher they sit: 10 to 30 points.',
@@ -489,7 +478,6 @@ export const BRICK_BREAKER_METADATA = {
   featured: false,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const PATTERN_MEMORY_METADATA = {
   id: 'pattern-memory-battle',
@@ -523,7 +511,6 @@ export const PATTERN_MEMORY_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const BOMB_PASS_METADATA = {
   id: 'bomb-pass-2d',
   name: 'Bomb Pass 2D',
@@ -556,7 +543,6 @@ export const BOMB_PASS_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const DRAW_GUESS_METADATA = {
   id: 'draw-guess-battle',
   name: 'Draw & Guess Battle',
@@ -572,7 +558,8 @@ export const DRAW_GUESS_METADATA = {
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
   estimatedDuration: 240,
   difficulty: 'easy' as const,
-  controls: 'Draw with your finger or mouse. Type guesses and press Enter. Brush, eraser and a simple palette.',
+  controls:
+    'Draw with your finger or mouse. Type guesses and press Enter. Brush, eraser and a simple palette.',
   rules: [
     'Each round one player is the drawer and receives a secret word nobody else can see.',
     'The drawer sketches on a shared 2D canvas; strokes are sent as points, never a screenshot.',
@@ -590,7 +577,6 @@ export const DRAW_GUESS_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const SECRET_ROLE_METADATA = {
   id: 'secret-role',
   name: 'Secret Role',
@@ -606,7 +592,8 @@ export const SECRET_ROLE_METADATA = {
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
   estimatedDuration: 300,
   difficulty: 'medium' as const,
-  controls: 'On your turn type a short clue. Then vote for who you think is the Secret Agent. The agent may guess the location.',
+  controls:
+    'On your turn type a short clue. Then vote for who you think is the Secret Agent. The agent may guess the location.',
   rules: [
     'Each round the server assigns one Secret Agent; everyone else is a Citizen who knows the location.',
     'Roles are private: you only ever see your own role and (if you are a Citizen) the location.',
@@ -624,7 +611,6 @@ export const SECRET_ROLE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const PLATFORM_DASH_METADATA = {
   id: 'platform-dash-2d',
   name: 'Platform Dash 2D',
@@ -640,7 +626,8 @@ export const PLATFORM_DASH_METADATA = {
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
   estimatedDuration: 180,
   difficulty: 'medium' as const,
-  controls: 'Mobile: left / right / jump buttons. Desktop: A/D or arrows, Space or Arrow Up to jump.',
+  controls:
+    'Mobile: left / right / jump buttons. Desktop: A/D or arrows, Space or Arrow Up to jump.',
   rules: [
     'Everyone races the same server-picked 2D course (Summit, Caves or Skyway).',
     'Move and jump — the server owns position, velocity, collisions and the finish line.',
@@ -655,7 +642,6 @@ export const PLATFORM_DASH_METADATA = {
   gridOptions: ['summit', 'caves', 'skyway'],
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const COLOR_CLASH_METADATA = {
   id: 'color-clash',
@@ -672,7 +658,8 @@ export const COLOR_CLASH_METADATA = {
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
   estimatedDuration: 150,
   difficulty: 'easy' as const,
-  controls: 'Tap the colour that matches the instruction. Buttons are large, labelled, and colour-coded.',
+  controls:
+    'Tap the colour that matches the instruction. Buttons are large, labelled, and colour-coded.',
   rules: [
     'Each round the server picks a challenge type and the correct colour — clients never decide.',
     'Name: tap the colour that is named. Stroop: tap the ink colour, not the written word.',
@@ -688,7 +675,6 @@ export const COLOR_CLASH_METADATA = {
   defaultRounds: 12,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const TERRITORY_RUSH_METADATA = {
   id: 'territory-rush',
@@ -720,7 +706,6 @@ export const TERRITORY_RUSH_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const HEXA_CONQUEST_METADATA = {
   id: 'hexa-conquest',
   name: 'Hexa Conquest',
@@ -750,7 +735,6 @@ export const HEXA_CONQUEST_METADATA = {
   featured: false,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const COLOR_TRAILS_METADATA = {
   id: 'color-trails',
@@ -782,7 +766,6 @@ export const COLOR_TRAILS_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const COIN_HUNTERS_METADATA = {
   id: 'coin-hunters-arena',
   name: 'Coin Hunters Arena',
@@ -813,7 +796,6 @@ export const COIN_HUNTERS_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const CASTLE_SIEGE_METADATA = {
   id: 'castle-siege-2d',
   name: 'Castle Siege 2D',
@@ -829,7 +811,8 @@ export const CASTLE_SIEGE_METADATA = {
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
   estimatedDuration: 180,
   difficulty: 'medium' as const,
-  controls: 'Move with WASD / arrows / D-pad. Build, upgrade, fire and capture with the action buttons.',
+  controls:
+    'Move with WASD / arrows / D-pad. Build, upgrade, fire and capture with the action buttons.',
   rules: [
     'Each player owns a castle with 100 hit points and a commander on the 2D field.',
     'Energy regenerates on the server clock. Spend it to build walls, upgrade towers or fire.',
@@ -837,13 +820,13 @@ export const CASTLE_SIEGE_METADATA = {
     'Stand on a capture node to earn hold points. Destroy every rival castle, or lead when the clock ends.',
     'The server validates range, cooldowns, cost, damage and captures — clients never set HP.',
   ],
-  scoring: 'Damage dealt + capture holds + remaining castle HP. Last castle standing wins outright.',
+  scoring:
+    'Damage dealt + capture holds + remaining castle HP. Last castle standing wins outright.',
   winCondition: 'Destroy every other castle, or hold the highest score when time expires.',
   tags: ['strategy', 'defense', 'arcade', '2-4 players'],
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const TRAFFIC_CONTROL_METADATA = {
   id: 'traffic-control-battle',
@@ -875,7 +858,6 @@ export const TRAFFIC_CONTROL_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const MAGNET_MAZE_METADATA = {
   id: 'magnet-maze',
   name: 'Magnet Maze',
@@ -904,7 +886,6 @@ export const MAGNET_MAZE_METADATA = {
   featured: false,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const SHOP_RUSH_METADATA = {
   id: 'shop-rush-battle',
@@ -936,7 +917,6 @@ export const SHOP_RUSH_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const SHADOW_COPY_METADATA = {
   id: 'shadow-copy-battle',
   name: 'Shadow Copy Battle',
@@ -960,7 +940,8 @@ export const SHADOW_COPY_METADATA = {
     'Gold crystals are yours. Violet crystals can only be collected by a Shadow Copy.',
     'Shadows skip a blocked step and stay put — they never teleport and clients cannot submit a path.',
   ],
-  scoring: 'Player crystal +100, shadow crystal +50, exit +75, efficient route +20. Highest total wins.',
+  scoring:
+    'Player crystal +100, shadow crystal +50, exit +75, efficient route +20. Highest total wins.',
   winCondition: 'Hold the highest score after three rounds.',
   tags: ['strategy', 'puzzle', 'shadow', '2-4 players'],
   featured: true,
@@ -969,7 +950,6 @@ export const SHADOW_COPY_METADATA = {
   gridOptions: ['twin-plates', 'shadow-vault', 'relay-gate', 'split-loops', 'hazard-run'],
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const ECHO_MAZE_METADATA = {
   id: 'echo-maze',
@@ -1002,7 +982,6 @@ export const ECHO_MAZE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const FAKE_DOOR_METADATA = {
   id: 'fake-door-battle',
   name: 'Fake Door Battle',
@@ -1034,7 +1013,6 @@ export const FAKE_DOOR_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const MOVING_ISLAND_METADATA = {
   id: 'moving-island',
   name: 'Moving Island',
@@ -1064,7 +1042,6 @@ export const MOVING_ISLAND_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const MAGNET_THIEF_METADATA = {
   id: 'magnet-thief',
   name: 'Magnet Thief',
@@ -1080,7 +1057,8 @@ export const MAGNET_THIEF_METADATA = {
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
   estimatedDuration: 140,
   difficulty: 'medium' as const,
-  controls: 'Move with WASD / arrows / D-pad. Magnet with Q/E or the magnet buttons (direction + activate).',
+  controls:
+    'Move with WASD / arrows / D-pad. Magnet with Q/E or the magnet buttons (direction + activate).',
   rules: [
     'Step onto a coin to collect it. The server grants the points.',
     'Activate your magnet in a direction to pull nearby coins one cell toward you (cooldown applies).',
@@ -1093,7 +1071,6 @@ export const MAGNET_THIEF_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const REVERSE_RACE_METADATA = {
   id: 'reverse-race',
@@ -1126,7 +1103,6 @@ export const REVERSE_RACE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const MIRROR_ARENA_METADATA = {
   id: 'mirror-arena',
   name: 'Mirror Arena',
@@ -1155,7 +1131,6 @@ export const MIRROR_ARENA_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const CHAIN_REACTION_METADATA = {
   id: 'chain-reaction-battle',
@@ -1188,7 +1163,6 @@ export const CHAIN_REACTION_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const ONE_BUTTON_METADATA = {
   id: 'one-button-battle',
   name: 'One Button Battle',
@@ -1218,23 +1192,95 @@ export const ONE_BUTTON_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const LUDO_METADATA = {
-  id: 'ludo', name: 'Ludo', description: 'Race four tokens around a classic board, capture opponents, and bring your team home.', category: 'strategy' as const, icon: '🎲', thumbnail: '🎲', minPlayers: 2, maxPlayers: 4, supportedPlayerCounts: [2, 3, 4], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 300, difficulty: 'medium' as const, controls: 'Roll, then tap a legal token. Six launches a token and grants another turn.', rules: ['Four tokens per player.', 'A six launches a token from the yard and grants another roll.', 'Exact movement is required for home.', 'Safe cells prevent captures.'], scoring: '10 per move, 25 per capture, 100 per token home.', winCondition: 'Bring all four tokens home first.', tags: ['board', 'turn-based', 'classic', '2-4 players'], featured: true, version: '1.0.0',
+  id: 'ludo',
+  name: 'Ludo',
+  description:
+    'Race four tokens around a classic board, capture opponents, and bring your team home.',
+  category: 'strategy' as const,
+  icon: '🎲',
+  thumbnail: '🎲',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 300,
+  difficulty: 'medium' as const,
+  controls: 'Roll, then tap a legal token. Six launches a token and grants another turn.',
+  rules: [
+    'Four tokens per player.',
+    'A six launches a token from the yard and grants another roll.',
+    'Exact movement is required for home.',
+    'Safe cells prevent captures.',
+  ],
+  scoring: '10 per move, 25 per capture, 100 per token home.',
+  winCondition: 'Bring all four tokens home first.',
+  tags: ['board', 'turn-based', 'classic', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
 } satisfies GameMetadata;
 
 export const ARROW_PUZZLE_METADATA = {
-  id: 'arrow-puzzle', name: 'Arrow Puzzle', description: 'Clear a directional grid by choosing arrows only when their path is unlocked.', category: 'memory' as const, icon: '↗️', thumbnail: '↗️', minPlayers: 2, maxPlayers: 4, supportedPlayerCounts: [2, 3, 4], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 180, difficulty: 'medium' as const, controls: 'Tap an unlocked arrow tile to clear it.', rules: ['Everyone solves the same seeded board.', 'An arrow is available when it points outside the grid or at a cleared tile.', 'Clear every tile before the clock expires.'], scoring: 'Points increase for each valid clear and finishing quickly.', winCondition: 'Complete the board first.', tags: ['puzzle', 'logic', 'race', '2-4 players'], featured: true, version: '1.0.0',
+  id: 'arrow-puzzle',
+  name: 'Arrow Puzzle',
+  description: 'Clear a directional grid by choosing arrows only when their path is unlocked.',
+  category: 'memory' as const,
+  icon: '↗️',
+  thumbnail: '↗️',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 180,
+  difficulty: 'medium' as const,
+  controls: 'Tap an unlocked arrow tile to clear it.',
+  rules: [
+    'Everyone solves the same seeded board.',
+    'An arrow is available when it points outside the grid or at a cleared tile.',
+    'Clear every tile before the clock expires.',
+  ],
+  scoring: 'Points increase for each valid clear and finishing quickly.',
+  winCondition: 'Complete the board first.',
+  tags: ['puzzle', 'logic', 'race', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
 } satisfies GameMetadata;
 
 export const BLACK_BLAST_METADATA = {
-  id: 'black-blast', name: 'Black Blast', description: 'Place abstract energy blasts, trigger chain reactions, and score more than your rivals.', category: 'reflex' as const, icon: '●', thumbnail: '●', minPlayers: 2, maxPlayers: 4, supportedPlayerCounts: [2, 3, 4], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 150, difficulty: 'medium' as const, controls: 'WASD, arrows, or directional buttons to move. Tap Blast to trigger energy.', rules: ['Move around the arena to line up targets.', 'Blast zones are temporary and have a cooldown.', 'Chain streaks award bonus points.'], scoring: 'Collectible energy values plus combo bonuses.', winCondition: 'Highest score when the arena clock ends.', tags: ['arcade', 'action', 'chain-reaction', '2-4 players'], featured: true, version: '1.0.0',
+  id: 'black-blast',
+  name: 'Black Blast',
+  description:
+    'Place abstract energy blasts, trigger chain reactions, and score more than your rivals.',
+  category: 'reflex' as const,
+  icon: '●',
+  thumbnail: '●',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 150,
+  difficulty: 'medium' as const,
+  controls: 'WASD, arrows, or directional buttons to move. Tap Blast to trigger energy.',
+  rules: [
+    'Move around the arena to line up targets.',
+    'Blast zones are temporary and have a cooldown.',
+    'Chain streaks award bonus points.',
+  ],
+  scoring: 'Collectible energy values plus combo bonuses.',
+  winCondition: 'Highest score when the arena clock ends.',
+  tags: ['arcade', 'action', 'chain-reaction', '2-4 players'],
+  featured: true,
+  version: '1.0.0',
 } satisfies GameMetadata;
 
 export const SPLIT_WORLD_METADATA = {
   id: 'split-world',
   name: 'Split World',
-  description: 'See different versions of the same world. Share clues, work together, and find the way out.',
+  description:
+    'See different versions of the same world. Share clues, work together, and find the way out.',
   category: 'strategy' as const,
   icon: '🌍',
   thumbnail: '🌍',
@@ -1260,7 +1306,6 @@ export const SPLIT_WORLD_METADATA = {
   defaultRounds: 5,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const INVISIBLE_PATH_METADATA = {
   id: 'invisible-path',
@@ -1294,12 +1339,155 @@ export const INVISIBLE_PATH_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-const COOP_RULES = ['Exactly two players cooperate as one team.', 'The server validates every action, objective, score, and timer.', 'Both partners must contribute before the team can finish.', 'Complete the level before the five-minute time limit.'];
-export const LOVE_MAZE_METADATA = { id: 'love-maze', name: 'Love Maze', description: 'Navigate a colorful maze, operate switches, collect keys, and reach the exit together.', category: 'strategy' as const, icon: '🧭', thumbnail: '🧭', minPlayers: 2, maxPlayers: 2, supportedPlayerCounts: [2], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 300, difficulty: 'medium' as const, controls: 'WASD / arrows or touch direction buttons. Communicate with your partner.', rules: [...COOP_RULES, 'Both switches, keys, and players are required at the exit.', 'Ten handcrafted difficulty levels are represented by the level progression.'], scoring: 'Team actions, checkpoints, and cooperation objectives build the shared score.', winCondition: 'Open the cooperative door and both players reach the exit.', tags: ['co-op', 'couple', 'maze', '2 players'], featured: true, version: '1.0.0' } satisfies GameMetadata;
-export const SYNC_JUMP_METADATA = { id: 'sync-jump', name: 'Sync Jump', description: 'Run, jump, recover from mistakes, and keep your partner close across a cooperative obstacle course.', category: 'reflex' as const, icon: '🪂', thumbnail: '🪂', minPlayers: 2, maxPlayers: 2, supportedPlayerCounts: [2], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 300, difficulty: 'medium' as const, controls: 'Arrow/WASD movement and Jump; use the touch controls on mobile.', rules: [...COOP_RULES, 'Stay close to grow the synchronization meter.', 'Checkpoints provide recovery after a failed jump.', 'Both players must reach the finish zone.'], scoring: 'Movement and checkpoints add team points; synchronized movement raises the team meter.', winCondition: 'Both partners finish the obstacle course.', tags: ['co-op', 'couple', 'platform', '2 players'], featured: true, version: '1.0.0' } satisfies GameMetadata;
-export const COUPLE_SYNC_METADATA = { id: 'couple-sync', name: 'Couple Sync', description: 'Coordinate signals, timing, memory, and matching choices through ten short team rounds.', category: 'reflex' as const, icon: '🔗', thumbnail: '🔗', minPlayers: 2, maxPlayers: 2, supportedPlayerCounts: [2], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 180, difficulty: 'medium' as const, controls: 'Tap or click the requested signal value before the round timer ends.', rules: ['Ten rounds alternate timing and matching challenges.', 'Both partners must submit the current signal.', 'Wrong signals count as mistakes and do not advance the team.', 'The server validates the signal and round order.'], scoring: '100 team points per successfully synchronized round; mistakes reduce performance rating.', winCondition: 'Complete all ten cooperation rounds.', tags: ['co-op', 'couple', 'reaction', '2 players'], featured: true, hasRounds: true, defaultRounds: 10, version: '1.0.0' } satisfies GameMetadata;
-export const COUPLE_MEMORY_METADATA = { id: 'couple-memory', name: 'Couple Memory', description: 'Reveal a shared board together, remember symbols, and clear every matching pair as a team.', category: 'memory' as const, icon: '🧩', thumbnail: '🧩', minPlayers: 2, maxPlayers: 2, supportedPlayerCounts: [2], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 300, difficulty: 'medium' as const, controls: 'Tap or click two cards, taking turns with your partner.', rules: ['The shared 4×4 board contains eight matching pairs.', 'Either partner may reveal an available card.', 'A match earns team points; a mismatch counts as a mistake.', 'Both partners must reveal at least one card before the board can finish.'], scoring: 'Pairs, combo streaks, speed, and few mistakes determine the team score.', winCondition: 'Find all pairs before time expires.', tags: ['co-op', 'couple', 'memory', '2 players'], featured: true, version: '1.0.0' } satisfies GameMetadata;
-export const BUILD_TOGETHER_METADATA = { id: 'build-together', name: 'Build Together', description: 'Place, rotate, and snap limited pieces into a target structure while sharing the work.', category: 'strategy' as const, icon: '🧱', thumbnail: '🧱', minPlayers: 2, maxPlayers: 2, supportedPlayerCounts: [2], hasAI: true, aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[], estimatedDuration: 300, difficulty: 'medium' as const, controls: 'Select a piece, choose a grid cell and rotation, then place it; touch-friendly buttons work on mobile.', rules: [...COOP_RULES, 'Every required piece must be placed on the target grid.', 'Players can remove their own pieces to correct mistakes.', 'Both partners must place pieces before completion is accepted.'], scoring: 'Accurate placements and unused time increase team score; removals count as mistakes.', winCondition: 'Place every required piece in the target structure.', tags: ['co-op', 'couple', 'construction', '2 players'], featured: true, version: '1.0.0' } satisfies GameMetadata;
+const COOP_RULES = [
+  'Exactly two players cooperate as one team.',
+  'The server validates every action, objective, score, and timer.',
+  'Both partners must contribute before the team can finish.',
+  'Complete the level before the five-minute time limit.',
+];
+export const LOVE_MAZE_METADATA = {
+  id: 'love-maze',
+  name: 'Love Maze',
+  description:
+    'Navigate a colorful maze, operate switches, collect keys, and reach the exit together.',
+  category: 'strategy' as const,
+  icon: '🧭',
+  thumbnail: '🧭',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 300,
+  difficulty: 'medium' as const,
+  controls: 'WASD / arrows or touch direction buttons. Communicate with your partner.',
+  rules: [
+    ...COOP_RULES,
+    'Both switches, keys, and players are required at the exit.',
+    'Ten handcrafted difficulty levels are represented by the level progression.',
+  ],
+  scoring: 'Team actions, checkpoints, and cooperation objectives build the shared score.',
+  winCondition: 'Open the cooperative door and both players reach the exit.',
+  tags: ['co-op', 'couple', 'maze', '2 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+export const SYNC_JUMP_METADATA = {
+  id: 'sync-jump',
+  name: 'Sync Jump',
+  description:
+    'Run, jump, recover from mistakes, and keep your partner close across a cooperative obstacle course.',
+  category: 'reflex' as const,
+  icon: '🪂',
+  thumbnail: '🪂',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 300,
+  difficulty: 'medium' as const,
+  controls: 'Arrow/WASD movement and Jump; use the touch controls on mobile.',
+  rules: [
+    ...COOP_RULES,
+    'Stay close to grow the synchronization meter.',
+    'Checkpoints provide recovery after a failed jump.',
+    'Both players must reach the finish zone.',
+  ],
+  scoring: 'Movement and checkpoints add team points; synchronized movement raises the team meter.',
+  winCondition: 'Both partners finish the obstacle course.',
+  tags: ['co-op', 'couple', 'platform', '2 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+export const COUPLE_SYNC_METADATA = {
+  id: 'couple-sync',
+  name: 'Couple Sync',
+  description:
+    'Coordinate signals, timing, memory, and matching choices through ten short team rounds.',
+  category: 'reflex' as const,
+  icon: '🔗',
+  thumbnail: '🔗',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 180,
+  difficulty: 'medium' as const,
+  controls: 'Tap or click the requested signal value before the round timer ends.',
+  rules: [
+    'Ten rounds alternate timing and matching challenges.',
+    'Both partners must submit the current signal.',
+    'Wrong signals count as mistakes and do not advance the team.',
+    'The server validates the signal and round order.',
+  ],
+  scoring:
+    '100 team points per successfully synchronized round; mistakes reduce performance rating.',
+  winCondition: 'Complete all ten cooperation rounds.',
+  tags: ['co-op', 'couple', 'reaction', '2 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 10,
+  version: '1.0.0',
+} satisfies GameMetadata;
+export const COUPLE_MEMORY_METADATA = {
+  id: 'couple-memory',
+  name: 'Couple Memory',
+  description:
+    'Reveal a shared board together, remember symbols, and clear every matching pair as a team.',
+  category: 'memory' as const,
+  icon: '🧩',
+  thumbnail: '🧩',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 300,
+  difficulty: 'medium' as const,
+  controls: 'Tap or click two cards, taking turns with your partner.',
+  rules: [
+    'The shared 4×4 board contains eight matching pairs.',
+    'Either partner may reveal an available card.',
+    'A match earns team points; a mismatch counts as a mistake.',
+    'Both partners must reveal at least one card before the board can finish.',
+  ],
+  scoring: 'Pairs, combo streaks, speed, and few mistakes determine the team score.',
+  winCondition: 'Find all pairs before time expires.',
+  tags: ['co-op', 'couple', 'memory', '2 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+export const BUILD_TOGETHER_METADATA = {
+  id: 'build-together',
+  name: 'Build Together',
+  description:
+    'Place, rotate, and snap limited pieces into a target structure while sharing the work.',
+  category: 'strategy' as const,
+  icon: '🧱',
+  thumbnail: '🧱',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 300,
+  difficulty: 'medium' as const,
+  controls:
+    'Select a piece, choose a grid cell and rotation, then place it; touch-friendly buttons work on mobile.',
+  rules: [
+    ...COOP_RULES,
+    'Every required piece must be placed on the target grid.',
+    'Players can remove their own pieces to correct mistakes.',
+    'Both partners must place pieces before completion is accepted.',
+  ],
+  scoring: 'Accurate placements and unused time increase team score; removals count as mistakes.',
+  winCondition: 'Place every required piece in the target structure.',
+  tags: ['co-op', 'couple', 'construction', '2 players'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
 
 export const CONNECT_FOUR_METADATA = {
   id: 'connect-four',
@@ -1408,6 +1596,95 @@ export const CHESS_METADATA = {
   scoring: 'Checkmate wins; all other standard draws score equally.',
   winCondition: 'Checkmate the opposing king.',
   tags: ['classic', 'board', 'strategy', 'chess'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+export const UNO_METADATA = {
+  id: 'uno',
+  name: 'UNO',
+  description:
+    'A fast original 2D card game: match colors and symbols, manage wild cards, and empty your hand.',
+  category: 'strategy' as const,
+  icon: '🃏',
+  thumbnail: '🃏',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 600,
+  difficulty: 'medium' as const,
+  controls: 'Tap or click a playable card. Choose a color after a Wild.',
+  rules: [
+    'Each player starts with seven server-dealt cards.',
+    'Play a card matching the current color or symbol, or play a Wild.',
+    'Skip and Draw Two affect the next player; Reverse changes direction and acts as Skip with two players.',
+    'Draw One draws one card and passes the turn; Draw Two cards do not stack.',
+    'Wild Draw Four is legal only when you hold no card of the current color.',
+    'Calling UNO is optional but missing the call before the next turn costs two cards.',
+  ],
+  scoring: 'The round winner receives the pip and action values of cards left in opponents hands.',
+  winCondition: 'Play every card in your hand.',
+  tags: ['classic', 'cards', 'strategy'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+export const SIM_METADATA = {
+  id: 'sim',
+  name: 'Sim',
+  description:
+    'Claim edges in a complete six-node graph while avoiding a triangle in your own color.',
+  category: 'strategy' as const,
+  icon: '🔺',
+  thumbnail: '🔺',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 300,
+  difficulty: 'hard' as const,
+  controls: 'Tap or click an empty edge between two nodes.',
+  rules: [
+    'Six nodes form a complete graph of fifteen edges.',
+    'Players alternate claiming an empty edge in their color.',
+    'Creating a triangle using three of your own edges makes you lose immediately.',
+    'If all fifteen edges are filled without a triangle, the result is a deterministic draw.',
+  ],
+  scoring: 'The winner is the player who does not create a same-color triangle.',
+  winCondition: 'Make the opponent create their own colored triangle.',
+  tags: ['classic', 'graph', 'strategy'],
+  featured: true,
+  version: '1.0.0',
+} satisfies GameMetadata;
+export const DOMINOES_METADATA = {
+  id: 'dominoes',
+  name: 'Dominoes',
+  description:
+    'Place matching double-six tiles, draw when blocked, and win with the lowest pip total.',
+  category: 'strategy' as const,
+  icon: '🁣',
+  thumbnail: '🁣',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 900,
+  difficulty: 'medium' as const,
+  controls: 'Select a tile and choose the left or right open end.',
+  rules: [
+    'The server shuffles the 28 unique double-six tiles.',
+    'Two players receive seven tiles; three or four players receive five.',
+    'A tile must match the number at the selected open end; it is rotated server-side.',
+    'If no tile is playable, draw until a playable tile appears or the boneyard is empty.',
+    'A hand ends when a player has no tiles or the boneyard is empty and nobody can play.',
+    'In a blocked hand, the lowest pip total wins; equal totals draw.',
+  ],
+  scoring: 'A hand winner scores the pips remaining in opponents hands.',
+  winCondition: 'Empty your hand, or have the lowest pips in a blocked hand.',
+  tags: ['classic', 'tiles', 'strategy'],
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;

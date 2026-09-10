@@ -1,11 +1,5 @@
-import type { GameAction, GameFinishReason, GameMetadata } from '@2play/shared';
-import type {
-  GameContext,
-  GameModule,
-  GamePlayerView,
-  GameResultDraft,
-  ValidationResult,
-} from '../GameModule';
+import type { GameFinishReason } from '@2play/shared';
+import type { GameContext, GameModule, GameResultDraft } from '../GameModule';
 import { actionAccepted } from '../GameModule';
 import { CHESS_METADATA } from '@2play/shared';
 type Color = 'w' | 'b';

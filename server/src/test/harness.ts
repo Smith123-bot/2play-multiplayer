@@ -68,6 +68,9 @@ import { connectFourGame } from '../games/connect-four';
 import { hangmanGame } from '../games/hangman';
 import { sosGame } from '../games/sos-game';
 import { chessGame } from '../games/chess';
+import { unoGame } from '../games/uno';
+import { simGame } from '../games/sim';
+import { dominoesGame } from '../games/dominoes';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -121,14 +124,17 @@ export function createTestPlatform(
     mode: 'memory',
     init: () => repository.init(),
     ensureHealthy: () => Promise.resolve(),
-    healthStatus: () => repository.health().then((health) => ({ ...health, mode: 'memory' as const })),
+    healthStatus: () =>
+      repository.health().then((health) => ({ ...health, mode: 'memory' as const })),
     close: () => repository.close(),
-    upsertUser: (input: Parameters<MemoryRepository['upsertUser']>[0]) => repository.upsertUser(input),
+    upsertUser: (input: Parameters<MemoryRepository['upsertUser']>[0]) =>
+      repository.upsertUser(input),
     findUserBySession: (token: string) => repository.findUserBySession(token),
     findUserById: (id: string) => repository.findUserById(id),
     updateUser: (id: string, patch: Parameters<MemoryRepository['updateUser']>[1]) =>
       repository.updateUser(id, patch),
-    recordMatch: (input: Parameters<MemoryRepository['recordMatch']>[0]) => repository.recordMatch(input),
+    recordMatch: (input: Parameters<MemoryRepository['recordMatch']>[0]) =>
+      repository.recordMatch(input),
     getHistory: (id: string, limit?: number) => repository.getHistory(id, limit),
     getStatistics: (id: string) => repository.getStatistics(id),
     getStatistic: (id: string, gameId: string) => repository.getStatistic(id, gameId),
@@ -224,6 +230,9 @@ export function createTestPlatform(
       hangmanGame,
       sosGame,
       chessGame,
+      unoGame,
+      simGame,
+      dominoesGame,
     ]) {
       platform.registry.register(game);
     }

@@ -1,4 +1,4 @@
-import type { AIDifficulty, GameAction, GameFinishReason, GameMetadata } from '@2play/shared';
+import type { GameAction, GameFinishReason, GameMetadata } from '@2play/shared';
 import type {
   ActionResult,
   GameContext,
@@ -7,7 +7,7 @@ import type {
   GameResultDraft,
   ValidationResult,
 } from './GameModule';
-import { actionAccepted, actionRejected } from './GameModule';
+import { actionAccepted } from './GameModule';
 
 type ClassicKind = 'connect-four' | 'hangman' | 'sos-game';
 interface Player {

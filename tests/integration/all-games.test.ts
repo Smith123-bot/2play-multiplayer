@@ -23,10 +23,41 @@ interface GameCase {
 }
 
 const CASES: GameCase[] = [
-  { id: 'connect-four', expect: (state) => Array.isArray(state.board) && state.board.length === 42, action: { type: 'drop', payload: { column: 0 } } },
-  { id: 'hangman', expect: (state) => typeof state.word === 'string' && !state.word.includes('PLANET'), action: { type: 'guess', payload: { letter: 'E' } } },
-  { id: 'sos-game', expect: (state) => Array.isArray(state.board) && state.board.length === 25, action: { type: 'place', payload: { index: 0, letter: 'S' } } },
-  { id: 'chess', expect: (state) => Array.isArray(state.board) && state.board.length === 64, action: { type: 'move', payload: { from: 52, to: 44 } } },
+  {
+    id: 'connect-four',
+    expect: (state) => Array.isArray(state.board) && state.board.length === 42,
+    action: { type: 'drop', payload: { column: 0 } },
+  },
+  {
+    id: 'hangman',
+    expect: (state) => typeof state.word === 'string' && !state.word.includes('PLANET'),
+    action: { type: 'guess', payload: { letter: 'E' } },
+  },
+  {
+    id: 'sos-game',
+    expect: (state) => Array.isArray(state.board) && state.board.length === 25,
+    action: { type: 'place', payload: { index: 0, letter: 'S' } },
+  },
+  {
+    id: 'chess',
+    expect: (state) => Array.isArray(state.board) && state.board.length === 64,
+    action: { type: 'move', payload: { from: 52, to: 44 } },
+  },
+  {
+    id: 'uno',
+    expect: (state) => Array.isArray(state.discard) && Boolean(state.handCounts),
+    action: { type: 'draw' },
+  },
+  {
+    id: 'sim',
+    expect: (state) => Object.keys(state.edges ?? {}).length === 15,
+    action: { type: 'edge', payload: { edge: '0-1' } },
+  },
+  {
+    id: 'dominoes',
+    expect: (state) => Array.isArray(state.boneyard) && state.boneyard.length > 0,
+    action: { type: 'draw' },
+  },
   {
     id: 'reaction-race',
     settings: { rounds: 1 },
@@ -113,7 +144,9 @@ const CASES: GameCase[] = [
     id: 'target-rush',
     settings: { rounds: 3 },
     expect: (state) =>
-      typeof state.totalRounds === 'number' && Array.isArray(state.targets) && Boolean(state.scores),
+      typeof state.totalRounds === 'number' &&
+      Array.isArray(state.targets) &&
+      Boolean(state.scores),
     action: { type: 'hit', payload: { targetId: 'target-0' } },
   },
   {
@@ -252,7 +285,8 @@ const CASES: GameCase[] = [
   },
   {
     id: 'traffic-control-battle',
-    expect: (state) => Boolean(state.zones) && typeof state.stepMs === 'number' && typeof state.endsAt === 'number',
+    expect: (state) =>
+      Boolean(state.zones) && typeof state.stepMs === 'number' && typeof state.endsAt === 'number',
     action: { type: 'switch' },
   },
   {
@@ -371,36 +405,75 @@ const CASES: GameCase[] = [
   },
   {
     id: 'ludo',
-    expect: (state) => Boolean(state.players) && state.phase === 'playing' && typeof state.currentPlayerId === 'string',
+    expect: (state) =>
+      Boolean(state.players) &&
+      state.phase === 'playing' &&
+      typeof state.currentPlayerId === 'string',
     action: { type: 'roll-dice' },
   },
   {
     id: 'arrow-puzzle',
-    expect: (state) => Array.isArray(state.tiles) && Boolean(state.players) && typeof state.endsAt === 'number',
+    expect: (state) =>
+      Array.isArray(state.tiles) && Boolean(state.players) && typeof state.endsAt === 'number',
     action: { type: 'activate-arrow', payload: { index: 0 } },
   },
   {
     id: 'black-blast',
-    expect: (state) => Array.isArray(state.objects) && Boolean(state.players) && typeof state.endsAt === 'number',
+    expect: (state) =>
+      Array.isArray(state.objects) && Boolean(state.players) && typeof state.endsAt === 'number',
     action: { type: 'move', payload: { dx: 1, dy: 0 } },
   },
   {
     id: 'split-world',
     expect: (state) =>
-      Array.isArray(state.tiles) && Boolean(state.players) && Boolean(state.goal) && typeof state.role === 'string' && state.trueTiles === undefined,
+      Array.isArray(state.tiles) &&
+      Boolean(state.players) &&
+      Boolean(state.goal) &&
+      typeof state.role === 'string' &&
+      state.trueTiles === undefined,
     action: { type: 'move', payload: { direction: 'right' } },
   },
-  { id: 'love-maze', expect: (state) => state.phase === 'playing' && Boolean(state.objectives) && Boolean(state.players), action: { type: 'move', payload: { dx: 1, dy: 0 } } },
-  { id: 'sync-jump', expect: (state) => state.phase === 'playing' && typeof state.syncScore === 'number' && Boolean(state.players), action: { type: 'jump' } },
-  { id: 'couple-sync', expect: (state) => state.phase === 'playing' && typeof state.round === 'number' && typeof state.roundTarget === 'number', action: { type: 'press', payload: { value: 0 } } },
-  { id: 'couple-memory', expect: (state) => state.phase === 'playing' && Array.isArray(state.cards) && state.cards.length === 16, action: { type: 'reveal', payload: { cardId: 0 } } },
-  { id: 'build-together', expect: (state) => state.phase === 'playing' && Array.isArray(state.pieces) && state.pieces.length > 0, action: { type: 'place', payload: { pieceId: 0, x: 0, y: 0, rotation: 0 } } },
+  {
+    id: 'love-maze',
+    expect: (state) =>
+      state.phase === 'playing' && Boolean(state.objectives) && Boolean(state.players),
+    action: { type: 'move', payload: { dx: 1, dy: 0 } },
+  },
+  {
+    id: 'sync-jump',
+    expect: (state) =>
+      state.phase === 'playing' && typeof state.syncScore === 'number' && Boolean(state.players),
+    action: { type: 'jump' },
+  },
+  {
+    id: 'couple-sync',
+    expect: (state) =>
+      state.phase === 'playing' &&
+      typeof state.round === 'number' &&
+      typeof state.roundTarget === 'number',
+    action: { type: 'press', payload: { value: 0 } },
+  },
+  {
+    id: 'couple-memory',
+    expect: (state) =>
+      state.phase === 'playing' && Array.isArray(state.cards) && state.cards.length === 16,
+    action: { type: 'reveal', payload: { cardId: 0 } },
+  },
+  {
+    id: 'build-together',
+    expect: (state) =>
+      state.phase === 'playing' && Array.isArray(state.pieces) && state.pieces.length > 0,
+    action: { type: 'place', payload: { pieceId: 0, x: 0, y: 0, rotation: 0 } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */
-function firstLegalMove(
-  state: { cols: number; rows: number; hLines: boolean[]; vLines: boolean[] },
-): { orientation: 'h' | 'v'; row: number; col: number } | null {
+function firstLegalMove(state: {
+  cols: number;
+  rows: number;
+  hLines: boolean[];
+  vLines: boolean[];
+}): { orientation: 'h' | 'v'; row: number; col: number } | null {
   for (let row = 0; row < state.rows; row += 1) {
     for (let col = 0; col < state.cols - 1; col += 1) {
       if (!state.hLines[row * (state.cols - 1) + col]) {
@@ -437,7 +510,9 @@ async function playWithAI(game: GameCase): Promise<{ client: TestClient; room: R
 
   const aiCount = game.extraAi ?? 1;
   for (let i = 0; i < aiCount; i += 1) {
-    const ai = await emitAck<{ playerId: string }>(client.socket, 'room:add-ai', { difficulty: 'hard' });
+    const ai = await emitAck<{ playerId: string }>(client.socket, 'room:add-ai', {
+      difficulty: 'hard',
+    });
     expect(ai.ok).toBe(true);
   }
 
@@ -550,7 +625,7 @@ describe('every shipped game is playable', () => {
       // Sockets, players and chat all survive the finish line (spec §17/§66).
       expect(host.socket.connected).toBe(true);
       expect(guest.socket.connected).toBe(true);
-      expect((finished?.chat.length ?? 0)).toBeGreaterThan(0);
+      expect(finished?.chat.length ?? 0).toBeGreaterThan(0);
 
       // A rematch can be requested immediately after the result.
       const vote = await emitAck(host.socket, 'rematch:request', {});
@@ -583,7 +658,11 @@ describe('every shipped game is playable', () => {
       await once(host.socket, 'game:started', 25_000);
 
       // The scrambled word is public; the answer never is.
-      const playing = await waitForRoom(host.socket, (current) => current.status === 'PLAYING', 25_000);
+      const playing = await waitForRoom(
+        host.socket,
+        (current) => current.status === 'PLAYING',
+        25_000,
+      );
       const scrambleState = playing.gameState as { scrambled: string; answer: string | null };
       expect(scrambleState.scrambled).toMatch(/^[A-Z]+$/);
       expect(scrambleState.answer).toBeNull();

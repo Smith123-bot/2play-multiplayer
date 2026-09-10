@@ -24,9 +24,17 @@ function once<T>(socket: Socket, event: string, timeoutMs = 5000): Promise<T> {
   });
 }
 
-function emitAck<T>(socket: Socket, event: string, payload: unknown, timeoutMs = 5000): Promise<AckResponse<T>> {
+function emitAck<T>(
+  socket: Socket,
+  event: string,
+  payload: unknown,
+  timeoutMs = 5000,
+): Promise<AckResponse<T>> {
   return new Promise<AckResponse<T>>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`timeout waiting for ack "${event}"`)), timeoutMs);
+    const timer = setTimeout(
+      () => reject(new Error(`timeout waiting for ack "${event}"`)),
+      timeoutMs,
+    );
     socket.emit(event, payload, (response: AckResponse<T>) => {
       clearTimeout(timer);
       resolve(response);
@@ -35,8 +43,12 @@ function emitAck<T>(socket: Socket, event: string, payload: unknown, timeoutMs =
 }
 
 async function authenticate(socket: Socket, nickname: string): Promise<SessionInfo> {
-  const response = await emitAck<{ session: SessionInfo }>(socket, 'authenticate', { nickname, avatar: '🦊' });
-  if (!response.ok || !response.data) throw new Error(`auth failed: ${JSON.stringify(response.error)}`);
+  const response = await emitAck<{ session: SessionInfo }>(socket, 'authenticate', {
+    nickname,
+    avatar: '🦊',
+  });
+  if (!response.ok || !response.data)
+    throw new Error(`auth failed: ${JSON.stringify(response.error)}`);
   return response.data.session;
 }
 
@@ -162,10 +174,14 @@ describe('room lifecycle over sockets', () => {
       await once(socket, 'connect');
       await authenticate(socket, 'QuickPlayer');
 
-      const result = await emitAck<{ room: RoomState; playerId: string }>(socket, 'room:quick-play', {
-        gameId: 'reaction-race',
-        aiDifficulty: 'medium',
-      });
+      const result = await emitAck<{ room: RoomState; playerId: string }>(
+        socket,
+        'room:quick-play',
+        {
+          gameId: 'reaction-race',
+          aiDifficulty: 'medium',
+        },
+      );
 
       expect(result.ok).toBe(true);
       expect(result.data?.room.isPrivate).toBe(true);
@@ -188,7 +204,12 @@ describe('room lifecycle over sockets', () => {
 
     const detailedResponse = await fetch(`${server.url}/api/health/detailed`);
     expect(detailedResponse.status).toBe(200);
-    const detailed = (await detailedResponse.json()) as { status: string; rooms: number; timers: number; memory: { heapUsedBytes: number } };
+    const detailed = (await detailedResponse.json()) as {
+      status: string;
+      rooms: number;
+      timers: number;
+      memory: { heapUsedBytes: number };
+    };
     expect(detailed.status).toBe('ok');
     expect(detailed.rooms).toBeGreaterThanOrEqual(0);
     expect(detailed.timers).toBeGreaterThanOrEqual(0);
@@ -211,6 +232,7 @@ describe('room lifecycle over sockets', () => {
       'coin-hunters-arena',
       'color-clash',
       'color-trails',
+      'dominoes',
       'dots-and-boxes',
       'draw-guess-battle',
       'echo-maze',
@@ -237,9 +259,11 @@ describe('room lifecycle over sockets', () => {
       'shape-match-battle',
       'shop-rush-battle',
       'sos-game',
+      'sim',
       'snake-battle',
       'split-world',
       'target-rush',
+      'uno',
       'territory-rush',
       'traffic-control-battle',
       'traffic-dodge-race',

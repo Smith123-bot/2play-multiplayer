@@ -47,6 +47,9 @@ import { chessClient } from '../chess';
 import { unoClient } from '../uno';
 import { simClient } from '../sim';
 import { dominoesClient } from '../dominoes';
+import { mirrorGridClient } from '../mirror-grid';
+import { fuseClient } from '../fuse';
+import { dominoMindClient } from '../domino-mind';
 import { loveMazeClient } from '../love-maze';
 import { syncJumpClient } from '../sync-jump';
 import { coupleSyncClient } from '../couple-sync';
@@ -118,6 +121,9 @@ const modules: ClientGameModule[] = [
   unoClient,
   simClient,
   dominoesClient,
+  mirrorGridClient,
+  fuseClient,
+  dominoMindClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

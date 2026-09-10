@@ -2023,3 +2023,178 @@ export const DOMINOES_METADATA = {
   },
   version: '1.0.0',
 } satisfies GameMetadata;
+
+
+export const MIRROR_GRID_METADATA = {
+  id: 'mirror-grid',
+  name: 'Mirror Grid',
+  description:
+    'Work out how a pattern looks after it is reflected, then build it. Not a copy — a genuine transformation.',
+  category: 'strategy' as const,
+  icon: '🪟',
+  thumbnail: '🪟',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 420,
+  difficulty: 'medium' as const,
+  controls: 'Tap a cell to cycle symbols. Long-press or use the palette to pick a colour.',
+  rules: [
+    'A pattern is shown on one side of a mirror line. Build how it looks AFTER reflection.',
+    'The mirror is either vertical (left ↔ right) or horizontal (top ↕ bottom) — the level tells you which.',
+    'It is not a copy: a vertical mirror swaps columns, a horizontal mirror swaps rows.',
+    'Every player races the same puzzle. Submit when you think it is right.',
+    'A wrong submission costs points and tells you how many cells are still off — never the answer.',
+  ],
+  scoring: 'Level solved +200, placement bonus up to +120, plus a speed bonus. A wrong submission costs 10.',
+  winCondition: 'Highest total score after the final level. Fastest server-recorded solve breaks a tie.',
+  tags: ['puzzle', 'logic', 'symmetry', 'race', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 5,
+  howToPlay: {
+    objective: 'Build the pattern exactly as it appears after being reflected through the mirror line.',
+    steps: [
+      'Study the source pattern and the mirror line direction shown above the board.',
+      'Work out where each symbol lands after the reflection.',
+      'Tap a cell to place a symbol, and use the palette to change symbol or colour.',
+      'Tap a filled cell repeatedly to cycle it, or clear it.',
+      'Press Submit when you think the reflection is complete.',
+    ],
+    controls: {
+      mobile: 'Tap a cell to place the selected symbol. Tap the palette to change symbol or colour.',
+      desktop: 'Click a cell to place; click the palette to change symbol or colour.',
+    },
+    scoring:
+      'Solving a level scores 200 plus a placement bonus (120/70/40/20) and a speed bonus of up to 150. Each wrong submission costs 10.',
+    winCondition: 'The highest total score after the last level wins; the earliest server timestamp breaks ties.',
+    timeLimit: '2 minutes per level.',
+    specialRules: [
+      'A vertical mirror line flips LEFT and RIGHT (columns swap).',
+      'A horizontal mirror line flips TOP and BOTTOM (rows swap).',
+      'Every player gets the identical puzzle, so the race is fair.',
+      'A wrong submit tells you how many cells are still incorrect, but never which answer to use.',
+    ],
+    playerCount: '2\u20134 players',
+  },
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const FUSE_METADATA = {
+  id: 'fuse',
+  name: 'Fuse',
+  description:
+    'Rotate the wire tiles until every power source reaches its own matching bulb. An abstract connection puzzle.',
+  category: 'strategy' as const,
+  icon: '💡',
+  thumbnail: '💡',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 480,
+  difficulty: 'medium' as const,
+  controls: 'Tap or click a wire tile to rotate it a quarter turn.',
+  rules: [
+    'Each board has one or more sources and a matching bulb for each.',
+    'Rotate wire tiles so a continuous path links every source to ITS OWN bulb.',
+    'Two tiles connect only when both open toward each other — a one-sided opening does nothing.',
+    'Sources, bulbs and blockers are fixed and cannot be rotated.',
+    'A source that reaches the wrong bulb does not count. Every circuit must be correctly paired.',
+  ],
+  scoring: 'Level solved +250, placement bonus up to +120, plus a speed bonus. Each rotation costs 1.',
+  winCondition: 'Highest total score after the final level. Fastest server-recorded solve breaks a tie.',
+  tags: ['puzzle', 'logic', 'circuit', 'race', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 4,
+  howToPlay: {
+    objective: 'Rotate the wires until every source is connected to its own matching bulb.',
+    steps: [
+      'Look at the sources and the bulb that shares each one\u2019s colour.',
+      'Tap a wire tile to rotate it one quarter turn.',
+      'Build an unbroken path: two tiles only join when both open toward each other.',
+      'Sources, bulbs and blockers are fixed \u2014 plan around them.',
+      'The level completes the instant every circuit is correctly paired.',
+    ],
+    controls: {
+      mobile: 'Tap a wire tile to rotate it clockwise.',
+      desktop: 'Click a wire tile to rotate it; it highlights on hover.',
+    },
+    scoring:
+      'Completing a board scores 250 plus a placement bonus (120/70/40/20) and a speed bonus of up to 150. Every rotation costs 1 point, so tidy solutions score better.',
+    winCondition: 'The highest total score after the last board wins.',
+    timeLimit: '2.5 minutes per board.',
+    specialRules: [
+      'A connection needs BOTH tiles to open toward each other.',
+      'Connecting a source to another circuit\u2019s bulb does not count as solved.',
+      'Blockers can never be rotated or connected through.',
+      'Every board is generated by carving real paths first, so it is always solvable.',
+    ],
+    playerCount: '2\u20134 players',
+  },
+  version: '1.0.0',
+} satisfies GameMetadata;
+
+
+export const DOMINO_MIND_METADATA = {
+  id: 'domino-mind',
+  name: 'Domino Mind',
+  description:
+    'Place dominoes to build a chain reaction, then push the starter and watch the cascade hit every target.',
+  category: 'strategy' as const,
+  icon: '🁣',
+  thumbnail: '🁣',
+  minPlayers: 2,
+  maxPlayers: 4,
+  supportedPlayerCounts: [2, 3, 4],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 480,
+  difficulty: 'hard' as const,
+  controls: 'Tap an empty cell to place a domino, tap a placed one to rotate, then press Push.',
+  rules: [
+    'Each level has a start domino, some targets, and a small budget of dominoes you may place.',
+    'A falling domino topples the first standing piece within reach along the way it faces.',
+    'Only the START domino can be pushed \u2014 you must build a route to everything else.',
+    'Splitters also topple sideways. Blockers stop a chain dead and never fall.',
+    'The level is solved when every target has fallen and no forbidden domino has.',
+  ],
+  scoring: 'Level solved +250, placement bonus up to +120, plus a speed bonus. Each failed attempt costs 15.',
+  winCondition: 'Highest total score after the final level. Fastest server-recorded solve breaks a tie.',
+  tags: ['puzzle', 'logic', 'chain-reaction', 'race', '2-4 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 5,
+  howToPlay: {
+    objective: 'Build a chain reaction that knocks over every target when you push the start domino.',
+    steps: [
+      'Find the START domino \u2014 it is the only one you are allowed to push.',
+      'Tap an empty cell to place one of your dominoes, facing the way it should fall.',
+      'Tap a domino you placed to rotate it, or remove it to get the budget back.',
+      'Press Push to run the chain reaction.',
+      'If it stops short, adjust your layout and try again \u2014 failing does not end the level.',
+    ],
+    controls: {
+      mobile: 'Tap an empty cell to place, tap your domino to rotate, then tap Push.',
+      desktop: 'Click to place and rotate; click Push to run the cascade.',
+    },
+    scoring:
+      'Solving a level scores 250 plus a placement bonus (120/70/40/20) and a speed bonus of up to 150. Each failed attempt costs 15, so think before you push.',
+    winCondition: 'The highest total score after the last level wins.',
+    timeLimit: 'Each level has its own clock, from 90 seconds to just over 3 minutes.',
+    specialRules: [
+      'A domino topples the FIRST standing piece within reach along its facing \u2014 it cannot reach past one.',
+      'Splitters also topple the two perpendicular directions.',
+      'Blockers absorb a fall and stop the chain; they never topple.',
+      'Forbidden dominoes must stay standing, so aim carefully.',
+      'The cascade is simulated from your actual layout \u2014 change it and the result changes.',
+    ],
+    playerCount: '2\u20134 players',
+  },
+  version: '1.0.0',
+} satisfies GameMetadata;

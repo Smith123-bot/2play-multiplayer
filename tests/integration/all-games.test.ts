@@ -546,6 +546,41 @@ const CASES: GameCase[] = [
       Boolean(state.players),
     action: { type: 'pass' },
   },
+  {
+    id: 'mirror-grid',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.source) &&
+      (state.source as unknown[]).length > 0 &&
+      Array.isArray(state.myAnswer) &&
+      typeof state.mirror === 'string' &&
+      // The answer must never reach a client.
+      state.solution === undefined &&
+      Boolean(state.players),
+    action: { type: 'set', payload: { index: 0, symbol: 'circle', color: 'red' } },
+  },
+  {
+    id: 'fuse',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.board) &&
+      (state.board as unknown[]).length > 0 &&
+      typeof state.circuits === 'number' &&
+      (state.circuits as number) > 0 &&
+      Boolean(state.players),
+    action: { type: 'rotate', payload: { tileId: 't0-0' } },
+  },
+  {
+    id: 'domino-mind',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.pieces) &&
+      (state.pieces as unknown[]).length > 0 &&
+      Array.isArray(state.requiredTargets) &&
+      typeof state.budget === 'number' &&
+      Boolean(state.players),
+    action: { type: 'push' },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

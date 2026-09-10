@@ -63,6 +63,9 @@ import { chessGame } from '../games/chess';
 import { unoGame } from '../games/uno';
 import { simGame } from '../games/sim';
 import { dominoesGame } from '../games/dominoes';
+import { mirrorGridGame } from '../games/mirror-grid';
+import { fuseGame } from '../games/fuse';
+import { dominoMindGame } from '../games/domino-mind';
 import { loveMazeGame } from '../games/love-maze';
 import { syncJumpGame } from '../games/sync-jump';
 import { coupleSyncGame } from '../games/couple-sync';
@@ -230,6 +233,9 @@ export function createTestPlatform(
       unoGame,
       simGame,
       dominoesGame,
+      mirrorGridGame,
+      fuseGame,
+      dominoMindGame,
     ]) {
       platform.registry.register(game);
     }

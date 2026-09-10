@@ -465,6 +465,51 @@ const CASES: GameCase[] = [
       Boolean(state.players),
     action: { type: 'place', payload: { x: 0, y: 0, kind: 'a' } },
   },
+  {
+    id: 'connect-four',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.board) &&
+      (state.board as unknown[]).length === 42 &&
+      state.cols === 7 &&
+      state.rows === 6 &&
+      Boolean(state.players),
+    action: { type: 'drop', payload: { col: 3 } },
+  },
+  {
+    id: 'hangman',
+    maxPlayers: 2,
+    expect: (state) =>
+      typeof state.masked === 'string' &&
+      (state.masked as string).length > 0 &&
+      // The answer must never reach a client mid-round.
+      state.secret === undefined &&
+      state.revealedWord === null &&
+      Boolean(state.players),
+    action: { type: 'guess', payload: { letter: 'E' } },
+  },
+  {
+    id: 'sos-game',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.board) &&
+      (state.board as unknown[]).length === 25 &&
+      Array.isArray(state.lines) &&
+      Boolean(state.players),
+    action: { type: 'place', payload: { index: 0, letter: 'S' } },
+  },
+  {
+    id: 'chess',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.board) &&
+      (state.board as unknown[]).length === 64 &&
+      (state.turn === 'w' || state.turn === 'b') &&
+      Boolean(state.clocks) &&
+      Boolean(state.players),
+    // e2-e4: from index 52 to index 36.
+    action: { type: 'move', payload: { from: 52, to: 36 } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */

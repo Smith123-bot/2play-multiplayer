@@ -56,6 +56,10 @@ import { mirrorArenaGame } from '../games/mirror-arena';
 import { chainReactionGame } from '../games/chain-reaction-battle';
 import { oneButtonGame } from '../games/one-button-battle';
 import { splitWorldGame } from '../games/split-world';
+import { connectFourGame } from '../games/connect-four';
+import { hangmanGame } from '../games/hangman';
+import { sosGame } from '../games/sos-game';
+import { chessGame } from '../games/chess';
 import { loveMazeGame } from '../games/love-maze';
 import { syncJumpGame } from '../games/sync-jump';
 import { coupleSyncGame } from '../games/couple-sync';
@@ -216,6 +220,10 @@ export function createTestPlatform(
       coupleSyncGame,
       coupleMemoryGame,
       buildTogetherGame,
+      connectFourGame,
+      hangmanGame,
+      sosGame,
+      chessGame,
     ]) {
       platform.registry.register(game);
     }

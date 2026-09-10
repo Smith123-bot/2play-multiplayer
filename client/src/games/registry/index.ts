@@ -40,6 +40,10 @@ import { mirrorArenaClient } from '../mirror-arena';
 import { chainReactionClient } from '../chain-reaction-battle';
 import { oneButtonClient } from '../one-button-battle';
 import { splitWorldClient } from '../split-world';
+import { connectFourClient } from '../connect-four';
+import { hangmanClient } from '../hangman';
+import { sosGameClient } from '../sos-game';
+import { chessClient } from '../chess';
 import { loveMazeClient } from '../love-maze';
 import { syncJumpClient } from '../sync-jump';
 import { coupleSyncClient } from '../couple-sync';
@@ -104,6 +108,10 @@ const modules: ClientGameModule[] = [
   coupleSyncClient,
   coupleMemoryClient,
   buildTogetherClient,
+  connectFourClient,
+  hangmanClient,
+  sosGameClient,
+  chessClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

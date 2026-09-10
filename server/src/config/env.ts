@@ -82,13 +82,33 @@ export const env: Env = parseEnv();
 export const isProduction = env.NODE_ENV === 'production';
 export const isTest = env.NODE_ENV === 'test';
 
+/**
+ * Resolves the allowed CORS origins.
+ *
+ * In production a wildcard is never returned: the API is credentialed
+ * (`credentials: true`), and reflecting an arbitrary origin back with
+ * credentials lets any site drive authenticated cross-origin requests. If
+ * `CORS_ORIGIN` is missing or `*` in production we fall back to the configured
+ * `CLIENT_URL` — a same-origin deployment keeps working, and a misconfigured
+ * one fails closed instead of open.
+ *
+ * Development and test keep the permissive behaviour so local tooling, the
+ * Vite dev server and the sandbox preview all work unchanged.
+ */
 export function parseCorsOrigins(): string[] | '*' {
   const raw = (env.CORS_ORIGIN ?? '').trim();
-  if (!raw || raw === '*') return '*';
-  return raw
+  const explicit = raw
     .split(',')
     .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+    .filter((value) => value.length > 0 && value !== '*');
+
+  if (explicit.length > 0) return explicit;
+
+  if (env.NODE_ENV === 'production') {
+    const fallback = (env.CLIENT_URL ?? '').trim();
+    return fallback.length > 0 ? [fallback] : [];
+  }
+  return '*';
 }
 
 /** True when Supabase credentials are (at least partially) configured. */

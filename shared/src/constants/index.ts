@@ -95,6 +95,13 @@ export const AUTH_RATE_LIMIT_PER_MIN = 60;
 export const HTTP_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 export const HTTP_RATE_LIMIT_MAX = 300;
 
+/**
+ * Maximum accepted Socket.IO frame size (32 KB), mirroring the HTTP JSON body
+ * limit. Every legitimate event is orders of magnitude smaller; the library
+ * default of 1 MB would let a client force large per-frame allocations.
+ */
+export const SOCKET_MAX_PAYLOAD_BYTES = 32 * 1024;
+
 /* ------------------------------------------------------------------ */
 /* Anti-cheat / physics                                                */
 /* ------------------------------------------------------------------ */

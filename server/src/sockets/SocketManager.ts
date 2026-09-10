@@ -4,7 +4,12 @@ import type {
   ClientToServerEvents,
   ServerToClientEvents,
 } from '@2play/shared';
-import { APP_VERSION, GAME_STATE_BROADCAST_THROTTLE_MS, SERVER_EVENTS } from '@2play/shared';
+import {
+  APP_VERSION,
+  GAME_STATE_BROADCAST_THROTTLE_MS,
+  SERVER_EVENTS,
+  SOCKET_MAX_PAYLOAD_BYTES,
+} from '@2play/shared';
 import type { Platform } from '../core/Platform';
 import type { Room } from '../rooms/Room';
 import { createLogger } from '../utils/logger';
@@ -40,6 +45,13 @@ export class SocketManager {
       pingTimeout: 20_000,
       connectTimeout: 15_000,
       transports: ['websocket', 'polling'],
+      /**
+       * Cap socket frames the way `express.json({ limit: '32kb' })` caps HTTP
+       * bodies. No legitimate event comes close: the largest are a chat message
+       * (a few hundred bytes) and a game action. Socket.IO's 1MB default would
+       * otherwise let a client force megabyte allocations per frame.
+       */
+      maxHttpBufferSize: SOCKET_MAX_PAYLOAD_BYTES,
     });
 
     this.io.on('connection', (socket) => {

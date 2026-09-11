@@ -83,11 +83,28 @@ export interface LudoLegalMove {
   reachesHome: boolean;
 }
 
+/**
+ * The most recent roll of the match. Unlike `dice` — which only describes the
+ * roll the current player still has to act on and is cleared the moment the
+ * turn passes — this survives the turn switch so every client can show what was
+ * just rolled. Without it a roll that has no legal move is invisible: the
+ * server clears `dice` and passes the turn in the same update, so the player
+ * who pressed "Roll dice" never receives the number they rolled.
+ */
+export interface LudoLastRoll {
+  playerId: string;
+  value: number;
+  /** False when the roll had no legal move and the turn passed immediately. */
+  playable: boolean;
+}
+
 export interface LudoState {
   phase: LudoPhase;
   turnOrder: string[];
   currentPlayerId: string | null;
   dice: number | null;
+  /** Display-only record of the last roll (kept across turns). */
+  lastRoll: LudoLastRoll | null;
   /** Consecutive sixes by the current player (three in a row forfeits the turn). */
   consecutiveSixes: number;
   legalMoves: LudoLegalMove[];
@@ -410,6 +427,7 @@ export const ludoGame: GameModule<LudoState> = {
       turnOrder: players.map((player) => player.id),
       currentPlayerId: null,
       dice: null,
+      lastRoll: null,
       consecutiveSixes: 0,
       legalMoves: [],
       players: {},
@@ -540,6 +558,8 @@ export const ludoGame: GameModule<LudoState> = {
         state.consecutiveSixes = 0;
       }
       state.lastEvent = `roll:${playerId}:${dice}`;
+      // Publish the number immediately so it survives a turn that passes below.
+      state.lastRoll = { playerId, value: dice, playable: false };
 
       // Three sixes in a row forfeits the turn (classic anti-stall rule).
       if (state.consecutiveSixes >= MAX_CONSECUTIVE_SIXES) {
@@ -550,6 +570,7 @@ export const ludoGame: GameModule<LudoState> = {
       }
 
       const moves = computeLegalMoves(state, playerId, dice);
+      state.lastRoll = { playerId, value: dice, playable: moves.length > 0 };
       state.legalMoves = moves;
       if (moves.length === 0) {
         // Nothing playable: a six still earns another roll, otherwise pass on.
@@ -727,6 +748,7 @@ export const ludoGame: GameModule<LudoState> = {
       phase: 'idle',
       currentPlayerId: null,
       dice: null,
+      lastRoll: null,
       consecutiveSixes: 0,
       legalMoves: [],
       players: Object.fromEntries(seats.map(([id, seat]) => [id, makeSlot(seat)])),
@@ -758,6 +780,7 @@ export const ludoGame: GameModule<LudoState> = {
       phase: state.phase,
       currentPlayerId: state.currentPlayerId,
       dice: state.dice,
+      lastRoll: state.lastRoll ? { ...state.lastRoll } : null,
       consecutiveSixes: state.consecutiveSixes,
       // Only the active player receives the playable move list.
       legalMoves: isCurrent ? state.legalMoves.map((move) => ({ ...move })) : [],

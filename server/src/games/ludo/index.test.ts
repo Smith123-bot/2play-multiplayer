@@ -144,6 +144,41 @@ describe('Ludo', () => {
     }
   });
 
+  it('keeps the rolled number visible when the roll has no legal move', () => {
+    const playerId = players[0]!.id;
+    // Every token is in the yard: only a six is playable, so a 1..5 roll has no
+    // move and the turn passes immediately. The client still has to be able to
+    // show what was rolled — otherwise pressing "Roll dice" looks like a no-op.
+    let rolls = 0;
+    while (rolls < 40) {
+      const out = act(playerId, { type: 'roll' });
+      expect(out.accepted).toBe(true);
+      rolls += 1;
+      const roll = state().lastRoll;
+      expect(roll).not.toBeNull();
+      expect(roll!.playerId).toBe(playerId);
+      expect(roll!.value).toBeGreaterThanOrEqual(1);
+      expect(roll!.value).toBeLessThanOrEqual(6);
+      const view = ludoGame.getPublicState(state(), playerId, context()) as {
+        lastRoll: { value: number; playable: boolean } | null;
+      };
+      expect(view.lastRoll).not.toBeNull();
+      expect(view.lastRoll!.value).toBe(roll!.value);
+      // `dice` describes the live roll only; `lastRoll` must outlive the turn.
+      if (state().currentPlayerId !== playerId) {
+        expect(state().dice).toBeNull();
+        expect(state().lastRoll!.value).toBe(roll!.value);
+        if (!roll!.playable) expect(view.lastRoll!.playable).toBe(false);
+        break;
+      }
+      // The roll was playable (a six) — clear the board state and roll again.
+      setDice(playerId, 6);
+      const tokenId = state().legalMoves[0]!.tokenId;
+      act(playerId, { type: 'move', payload: { tokenId } });
+    }
+    expect(rolls).toBeGreaterThan(0);
+  });
+
   /* ---------------- legal moves ---------------- */
 
   it('requires a six to leave the yard', () => {

@@ -58,7 +58,9 @@ describe('Draw & Guess Battle', () => {
     const guesser = players.find((player) => player.id !== drawerId)!;
     const hidden = publicState(guesser.id);
     expect(hidden.word).toBeNull();
-    expect(JSON.stringify(hidden)).not.toContain(state().current!.word);
+    // Sweep the payload values, not the field names: words like "cat" occur
+    // inside schema keys ("category"), which would be a false leak.
+    expect(JSON.stringify(hidden).replace(/"[^"]*":/g, '')).not.toContain(state().current!.word);
     const shown = publicState(drawerId);
     expect(shown.word).toBe(state().current!.word);
   });

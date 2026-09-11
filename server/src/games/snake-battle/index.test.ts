@@ -430,6 +430,20 @@ describe('Snake Battle', () => {
   it('getAIMove submits only meaningful turns and none when dead or finished', async () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const playerId = players[0]!.id;
+    // Build a situation that must produce a turn: the head is up against the
+    // right wall while heading right, so continuing straight is blocked and
+    // the AI has to submit a new direction. Left as-is, whether the AI ever
+    // prefers a turn depends on the board and the random stream.
+    const snake = state().snakes[playerId]!;
+    snake.alive = true;
+    snake.direction = 'right';
+    snake.pendingDirection = null;
+    const wallX = state().cols - 1;
+    snake.body = [
+      { x: wallX, y: 8 },
+      { x: wallX - 1, y: 8 },
+      { x: wallX - 2, y: 8 },
+    ];
     let submitted = 0;
     for (let attempt = 0; attempt < 12; attempt += 1) {
       const move = snakeBattleGame.getAIMove?.(playerId, 'medium', state(), context());
@@ -441,7 +455,6 @@ describe('Snake Battle', () => {
     }
     expect(submitted).toBeGreaterThan(0);
 
-    const snake = state().snakes[playerId]!;
     snake.alive = false;
     expect(snakeBattleGame.getAIMove?.(playerId, 'hard', state(), context())).toBeNull();
     state().phase = 'finished';

@@ -32,6 +32,8 @@ export interface LudoPublicState {
   phase: 'idle' | 'awaiting-roll' | 'awaiting-move' | 'finished';
   currentPlayerId: string | null;
   dice: number | null;
+  /** The last roll of the match — kept visible after the turn passes. */
+  lastRoll?: { playerId: string; value: number; playable: boolean } | null;
   consecutiveSixes: number;
   legalMoves: LudoLegalMove[];
   turnOrder: string[];
@@ -116,6 +118,9 @@ function LudoGame({ state, players, myPlayerId, sendAction, play, vibrate }: Gam
   const previousEvent = useRef<string | null>(null);
 
   const phase = state?.phase ?? 'idle';
+  const lastRoll = state?.lastRoll ?? null;
+  const lastRollWasMine = Boolean(myPlayerId) && lastRoll?.playerId === myPlayerId;
+  const lastRoller = players.find((player) => player.id === lastRoll?.playerId);
   const isMyTurn = Boolean(myPlayerId) && state?.currentPlayerId === myPlayerId;
   const canRoll = isMyTurn && phase === 'awaiting-roll';
   const canMove = isMyTurn && phase === 'awaiting-move';
@@ -337,7 +342,9 @@ function LudoGame({ state, players, myPlayerId, sendAction, play, vibrate }: Gam
 
       {/* Dice + controls */}
       <div className="flex flex-col items-center gap-3">
-        <Die value={state.dice} rolling={phase === 'awaiting-move'} />
+        {/* `lastRoll` keeps the number on screen when the roll had no legal move
+            and the server passed the turn in the same update. */}
+        <Die value={state.dice ?? lastRoll?.value ?? null} rolling={phase === 'awaiting-move'} />
         {canRoll ? (
           <Button onClick={roll} className="min-w-40">
             Roll dice
@@ -346,6 +353,13 @@ function LudoGame({ state, players, myPlayerId, sendAction, play, vibrate }: Gam
           <p className="text-sm text-emerald-300">
             Rolled {state.dice} — tap a highlighted token ({state.legalMoves.length} option
             {state.legalMoves.length === 1 ? '' : 's'})
+          </p>
+        ) : lastRoll && !lastRoll.playable ? (
+          <p className="text-sm text-amber-300">
+            {lastRollWasMine
+              ? `You rolled ${lastRoll.value} — no moves.`
+              : `${lastRoller?.nickname ?? 'Opponent'} rolled ${lastRoll.value} — no moves.`}
+            {currentPlayer ? ` Waiting for ${currentPlayer.nickname}…` : ''}
           </p>
         ) : (
           <p className="text-sm text-slate-400">

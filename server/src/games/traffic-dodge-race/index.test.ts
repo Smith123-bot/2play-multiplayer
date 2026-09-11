@@ -207,6 +207,11 @@ describe('Traffic Dodge Race', () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const [a, b] = players.map((player) => player.id);
 
+    // Park the traffic far behind the racers: a car spawned in the same lane
+    // would legitimately crash the racer (the collision check runs before the
+    // finish check), which is a different scenario than the one under test.
+    for (const car of state().traffic) car.pos = -car.length - 100;
+
     state().racers[a]!.position = state().trackLength - 1;
     state().racers[a]!.stunUntil = null;
     advanceRace(state(), 250, context());

@@ -122,14 +122,20 @@ describe('Hexa Conquest', () => {
         context(),
       ).valid,
     ).toBe(false);
+    const before = state().players[playerId]!.specials;
     const remote = legalBridges(state(), playerId)[0];
     expect(remote).toBeTruthy();
+    const target = state().tiles.find((tile) => tile.col === remote!.col && tile.row === remote!.row);
     const result = platform.gameManager.handleAction(room, playerId, {
       type: 'bridge',
       payload: { col: remote!.col, row: remote!.row },
     });
     expect(result.accepted).toBe(true);
-    expect(state().players[playerId]!.specials).toBe(0);
+    // A bridge always spends one charge. Capturing an energy hex immediately
+    // grants one back, and tiles are randomised per board, so both outcomes
+    // occur across runs — assert the rule rather than one of its two cases.
+    const refund = target?.kind === 'energy' ? 1 : 0;
+    expect(state().players[playerId]!.specials).toBe(before - 1 + refund);
   });
 
   it('turn timeout advances the current player', async () => {

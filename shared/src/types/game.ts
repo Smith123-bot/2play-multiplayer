@@ -1,7 +1,19 @@
 import type { AIDifficulty, PlayerSummary } from './player';
 
-export type GameCategory = 'reflex' | 'memory' | 'word' | 'strategy' | 'math';
+export type GameCategory = 'reflex' | 'memory' | 'word' | 'strategy' | 'math' | 'coop';
 export type GameDifficulty = 'easy' | 'medium' | 'hard';
+
+/** Structured rules content for the shared How To Play popup. */
+export interface HowToPlay {
+  objective: string;
+  steps: string[];
+  controls: { mobile: string; desktop: string };
+  scoring: string;
+  winCondition: string;
+  timeLimit: string;
+  specialRules: string[];
+  playerCount: string;
+}
 
 export interface GameMetadata {
   id: string;
@@ -27,6 +39,11 @@ export interface GameMetadata {
   featured: boolean;
   /** Optional per-game options surfaced in the lobby (e.g. grid sizes). */
   gridOptions?: string[];
+  /**
+   * Structured How To Play content shown in the pre-match rules popup.
+   * Optional so existing games keep working unchanged.
+   */
+  howToPlay?: HowToPlay;
   /** Round based games (best of N) expose a round count in the lobby. */
   hasRounds?: boolean;
   defaultRounds?: number;

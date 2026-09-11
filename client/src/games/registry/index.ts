@@ -40,6 +40,24 @@ import { mirrorArenaClient } from '../mirror-arena';
 import { chainReactionClient } from '../chain-reaction-battle';
 import { oneButtonClient } from '../one-button-battle';
 import { splitWorldClient } from '../split-world';
+import { connectFourClient } from '../connect-four';
+import { hangmanClient } from '../hangman';
+import { sosGameClient } from '../sos-game';
+import { chessClient } from '../chess';
+import { unoClient } from '../uno';
+import { simClient } from '../sim';
+import { dominoesClient } from '../dominoes';
+import { mirrorGridClient } from '../mirror-grid';
+import { fuseClient } from '../fuse';
+import { dominoMindClient } from '../domino-mind';
+import { loveMazeClient } from '../love-maze';
+import { syncJumpClient } from '../sync-jump';
+import { coupleSyncClient } from '../couple-sync';
+import { coupleMemoryClient } from '../couple-memory';
+import { buildTogetherClient } from '../build-together';
+import { ludoClient } from '../ludo';
+import { arrowPuzzleClient } from '../arrow-puzzle';
+import { blackBlastClient } from '../black-blast';
 
 /**
  * Client game registry.
@@ -88,6 +106,24 @@ const modules: ClientGameModule[] = [
   chainReactionClient,
   oneButtonClient,
   splitWorldClient,
+  ludoClient,
+  arrowPuzzleClient,
+  blackBlastClient,
+  loveMazeClient,
+  syncJumpClient,
+  coupleSyncClient,
+  coupleMemoryClient,
+  buildTogetherClient,
+  connectFourClient,
+  hangmanClient,
+  sosGameClient,
+  chessClient,
+  unoClient,
+  simClient,
+  dominoesClient,
+  mirrorGridClient,
+  fuseClient,
+  dominoMindClient,
 ];
 
 const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));

@@ -60,7 +60,10 @@ export class RoomManager {
 
   requireRoom(roomId: string): Room {
     const room = this.platform.roomStore.get(roomId);
-    if (!room) throw AppError.roomNotFound(`Room ${roomId} does not exist.`);
+    // Generic, code-free message: echoing the attempted code back gives a room
+    // scanner a per-code signal and reflects unvalidated input into the
+    // response. Every unknown code now fails identically.
+    if (!room) throw AppError.roomNotFound('Room not found or no longer available.');
     return room;
   }
 

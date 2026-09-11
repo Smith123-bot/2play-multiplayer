@@ -248,8 +248,19 @@ const CASES: GameCase[] = [
   },
   {
     id: 'traffic-control-battle',
-    expect: (state) => Boolean(state.zones) && typeof state.stepMs === 'number' && typeof state.endsAt === 'number',
-    action: { type: 'switch' },
+    expect: (state) => {
+      const junction = state.junction as { signals?: unknown[]; queues?: unknown[] } | null;
+      return (
+        Boolean(junction) &&
+        Array.isArray(junction!.signals) &&
+        // Four approaches, two lanes each.
+        Array.isArray(junction!.queues) &&
+        (junction!.queues as unknown[]).length === 8 &&
+        typeof state.endsAt === 'number' &&
+        Boolean(state.players)
+      );
+    },
+    action: { type: 'phase', payload: { phase: 'ew' } },
   },
   {
     id: 'magnet-maze',
@@ -370,10 +381,216 @@ const CASES: GameCase[] = [
     expect: (state) =>
       Array.isArray(state.tiles) &&
       Boolean(state.players) &&
-      Boolean(state.goal) &&
-      typeof state.role === 'string' &&
-      state.trueTiles === undefined,
+      typeof state.lens === 'string' &&
+      typeof state.objective === 'string' &&
+      state.totalRounds === 5 &&
+      // Hidden information must never reach a client.
+      state.trueTiles === undefined &&
+      state.switches === undefined &&
+      state.keys === undefined,
     action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'ludo',
+    expect: (state) =>
+      Boolean(state.players) &&
+      Array.isArray(state.trackCells) &&
+      (state.trackCells as unknown[]).length === 52 &&
+      typeof state.phase === 'string' &&
+      Array.isArray(state.turnOrder),
+    action: { type: 'roll' },
+  },
+  {
+    id: 'arrow-puzzle',
+    expect: (state) =>
+      Array.isArray(state.board) &&
+      (state.board as unknown[]).length > 0 &&
+      typeof state.difficulty === 'string' &&
+      Boolean(state.players) &&
+      // The generator solution must never reach a client.
+      state.layout === undefined &&
+      state.seed === undefined,
+    action: { type: 'hint' },
+  },
+  {
+    id: 'black-blast',
+    expect: (state) =>
+      Array.isArray(state.nodes) &&
+      (state.nodes as unknown[]).length > 0 &&
+      Array.isArray(state.pulses) &&
+      Boolean(state.players) &&
+      typeof state.cols === 'number',
+    action: { type: 'pulse' },
+  },
+  {
+    id: 'love-maze',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.tiles) &&
+      (state.tiles as unknown[]).length > 0 &&
+      typeof state.levelName === 'string' &&
+      state.totalLevels === 10 &&
+      Boolean(state.players),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'sync-jump',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.course) &&
+      (state.course as unknown[]).length > 0 &&
+      typeof state.syncMeter === 'number' &&
+      state.totalLevels === 10 &&
+      Boolean(state.players),
+    action: { type: 'move', payload: { direction: 'right' } },
+  },
+  {
+    id: 'couple-sync',
+    maxPlayers: 2,
+    expect: (state) =>
+      typeof state.totalRounds === 'number' &&
+      Boolean(state.current) &&
+      Boolean(state.players) &&
+      typeof state.teamScore === 'number',
+    action: { type: 'act' },
+  },
+  {
+    id: 'couple-memory',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.cards) &&
+      (state.cards as Array<{ symbol: string | null }>).length > 0 &&
+      // Face-down symbols must never reach a client.
+      (state.cards as Array<{ symbol: string | null }>).every((card) => card.symbol === null) &&
+      Boolean(state.players),
+    action: { type: 'hint' },
+  },
+  {
+    id: 'build-together',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.blueprint) &&
+      (state.blueprint as unknown[]).length > 0 &&
+      Boolean(state.inventory) &&
+      state.totalLevels === 10 &&
+      Boolean(state.players),
+    action: { type: 'place', payload: { x: 0, y: 0, kind: 'a' } },
+  },
+  {
+    id: 'connect-four',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.board) &&
+      (state.board as unknown[]).length === 42 &&
+      state.cols === 7 &&
+      state.rows === 6 &&
+      Boolean(state.players),
+    action: { type: 'drop', payload: { col: 3 } },
+  },
+  {
+    id: 'hangman',
+    maxPlayers: 2,
+    expect: (state) =>
+      typeof state.masked === 'string' &&
+      (state.masked as string).length > 0 &&
+      // The answer must never reach a client mid-round.
+      state.secret === undefined &&
+      state.revealedWord === null &&
+      Boolean(state.players),
+    action: { type: 'guess', payload: { letter: 'E' } },
+  },
+  {
+    id: 'sos-game',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.board) &&
+      (state.board as unknown[]).length === 25 &&
+      Array.isArray(state.lines) &&
+      Boolean(state.players),
+    action: { type: 'place', payload: { index: 0, letter: 'S' } },
+  },
+  {
+    id: 'chess',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.board) &&
+      (state.board as unknown[]).length === 64 &&
+      (state.turn === 'w' || state.turn === 'b') &&
+      Boolean(state.clocks) &&
+      Boolean(state.players),
+    // e2-e4: from index 52 to index 36.
+    action: { type: 'move', payload: { from: 52, to: 36 } },
+  },
+  {
+    id: 'uno',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.myHand) &&
+      (state.myHand as unknown[]).length === 7 &&
+      Boolean(state.topCard) &&
+      typeof state.activeColor === 'string' &&
+      typeof state.drawPileCount === 'number' &&
+      // The deck and other hands must never reach a client.
+      state.drawPile === undefined &&
+      Boolean(state.players),
+    action: { type: 'draw' },
+  },
+  {
+    id: 'sim',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.edges) &&
+      (state.edges as unknown[]).length === 15 &&
+      state.nodes === 6 &&
+      Boolean(state.players),
+    action: { type: 'claim', payload: { edgeId: 'e01' } },
+  },
+  {
+    id: 'dominoes',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.myHand) &&
+      (state.myHand as unknown[]).length === 7 &&
+      typeof state.boneyardCount === 'number' &&
+      // The boneyard contents must never reach a client.
+      state.boneyard === undefined &&
+      Boolean(state.players),
+    action: { type: 'pass' },
+  },
+  {
+    id: 'mirror-grid',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.source) &&
+      (state.source as unknown[]).length > 0 &&
+      Array.isArray(state.myAnswer) &&
+      typeof state.mirror === 'string' &&
+      // The answer must never reach a client.
+      state.solution === undefined &&
+      Boolean(state.players),
+    action: { type: 'set', payload: { index: 0, symbol: 'circle', color: 'red' } },
+  },
+  {
+    id: 'fuse',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.board) &&
+      (state.board as unknown[]).length > 0 &&
+      typeof state.circuits === 'number' &&
+      (state.circuits as number) > 0 &&
+      Boolean(state.players),
+    action: { type: 'rotate', payload: { tileId: 't0-0' } },
+  },
+  {
+    id: 'domino-mind',
+    maxPlayers: 2,
+    expect: (state) =>
+      Array.isArray(state.pieces) &&
+      (state.pieces as unknown[]).length > 0 &&
+      Array.isArray(state.requiredTargets) &&
+      typeof state.budget === 'number' &&
+      Boolean(state.players),
+    action: { type: 'push' },
   },
 ];
 

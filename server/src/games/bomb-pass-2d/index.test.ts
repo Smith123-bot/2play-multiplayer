@@ -125,14 +125,21 @@ describe('Bomb Pass 2D', () => {
     const other = holder === a ? b : a;
     state().players[holder]!.receivedAt = context().now() - 1000;
 
+    const before = context().now();
     const result = platform.gameManager.handleAction(room, holder, {
       type: 'pass',
       payload: { targetId: other },
     });
+    const after = context().now();
     expect(result.accepted).toBe(true);
     expect(state().holderId).toBe(other);
     expect(state().lastEvent).toBe(`pass:${other}`);
-    expect(state().players[other]!.receivedAt).toBe(context().now());
+    // `receivedAt` is stamped with the server clock during the handler, so it
+    // must land inside the window around the call — asserting equality against
+    // a later `now()` is a race that fails whenever the clock ticks between
+    // the handler and the assertion.
+    expect(state().players[other]!.receivedAt).toBeGreaterThanOrEqual(before);
+    expect(state().players[other]!.receivedAt).toBeLessThanOrEqual(after);
   });
 
   /* ---------------------------------------------------------------- */

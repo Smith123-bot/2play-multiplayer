@@ -56,6 +56,24 @@ import { mirrorArenaGame } from '../games/mirror-arena';
 import { chainReactionGame } from '../games/chain-reaction-battle';
 import { oneButtonGame } from '../games/one-button-battle';
 import { splitWorldGame } from '../games/split-world';
+import { connectFourGame } from '../games/connect-four';
+import { hangmanGame } from '../games/hangman';
+import { sosGame } from '../games/sos-game';
+import { chessGame } from '../games/chess';
+import { unoGame } from '../games/uno';
+import { simGame } from '../games/sim';
+import { dominoesGame } from '../games/dominoes';
+import { mirrorGridGame } from '../games/mirror-grid';
+import { fuseGame } from '../games/fuse';
+import { dominoMindGame } from '../games/domino-mind';
+import { loveMazeGame } from '../games/love-maze';
+import { syncJumpGame } from '../games/sync-jump';
+import { coupleSyncGame } from '../games/couple-sync';
+import { coupleMemoryGame } from '../games/couple-memory';
+import { buildTogetherGame } from '../games/build-together';
+import { ludoGame } from '../games/ludo';
+import { arrowPuzzleGame } from '../games/arrow-puzzle';
+import { blackBlastGame } from '../games/black-blast';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -200,6 +218,24 @@ export function createTestPlatform(
       chainReactionGame,
       oneButtonGame,
       splitWorldGame,
+      ludoGame,
+      arrowPuzzleGame,
+      blackBlastGame,
+      loveMazeGame,
+      syncJumpGame,
+      coupleSyncGame,
+      coupleMemoryGame,
+      buildTogetherGame,
+      connectFourGame,
+      hangmanGame,
+      sosGame,
+      chessGame,
+      unoGame,
+      simGame,
+      dominoesGame,
+      mirrorGridGame,
+      fuseGame,
+      dominoMindGame,
     ]) {
       platform.registry.register(game);
     }

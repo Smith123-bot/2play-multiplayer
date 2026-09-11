@@ -263,12 +263,19 @@ describe('Traffic Control Battle', () => {
   it('advances the simulation in fixed steps and generates traffic', () => {
     const playerId = players[0]!.id;
     const before = state().tick;
-    // Feed enough time for several fixed steps.
+    // Feed enough time for several fixed steps (TICK_MS = 250 → exactly 8).
     trafficControlGame.update!(state(), 2_000, context());
-    expect(state().tick).toBeGreaterThan(before);
-    // Traffic should have appeared somewhere on the junction.
+    expect(state().tick).toBe(before + 8);
+    // Traffic should appear somewhere on the junction. A spawn is probabilistic
+    // per tick (~30% early on) and each update() catches up at most 8 steps, so
+    // one burst can legitimately contain no spawn — keep stepping until traffic
+    // arrives, with a bound that no realistic seed can miss.
     const junction = mine(playerId);
-    expect(totalQueued(junction) + junction.inBox.length + junction.cleared).toBeGreaterThan(0);
+    const trafficHere = () => totalQueued(junction) + junction.inBox.length + junction.cleared;
+    for (let guard = 0; trafficHere() === 0 && guard < 10; guard += 1) {
+      trafficControlGame.update!(state(), 2_000, context());
+    }
+    expect(trafficHere()).toBeGreaterThan(0);
   });
 
   it('every player faces the same schedule but an independent junction', () => {

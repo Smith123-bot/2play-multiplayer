@@ -13,6 +13,8 @@ export interface PatternPlayerPublic {
   mistakes: number;
   score: number;
   streak: number;
+  bestStreak: number;
+  latestInputSeq: number;
   completedRounds: number;
   disconnected: boolean;
   left: boolean;
@@ -23,6 +25,7 @@ export interface PatternMemoryPublicState {
   round: number;
   totalRounds: number;
   patternLength: number;
+  tileCount: number;
   shown: number;
   showStepMs: number;
   inputEndsAt: number | null;
@@ -37,16 +40,26 @@ export interface PatternMemoryPublicState {
 }
 
 const TILE_COLORS = [
-  'bg-rose-500/80', 'bg-amber-500/80', 'bg-emerald-500/80',
-  'bg-sky-500/80', 'bg-violet-500/80', 'bg-pink-500/80',
-  'bg-teal-500/80', 'bg-orange-500/80', 'bg-indigo-500/80',
+  'bg-rose-500/80',
+  'bg-amber-500/80',
+  'bg-emerald-500/80',
+  'bg-sky-500/80',
+  'bg-violet-500/80',
+  'bg-pink-500/80',
+  'bg-teal-500/80',
+  'bg-orange-500/80',
+  'bg-indigo-500/80',
 ];
 
 const TILE_GLOWS = [
-  'shadow-[0_0_24px_rgba(244,63,94,0.9)]', 'shadow-[0_0_24px_rgba(245,158,11,0.9)]',
-  'shadow-[0_0_24px_rgba(16,185,129,0.9)]', 'shadow-[0_0_24px_rgba(14,165,233,0.9)]',
-  'shadow-[0_0_24px_rgba(139,92,246,0.9)]', 'shadow-[0_0_24px_rgba(236,72,153,0.9)]',
-  'shadow-[0_0_24px_rgba(20,184,166,0.9)]', 'shadow-[0_0_24px_rgba(249,115,22,0.9)]',
+  'shadow-[0_0_24px_rgba(244,63,94,0.9)]',
+  'shadow-[0_0_24px_rgba(245,158,11,0.9)]',
+  'shadow-[0_0_24px_rgba(16,185,129,0.9)]',
+  'shadow-[0_0_24px_rgba(14,165,233,0.9)]',
+  'shadow-[0_0_24px_rgba(139,92,246,0.9)]',
+  'shadow-[0_0_24px_rgba(236,72,153,0.9)]',
+  'shadow-[0_0_24px_rgba(20,184,166,0.9)]',
+  'shadow-[0_0_24px_rgba(249,115,22,0.9)]',
   'shadow-[0_0_24px_rgba(99,102,241,0.9)]',
 ];
 
@@ -62,6 +75,8 @@ function PatternMemoryGame({
   const [tapped, setTapped] = useState<number | null>(null);
   const previousFlashKey = useRef<string | null>(null);
   const previousEvent = useRef<string | null>(null);
+  const inputSequence = useRef(0);
+  const serverSnapshotAt = useRef(Date.now());
   const [, forceTick] = useState(0);
 
   const phase = state?.phase ?? 'idle';
@@ -114,12 +129,41 @@ function PatternMemoryGame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastEvent]);
 
+  useEffect(() => {
+    serverSnapshotAt.current = Date.now();
+  }, [state?.serverTime]);
+
   // Input countdown ticker.
   useEffect(() => {
     if (phase !== 'input') return;
     const id = window.setInterval(() => forceTick((tick) => tick + 1), 250);
     return () => window.clearInterval(id);
   }, [phase]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+          target.isContentEditable)
+      )
+        return;
+      const tile = Number(event.key) - 1;
+      if (!myTurn || !Number.isInteger(tile) || tile < 0 || tile >= (state?.tileCount ?? 0)) return;
+      event.preventDefault();
+      inputSequence.current = Math.max(inputSequence.current, me?.latestInputSeq ?? -1) + 1;
+      setTapped(tile);
+      window.setTimeout(() => setTapped(null), 180);
+      sendAction({
+        type: 'tap',
+        payload: { tile, sequence: inputSequence.current },
+      } satisfies GameAction);
+      vibrate('buttonPress');
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [me?.latestInputSeq, myTurn, sendAction, state?.tileCount, vibrate]);
 
   if (phase === 'idle' || !state) {
     return (
@@ -136,14 +180,19 @@ function PatternMemoryGame({
     if (!myTurn) return;
     setTapped(tile);
     window.setTimeout(() => setTapped(null), 180);
-    sendAction({ type: 'tap', payload: { tile } } satisfies GameAction);
+    inputSequence.current = Math.max(inputSequence.current, me?.latestInputSeq ?? -1) + 1;
+    sendAction({
+      type: 'tap',
+      payload: { tile, sequence: inputSequence.current },
+    } satisfies GameAction);
     vibrate('buttonPress');
   };
 
   const revealed = state.revealPattern ?? null;
+  const estimatedServerNow = state.serverTime + Date.now() - serverSnapshotAt.current;
   const inputLeft =
     state.inputEndsAt !== null
-      ? Math.max(0, (state.inputEndsAt - state.serverTime) / 1000)
+      ? Math.max(0, (state.inputEndsAt - estimatedServerNow) / 1000)
       : null;
   const myScore = me?.score ?? 0;
   const rivalScore = rivalView?.score ?? 0;
@@ -154,7 +203,10 @@ function PatternMemoryGame({
     phase === 'show'
       ? { tone: 'warning' as const, text: `Watch closely… ${state.shown}/${state.patternLength}` }
       : phase === 'input'
-        ? { tone: 'primary' as const, text: `Your turn — ${me?.progress ?? 0}/${state.patternLength}` }
+        ? {
+            tone: 'primary' as const,
+            text: `Your turn — ${me?.progress ?? 0}/${state.patternLength}`,
+          }
         : phase === 'reveal'
           ? { tone: 'accent' as const, text: 'Round review' }
           : { tone: 'default' as const, text: 'Match over' };
@@ -175,6 +227,9 @@ function PatternMemoryGame({
           {phaseBanner.text}
         </Badge>
         {me && me.streak > 0 ? <Badge tone="success">Streak x{me.streak}</Badge> : null}
+        <Badge tone="accent">
+          Layout {state.tileCount <= 4 ? '2×2' : state.tileCount <= 6 ? '3×2' : '3×3'}
+        </Badge>
         {phase === 'input' && inputLeft !== null ? (
           <Badge tone={inputLeft < 2 ? 'danger' : 'default'}>{inputLeft.toFixed(1)}s</Badge>
         ) : null}
@@ -185,10 +240,14 @@ function PatternMemoryGame({
         ) : null}
       </div>
 
-      {/* 3x3 board */}
+      {/* Progressive 2x2, 3x2 and 3x3 boards. */}
       <div className="mx-auto w-full max-w-sm">
-        <div className="grid grid-cols-3 gap-2" role="grid" aria-label="Pattern board">
-          {Array.from({ length: 9 }, (_, tile) => {
+        <div
+          className={cn('grid gap-2', state.tileCount <= 4 ? 'grid-cols-2' : 'grid-cols-3')}
+          role="grid"
+          aria-label={`${state.tileCount}-tile pattern board`}
+        >
+          {Array.from({ length: state.tileCount }, (_, tile) => {
             const isFlash = phase === 'show' && state.flash === tile && flashActive;
             const isTap = tapped === tile;
             const revealedHere = revealed?.indexOf(tile);
@@ -266,7 +325,7 @@ function PatternMemoryGame({
         {phase === 'show'
           ? 'Memorise the flashes…'
           : phase === 'input'
-            ? 'Tap the tiles in the same order — one mistake ends your attempt.'
+            ? 'Tap or press number keys in the same order — one mistake ends your attempt.'
             : phase === 'reveal'
               ? 'Next pattern loads in a moment…'
               : 'Thanks for playing!'}

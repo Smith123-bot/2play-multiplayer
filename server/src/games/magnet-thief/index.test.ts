@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createPlayer, createTestPlatform, type TestPlatform } from '../../test/harness';
+import {
+  createGameFixture,
+  createPlayer,
+  createTestPlatform,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
+  activateMagnet,
   finishMagnet,
   inSafeCorner,
   MAGNET_COOLDOWN,
@@ -10,6 +16,7 @@ import {
   magnetThiefGame,
   pullGems,
   SAFE_CORNERS,
+  tryMagnetMove,
   type MagnetState,
 } from './index';
 import type { Room } from '../../rooms/Room';
@@ -36,14 +43,16 @@ describe('Magnet Thief', () => {
   async function startWithPlayers(count: 3 | 4): Promise<void> {
     const local = createTestPlatform();
     const ids = [];
-    for (let i = 0; i < count; i += 1) ids.push(await createPlayer(local.platform, `Mt${count}${i}`));
+    for (let i = 0; i < count; i += 1)
+      ids.push(await createPlayer(local.platform, `Mt${count}${i}`));
     const extra = local.platform.roomManager.createRoom({
       gameId: 'magnet-thief',
       maxPlayers: count,
       isPrivate: false,
       host: ids[0]!,
     });
-    for (let i = 1; i < count; i += 1) local.platform.roomManager.joinRoom({ roomId: extra.id, player: ids[i]! });
+    for (let i = 1; i < count; i += 1)
+      local.platform.roomManager.joinRoom({ roomId: extra.id, player: ids[i]! });
     extra.status = 'PLAYING';
     extra.gameStartedAt = Date.now();
     local.platform.gameManager.createState(extra);
@@ -67,14 +76,28 @@ describe('Magnet Thief', () => {
 
   it('accepts movement, pulls in range, and rejects self-grant / score cheats', () => {
     const playerId = players[0]!.id;
-    const moved = platform.gameManager.handleAction(room, playerId, { type: 'move', payload: { dx: 1, dy: 0 } });
+    const moved = platform.gameManager.handleAction(room, playerId, {
+      type: 'move',
+      payload: { dx: 1, dy: 0 },
+    });
     expect(moved.accepted).toBe(true);
-    expect(magnetThiefGame.validateAction(playerId, { type: 'grant' }, state(), context()).valid).toBe(false);
-    expect(magnetThiefGame.validateAction(playerId, { type: 'own' }, state(), context()).valid).toBe(false);
-    expect(magnetThiefGame.validateAction(playerId, { type: 'score', payload: { score: 99 } }, state(), context()).valid).toBe(
-      false,
-    );
-    expect(magnetThiefGame.handlePlayerAction(playerId, { type: 'grant' }, state(), context()).accepted).toBe(false);
+    expect(
+      magnetThiefGame.validateAction(playerId, { type: 'grant' }, state(), context()).valid,
+    ).toBe(false);
+    expect(
+      magnetThiefGame.validateAction(playerId, { type: 'own' }, state(), context()).valid,
+    ).toBe(false);
+    expect(
+      magnetThiefGame.validateAction(
+        playerId,
+        { type: 'score', payload: { score: 99 } },
+        state(),
+        context(),
+      ).valid,
+    ).toBe(false);
+    expect(
+      magnetThiefGame.handlePlayerAction(playerId, { type: 'grant' }, state(), context()).accepted,
+    ).toBe(false);
   });
 
   it('attracts an unowned gem in range and enforces cooldown', () => {
@@ -88,7 +111,9 @@ describe('Magnet Thief', () => {
     expect(gem.ownerId).toBe(playerId);
     expect(player.score).toBeGreaterThanOrEqual(gem.value);
     expect(player.carrying).toContain(gem.id);
-    expect(magnetThiefGame.validateAction(playerId, { type: 'pull' }, state(), context()).valid).toBe(false);
+    expect(
+      magnetThiefGame.validateAction(playerId, { type: 'pull' }, state(), context()).valid,
+    ).toBe(false);
   });
 
   it('steals a gem outside a safe corner and refuses a steal inside one', () => {
@@ -149,15 +174,74 @@ describe('Magnet Thief', () => {
   it('AI returns a legal move or pull', () => {
     const move = magnetThiefGame.getAIMove?.(players[0]!.id, 'hard', state(), context());
     expect(move?.type === 'move' || move?.type === 'pull').toBe(true);
-    if (move) expect(magnetThiefGame.validateAction(players[0]!.id, move, state(), context()).valid).toBe(true);
+    if (move)
+      expect(magnetThiefGame.validateAction(players[0]!.id, move, state(), context()).valid).toBe(
+        true,
+      );
   });
 
   it('initialises 3 and 4 player matches with distinct corners', async () => {
     for (const count of [3, 4] as const) {
       await startWithPlayers(count);
       expect(Object.keys(state().players)).toHaveLength(count);
-      const keys = new Set(Object.values(state().players).map((player) => `${player.x},${player.y}`));
+      const keys = new Set(
+        Object.values(state().players).map((player) => `${player.x},${player.y}`),
+      );
       expect(keys.size).toBe(count);
     }
+  });
+
+  it('uses force over distance, blocks obstacle movement, and repels exposed loot', () => {
+    const [thief, owner] = players.map((player) => player.id);
+    const thiefState = state().players[thief]!;
+    const ownerState = state().players[owner]!;
+    const gem = state().gems[0]!;
+    thiefState.x = 5;
+    thiefState.y = 2;
+    gem.x = 7.5;
+    gem.y = 2;
+    gem.ownerId = null;
+    thiefState.lastPullAt = -MAGNET_COOLDOWN;
+    const before = gem.x;
+    expect(activateMagnet(thief, state(), context(), 'pull').affected).toContain(gem.id);
+    expect(gem.x).toBeLessThan(before);
+    expect(gem.ownerId).toBeNull();
+
+    thiefState.x = 6;
+    thiefState.y = 2.5;
+    expect(tryMagnetMove(thiefState, 0, 1, state().obstacles)).toBe(false);
+
+    ownerState.x = 7;
+    ownerState.y = 2;
+    ownerState.score = gem.value;
+    ownerState.carrying = [gem.id];
+    gem.x = ownerState.x;
+    gem.y = ownerState.y;
+    gem.ownerId = owner;
+    thiefState.x = 5;
+    thiefState.y = 2;
+    thiefState.lastPullAt = -MAGNET_COOLDOWN;
+    expect(activateMagnet(thief, state(), context(), 'repel').affected).toContain(gem.id);
+    expect(gem.ownerId).toBeNull();
+    expect(ownerState.score).toBe(0);
+  });
+
+  it('rejects stale movement sequences and advances difficulty stages', () => {
+    const playerId = players[0]!.id;
+    expect(
+      platform.gameManager.handleAction(room, playerId, {
+        type: 'move',
+        payload: { dx: 0, dy: 1, sequence: 2 },
+      }).accepted,
+    ).toBe(true);
+    expect(
+      platform.gameManager.handleAction(room, playerId, {
+        type: 'move',
+        payload: { dx: 0, dy: 1, sequence: 1 },
+      }).accepted,
+    ).toBe(false);
+    state().nextStageAt = context().now() - 1;
+    magnetThiefGame.update(state(), 16, context());
+    expect(state().stage).toBe(2);
   });
 });

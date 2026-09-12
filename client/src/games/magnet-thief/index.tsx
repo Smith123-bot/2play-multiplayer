@@ -18,6 +18,16 @@ export interface MagnetThiefPublicState {
   range: number;
   cooldown: number;
   safeCorners: Array<{ x: number; y: number }>;
+  stage: number;
+  nextStageAt: number | null;
+  obstacles: Array<{ x: number; y: number; radius: number }>;
+  lastEffect: {
+    id: number;
+    mode: 'pull' | 'repel';
+    playerId: string;
+    gemIds: string[];
+    at: number;
+  } | null;
   players: Record<
     string,
     {
@@ -29,6 +39,7 @@ export interface MagnetThiefPublicState {
       cooldownLeft: number;
       inSafe: boolean;
       disconnected: boolean;
+      latestInputSeq: number;
     }
   >;
   myCarrying: string[];
@@ -52,6 +63,7 @@ function MagnetThiefGame({
 }: GameComponentProps<MagnetThiefPublicState>) {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const previousEvent = useRef<string | null>(null);
+  const inputSequence = useRef(0);
   const phase = state?.phase ?? 'idle';
   const me = myPlayerId ? state?.players?.[myPlayerId] : undefined;
   const playing = phase === 'playing' && Boolean(me) && !me?.disconnected;
@@ -59,18 +71,25 @@ function MagnetThiefGame({
   const move = useCallback(
     (dx: number, dy: number) => {
       if (!playing) return;
-      sendAction({ type: 'move', payload: { dx, dy } } satisfies GameAction);
+      inputSequence.current = Math.max(inputSequence.current, me?.latestInputSeq ?? -1) + 1;
+      sendAction({
+        type: 'move',
+        payload: { dx, dy, sequence: inputSequence.current },
+      } satisfies GameAction);
       vibrate('buttonPress');
     },
-    [playing, sendAction, vibrate],
+    [me?.latestInputSeq, playing, sendAction, vibrate],
   );
 
-  const pull = useCallback(() => {
-    if (!playing) return;
-    sendAction({ type: 'pull', payload: {} } satisfies GameAction);
-    play('click');
-    vibrate('buttonPress');
-  }, [playing, sendAction, play, vibrate]);
+  const activateField = useCallback(
+    (mode: 'pull' | 'repel') => {
+      if (!playing) return;
+      sendAction({ type: mode, payload: {} } satisfies GameAction);
+      play('click');
+      vibrate('buttonPress');
+    },
+    [playing, sendAction, play, vibrate],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -89,12 +108,21 @@ function MagnetThiefGame({
         D: { dx: 1, dy: 0 },
       };
       const target = event.target as HTMLElement | null;
-      if (target && (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) || target.isContentEditable)) {
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+          target.isContentEditable)
+      ) {
         return;
       }
-      if (event.key === 'q' || event.key === 'Q' || event.key === 'e' || event.key === 'E' || event.key === ' ') {
+      if (event.key === 'q' || event.key === 'Q') {
         event.preventDefault();
-        pull();
+        activateField('repel');
+        return;
+      }
+      if (event.key === 'e' || event.key === 'E' || event.key === ' ') {
+        event.preventDefault();
+        activateField('pull');
         return;
       }
       const delta = map[event.key];
@@ -104,7 +132,7 @@ function MagnetThiefGame({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [move, pull]);
+  }, [move, activateField]);
 
   useEffect(() => {
     const lastEvent = state?.lastEvent ?? null;
@@ -114,8 +142,13 @@ function MagnetThiefGame({
     if (lastEvent.startsWith('steal:') && lastEvent.includes(myPlayerId ?? '')) {
       play('score');
       vibrate('success');
-    } else if (lastEvent.startsWith('pull:') && lastEvent.includes(myPlayerId ?? '')) {
+    } else if (
+      (lastEvent.startsWith('pull:') || lastEvent.startsWith('repel:')) &&
+      lastEvent.includes(myPlayerId ?? '')
+    ) {
       play('correct');
+    } else if (lastEvent.startsWith('stage:')) {
+      play('countdown');
     }
   }, [state?.lastEvent, myPlayerId, play, vibrate]);
 
@@ -137,7 +170,10 @@ function MagnetThiefGame({
   return (
     <div className="space-y-4">
       <GameHUD
-        players={players.map((player) => ({ ...player, score: state.players?.[player.id]?.score ?? player.score }))}
+        players={players.map((player) => ({
+          ...player,
+          score: state.players?.[player.id]?.score ?? player.score,
+        }))}
         myPlayerId={myPlayerId}
         deadline={state.endsAt ?? null}
         label="Arena clock"
@@ -145,8 +181,11 @@ function MagnetThiefGame({
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="primary">Carrying {me?.carrying ?? 0}</Badge>
         <Badge tone="accent">Stolen {me?.stolen ?? 0}</Badge>
+        <Badge tone="primary">Stage {state.stage ?? 1}/3</Badge>
         {me?.inSafe ? <Badge tone="success">Safe corner</Badge> : null}
-        {cooling ? <Badge tone="warning">Cooldown {Math.ceil((me?.cooldownLeft ?? 0) / 100) / 10}s</Badge> : null}
+        {cooling ? (
+          <Badge tone="warning">Cooldown {Math.ceil((me?.cooldownLeft ?? 0) / 100) / 10}s</Badge>
+        ) : null}
       </div>
       <div
         role="img"
@@ -183,6 +222,20 @@ function MagnetThiefGame({
             }}
           />
         ))}
+        {(state.obstacles ?? []).map((obstacle, index) => (
+          <span
+            key={`obstacle-${index}`}
+            aria-hidden
+            className="absolute rounded-full border border-slate-500 bg-slate-700 shadow-inner"
+            style={{
+              left: `${(obstacle.x / width) * 100}%`,
+              top: `${(obstacle.y / height) * 100}%`,
+              width: `${((obstacle.radius * 2) / width) * 100}%`,
+              aspectRatio: '1',
+              transform: 'translate(-50%, -50%)',
+            }}
+          />
+        ))}
         {(state.gems ?? []).map((gem) => (
           <span
             key={gem.id}
@@ -200,6 +253,7 @@ function MagnetThiefGame({
         {players.map((player, seat) => {
           const runner = state.players[player.id];
           if (!runner) return null;
+          const activeEffect = state.lastEffect?.playerId === player.id ? state.lastEffect : null;
           return (
             <span
               key={player.id}
@@ -213,7 +267,23 @@ function MagnetThiefGame({
                 transform: 'translate(-50%, -50%)',
                 boxShadow: player.id === myPlayerId ? '0 0 0 2px #fff' : undefined,
               }}
-            />
+            >
+              {activeEffect ? (
+                <span
+                  key={activeEffect.id}
+                  aria-hidden
+                  className={cn(
+                    'pointer-events-none absolute left-1/2 top-1/2 animate-ping rounded-full border',
+                    activeEffect.mode === 'repel' ? 'border-rose-300' : 'border-cyan-300',
+                  )}
+                  style={{
+                    width: `${((state.range * 2) / width / 0.045) * 100}%`,
+                    aspectRatio: '1',
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                />
+              ) : null}
+            </span>
           );
         })}
       </div>
@@ -235,17 +305,28 @@ function MagnetThiefGame({
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          disabled={!playing || cooling}
-          onClick={pull}
-          className="min-h-11 rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-4 text-sm font-semibold text-cyan-200 transition active:scale-95 disabled:opacity-40"
-        >
-          Magnet pull
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={!playing || cooling}
+            onClick={() => activateField('pull')}
+            className="min-h-11 rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-4 text-sm font-semibold text-cyan-200 transition active:scale-95 disabled:opacity-40"
+          >
+            Pull · E / Space
+          </button>
+          <button
+            type="button"
+            disabled={!playing || cooling}
+            onClick={() => activateField('repel')}
+            className="min-h-11 rounded-xl border border-rose-400/40 bg-rose-500/15 px-4 text-sm font-semibold text-rose-200 transition active:scale-95 disabled:opacity-40"
+          >
+            Repel · Q
+          </button>
+        </div>
       </div>
       <p className="text-center text-xs text-slate-500">
-        Range and cooldown are server-owned. You cannot grant yourself a gem. Safe corners protect carried gems.
+        Pull loose gems into collection range, or repel an exposed rival’s haul. Obstacles block
+        movement; safe corners protect carried gems.
       </p>
     </div>
   );

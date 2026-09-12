@@ -16,6 +16,7 @@ import { actionAccepted, actionRejected } from '../GameModule';
  */
 
 export type MagnetPhase = 'idle' | 'playing' | 'finished';
+export type MagnetMode = 'pull' | 'repel';
 
 export interface MagnetGem {
   id: string;
@@ -34,6 +35,7 @@ export interface MagnetPlayer {
   carrying: string[];
   disconnected: boolean;
   left: boolean;
+  latestInputSeq: number;
 }
 
 export interface MagnetState {
@@ -44,14 +46,33 @@ export interface MagnetState {
   endsAt: number | null;
   finishReason: GameFinishReason | null;
   lastEvent: string | null;
+  stage: number;
+  nextStageAt: number | null;
+  obstacles: Array<{ x: number; y: number; radius: number }>;
+  effectCounter: number;
+  lastEffect: {
+    id: number;
+    mode: MagnetMode;
+    playerId: string;
+    gemIds: string[];
+    at: number;
+  } | null;
+  nextAIRequestAt: Record<string, number>;
 }
 
 export const MAGNET_W = 18;
 export const MAGNET_H = 12;
 export const MAGNET_RANGE = 3;
 export const MAGNET_COOLDOWN = 2_000;
+export const MAGNET_COLLECT_RADIUS = 1.15;
+export const MAGNET_FORCE = 1.35;
 export const MOVE_STEP = 0.45;
 export const MATCH_MS = 60_000;
+export const MAGNET_OBSTACLES = [
+  { x: 6, y: 4, radius: 1.05 },
+  { x: 12, y: 8, radius: 1.05 },
+  { x: 9, y: 6, radius: 1.15 },
+];
 export const SAFE_CORNERS: Array<{ x: number; y: number }> = [
   { x: 1.2, y: 1.2 },
   { x: MAGNET_W - 1.2, y: 1.2 },
@@ -90,6 +111,7 @@ function makePlayer(index: number): MagnetPlayer {
     carrying: [],
     disconnected: false,
     left: false,
+    latestInputSeq: -1,
   };
 }
 
@@ -102,24 +124,76 @@ export function finishMagnet(state: MagnetState, ctx: GameContext, reason: GameF
   ctx.finish(reason);
 }
 
-export function tryMagnetMove(player: MagnetPlayer, dx: number, dy: number): void {
-  player.x = Math.max(0.4, Math.min(MAGNET_W - 0.4, player.x + dx * MOVE_STEP));
-  player.y = Math.max(0.4, Math.min(MAGNET_H - 0.4, player.y + dy * MOVE_STEP));
+export function tryMagnetMove(
+  player: MagnetPlayer,
+  dx: number,
+  dy: number,
+  obstacles = MAGNET_OBSTACLES,
+): boolean {
+  const x = Math.max(0.4, Math.min(MAGNET_W - 0.4, player.x + dx * MOVE_STEP));
+  const y = Math.max(0.4, Math.min(MAGNET_H - 0.4, player.y + dy * MOVE_STEP));
+  if (
+    obstacles.some(
+      (obstacle) => Math.hypot(x - obstacle.x, y - obstacle.y) < obstacle.radius + 0.38,
+    )
+  )
+    return false;
+  player.x = x;
+  player.y = y;
+  return true;
 }
 
-export function pullGems(playerId: string, state: MagnetState, ctx: GameContext): { ok: boolean; reason?: string } {
+export function activateMagnet(
+  playerId: string,
+  state: MagnetState,
+  ctx: GameContext,
+  mode: MagnetMode,
+): { ok: boolean; reason?: string; affected: string[] } {
   const player = state.players[playerId];
-  if (!player || player.left || state.phase !== 'playing') return { ok: false, reason: 'You cannot pull.' };
-  if (ctx.now() - player.lastPullAt < MAGNET_COOLDOWN) return { ok: false, reason: 'Magnet is cooling down.' };
+  if (!player || player.left || state.phase !== 'playing')
+    return { ok: false, reason: 'You cannot use the magnet.', affected: [] };
+  const cooldown = Math.max(1_150, MAGNET_COOLDOWN - (state.stage - 1) * 300);
+  if (ctx.now() - player.lastPullAt < cooldown)
+    return { ok: false, reason: 'Magnet is cooling down.', affected: [] };
   player.lastPullAt = ctx.now();
+  const range = MAGNET_RANGE + (state.stage - 1) * 0.35;
+  const affected: string[] = [];
   let stole = 0;
   for (const gem of state.gems) {
-    const dist = Math.hypot(gem.x - player.x, gem.y - player.y);
-    if (dist > MAGNET_RANGE) continue;
-    if (gem.ownerId === playerId) continue;
-    if (gem.ownerId) {
+    const dx = player.x - gem.x;
+    const dy = player.y - gem.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > range || gem.ownerId === playerId) continue;
+    if (mode === 'repel') {
+      if (!gem.ownerId) continue;
       const owner = state.players[gem.ownerId];
       if (owner && inSafeCorner(owner.x, owner.y)) continue;
+      if (owner) {
+        owner.carrying = owner.carrying.filter((id) => id !== gem.id);
+        owner.score = Math.max(0, owner.score - gem.value);
+      }
+      gem.ownerId = null;
+      const scale = MAGNET_FORCE / Math.max(0.1, dist);
+      gem.x = Math.max(0.5, Math.min(MAGNET_W - 0.5, gem.x - dx * scale));
+      gem.y = Math.max(0.5, Math.min(MAGNET_H - 0.5, gem.y - dy * scale));
+      affected.push(gem.id);
+      continue;
+    }
+    const priorOwner = gem.ownerId;
+    if (priorOwner) {
+      const owner = state.players[priorOwner];
+      if (owner && inSafeCorner(owner.x, owner.y)) continue;
+    }
+    if (dist > MAGNET_COLLECT_RADIUS) {
+      const force =
+        Math.min(MAGNET_FORCE, dist - MAGNET_COLLECT_RADIUS + 0.2) / Math.max(0.1, dist);
+      gem.x += dx * force;
+      gem.y += dy * force;
+      affected.push(gem.id);
+      continue;
+    }
+    if (priorOwner) {
+      const owner = state.players[priorOwner];
       if (owner) {
         owner.carrying = owner.carrying.filter((id) => id !== gem.id);
         owner.score = Math.max(0, owner.score - gem.value);
@@ -132,10 +206,26 @@ export function pullGems(playerId: string, state: MagnetState, ctx: GameContext)
     gem.y = player.y;
     if (!player.carrying.includes(gem.id)) player.carrying.push(gem.id);
     player.score += gem.value;
+    affected.push(gem.id);
   }
-  state.lastEvent = stole > 0 ? `steal:${playerId}` : `pull:${playerId}`;
+  state.effectCounter += 1;
+  state.lastEffect = { id: state.effectCounter, mode, playerId, gemIds: affected, at: ctx.now() };
+  state.lastEvent =
+    mode === 'repel'
+      ? `repel:${playerId}:${state.effectCounter}`
+      : stole > 0
+        ? `steal:${playerId}:${state.effectCounter}`
+        : `pull:${playerId}:${state.effectCounter}`;
   ctx.markStateChanged();
-  return { ok: true };
+  return { ok: true, affected };
+}
+
+export function pullGems(
+  playerId: string,
+  state: MagnetState,
+  ctx: GameContext,
+): { ok: boolean; reason?: string } {
+  return activateMagnet(playerId, state, ctx, 'pull');
 }
 
 export const magnetThiefGame: GameModule<MagnetState> = {
@@ -154,6 +244,12 @@ export const magnetThiefGame: GameModule<MagnetState> = {
       endsAt: null,
       finishReason: null,
       lastEvent: null,
+      stage: 1,
+      nextStageAt: null,
+      obstacles: MAGNET_OBSTACLES.map((item) => ({ ...item })),
+      effectCounter: 0,
+      lastEffect: null,
+      nextAIRequestAt: {},
     };
   },
 
@@ -196,8 +292,19 @@ export const magnetThiefGame: GameModule<MagnetState> = {
     state.startedAt = ctx.now();
     state.endsAt = ctx.now() + MATCH_MS;
     state.lastEvent = 'start';
+    state.stage = 1;
+    state.nextStageAt = ctx.now() + MATCH_MS / 3;
+    state.obstacles = MAGNET_OBSTACLES.map((item) => ({ ...item }));
+    state.effectCounter = 0;
+    state.lastEffect = null;
+    state.nextAIRequestAt = {};
     ctx.markStateChanged();
-    ctx.schedule(MATCH_MS, () => finishMagnet(state, ctx, 'timeout'), 'gameDuration', 'match-timeout');
+    ctx.schedule(
+      MATCH_MS,
+      () => finishMagnet(state, ctx, 'timeout'),
+      'gameDuration',
+      'match-timeout',
+    );
     for (const player of ctx.players) {
       if (player.isAI) ctx.requestAI(player.id, 280);
     }
@@ -213,12 +320,24 @@ export const magnetThiefGame: GameModule<MagnetState> = {
     if (action.type === 'move') {
       const dx = action.payload?.dx;
       const dy = action.payload?.dy;
-      if (typeof dx !== 'number' || typeof dy !== 'number') return { valid: false, reason: 'Need a direction.' };
-      if (Math.abs(dx) > 1.05 || Math.abs(dy) > 1.05) return { valid: false, reason: 'Move too large.' };
+      if (typeof dx !== 'number' || typeof dy !== 'number')
+        return { valid: false, reason: 'Need a direction.' };
+      if (Math.abs(dx) > 1.05 || Math.abs(dy) > 1.05 || Math.hypot(dx, dy) > 1.1)
+        return { valid: false, reason: 'Move too large.' };
+      const sequence = action.payload?.sequence;
+      if (
+        sequence !== undefined &&
+        (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+      )
+        return { valid: false, reason: 'Invalid input sequence.' };
+      if (typeof sequence === 'number' && sequence <= player.latestInputSeq)
+        return { valid: false, reason: 'Stale input.' };
       return { valid: true };
     }
-    if (action.type === 'pull') {
-      if (ctx.now() - player.lastPullAt < MAGNET_COOLDOWN) return { valid: false, reason: 'Magnet is cooling down.' };
+    if (action.type === 'pull' || action.type === 'repel') {
+      const cooldown = Math.max(1_150, MAGNET_COOLDOWN - (state.stage - 1) * 300);
+      if (ctx.now() - player.lastPullAt < cooldown)
+        return { valid: false, reason: 'Magnet is cooling down.' };
       return { valid: true };
     }
     return { valid: false, reason: 'Unknown action.' };
@@ -230,7 +349,17 @@ export const magnetThiefGame: GameModule<MagnetState> = {
     if (action.type === 'move') {
       const dx = typeof action.payload?.dx === 'number' ? action.payload.dx : 0;
       const dy = typeof action.payload?.dy === 'number' ? action.payload.dy : 0;
-      tryMagnetMove(player, dx, dy);
+      const sequence = action.payload?.sequence;
+      if (
+        sequence !== undefined &&
+        (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+      )
+        return actionRejected('Invalid input sequence.');
+      if (typeof sequence === 'number' && sequence <= player.latestInputSeq)
+        return actionRejected('Stale input.');
+      if (typeof sequence === 'number') player.latestInputSeq = sequence;
+      if (!tryMagnetMove(player, dx, dy, state.obstacles))
+        return actionRejected('An obstacle blocks the way.');
       for (const gem of state.gems) {
         if (gem.ownerId === playerId) {
           gem.x = player.x;
@@ -240,8 +369,8 @@ export const magnetThiefGame: GameModule<MagnetState> = {
       ctx.markStateChanged();
       return actionAccepted();
     }
-    if (action.type === 'pull') {
-      const result = pullGems(playerId, state, ctx);
+    if (action.type === 'pull' || action.type === 'repel') {
+      const result = activateMagnet(playerId, state, ctx, action.type);
       return result.ok ? actionAccepted() : actionRejected(result.reason ?? 'You cannot pull.');
     }
     return actionRejected('The server owns magnets and gems.');
@@ -249,8 +378,19 @@ export const magnetThiefGame: GameModule<MagnetState> = {
 
   update(state, _delta, ctx): void {
     if (state.phase !== 'playing') return;
-    for (const player of ctx.players) {
-      if (player.isAI && !state.players[player.id]?.left) ctx.requestAI(player.id, 240);
+    const now = ctx.now();
+    if (state.nextStageAt !== null && now >= state.nextStageAt && state.stage < 3) {
+      state.stage += 1;
+      state.nextStageAt = state.startedAt! + (MATCH_MS * state.stage) / 3;
+      state.lastEvent = `stage:${state.stage}`;
+      ctx.markStateChanged();
+    }
+    for (const view of ctx.players) {
+      if (!view.isAI || state.players[view.id]?.left) continue;
+      if (now >= (state.nextAIRequestAt[view.id] ?? 0)) {
+        ctx.requestAI(view.id, 80);
+        state.nextAIRequestAt[view.id] = now + (view.aiDifficulty === 'hard' ? 180 : 320);
+      }
     }
   },
 
@@ -283,9 +423,13 @@ export const magnetThiefGame: GameModule<MagnetState> = {
   },
 
   getResult(state, ctx): GameResultDraft {
-    const ranked = [...ctx.players].sort((a, b) => (state.players[b.id]?.score ?? 0) - (state.players[a.id]?.score ?? 0));
-    const best = ranked[0] ? state.players[ranked[0].id]?.score ?? 0 : 0;
-    const winners = ranked.filter((player) => (state.players[player.id]?.score ?? 0) === best).map((player) => player.id);
+    const ranked = [...ctx.players].sort(
+      (a, b) => (state.players[b.id]?.score ?? 0) - (state.players[a.id]?.score ?? 0),
+    );
+    const best = ranked[0] ? (state.players[ranked[0].id]?.score ?? 0) : 0;
+    const winners = ranked
+      .filter((player) => (state.players[player.id]?.score ?? 0) === best)
+      .map((player) => player.id);
     const rankings: RankingDraft[] = ranked.map((player, index) => {
       const entry = state.players[player.id];
       return {
@@ -297,7 +441,12 @@ export const magnetThiefGame: GameModule<MagnetState> = {
         stats: { stolen: entry?.stolen ?? 0, carrying: entry?.carrying.length ?? 0 },
       };
     });
-    return { winners, isDraw: winners.length > 1, rankings, reason: state.finishReason ?? 'completed' };
+    return {
+      winners,
+      isDraw: winners.length > 1,
+      rankings,
+      reason: state.finishReason ?? 'completed',
+    };
   },
 
   reset(state): MagnetState {
@@ -311,6 +460,12 @@ export const magnetThiefGame: GameModule<MagnetState> = {
       endsAt: null,
       finishReason: null,
       lastEvent: null,
+      stage: 1,
+      nextStageAt: null,
+      obstacles: MAGNET_OBSTACLES.map((item) => ({ ...item })),
+      effectCounter: 0,
+      lastEffect: null,
+      nextAIRequestAt: {},
     };
   },
 
@@ -330,8 +485,14 @@ export const magnetThiefGame: GameModule<MagnetState> = {
       serverTime: ctx.now(),
       width: MAGNET_W,
       height: MAGNET_H,
-      range: MAGNET_RANGE,
-      cooldown: MAGNET_COOLDOWN,
+      range: MAGNET_RANGE + (state.stage - 1) * 0.35,
+      cooldown: Math.max(1_150, MAGNET_COOLDOWN - (state.stage - 1) * 300),
+      stage: state.stage,
+      nextStageAt: state.nextStageAt,
+      obstacles: state.obstacles.map((item) => ({ ...item })),
+      lastEffect: state.lastEffect
+        ? { ...state.lastEffect, gemIds: [...state.lastEffect.gemIds] }
+        : null,
       safeCorners: SAFE_CORNERS,
       players: Object.fromEntries(
         Object.entries(state.players).map(([id, player]) => [
@@ -345,10 +506,11 @@ export const magnetThiefGame: GameModule<MagnetState> = {
             cooldownLeft: Math.max(0, MAGNET_COOLDOWN - (ctx.now() - player.lastPullAt)),
             inSafe: inSafeCorner(player.x, player.y),
             disconnected: player.disconnected,
+            latestInputSeq: player.latestInputSeq,
           },
         ]),
       ),
-      myCarrying: viewerId ? state.players[viewerId]?.carrying ?? [] : [],
+      myCarrying: viewerId ? (state.players[viewerId]?.carrying ?? []) : [],
     };
   },
 
@@ -356,18 +518,38 @@ export const magnetThiefGame: GameModule<MagnetState> = {
     if (state.phase !== 'playing') return null;
     const player = state.players[playerId];
     if (!player || player.left) return null;
+    const nearbyCarrier = Object.entries(state.players).find(
+      ([id, other]) =>
+        id !== playerId &&
+        other.carrying.length > 0 &&
+        !inSafeCorner(other.x, other.y) &&
+        Math.hypot(other.x - player.x, other.y - player.y) <=
+          MAGNET_RANGE + (state.stage - 1) * 0.35,
+    );
+    const cooldown = Math.max(1_150, MAGNET_COOLDOWN - (state.stage - 1) * 300);
+    const range = MAGNET_RANGE + (state.stage - 1) * 0.35;
+    if (nearbyCarrier && ctx.now() - player.lastPullAt >= cooldown && difficulty !== 'easy')
+      return { type: 'repel' };
     const target =
-      state.gems.find((gem) => gem.ownerId !== playerId && Math.hypot(gem.x - player.x, gem.y - player.y) <= MAGNET_RANGE + 2) ??
-      state.gems.find((gem) => gem.ownerId !== playerId);
+      state.gems.find(
+        (gem) =>
+          gem.ownerId !== playerId && Math.hypot(gem.x - player.x, gem.y - player.y) <= range + 2,
+      ) ?? state.gems.find((gem) => gem.ownerId !== playerId);
     if (!target) return { type: 'move', payload: { dx: 0, dy: 0 } };
     const dist = Math.hypot(target.x - player.x, target.y - player.y);
-    if (dist <= MAGNET_RANGE && ctx.now() - player.lastPullAt >= MAGNET_COOLDOWN) {
+    if (dist <= range && ctx.now() - player.lastPullAt >= cooldown) {
       if (difficulty === 'easy' && ctx.random() < 0.4) {
-        return { type: 'move', payload: { dx: Math.sign(ctx.random() - 0.5), dy: Math.sign(ctx.random() - 0.5) } };
+        return ctx.random() < 0.5
+          ? { type: 'move', payload: { dx: Math.sign(ctx.random() - 0.5), dy: 0 } }
+          : { type: 'move', payload: { dx: 0, dy: Math.sign(ctx.random() - 0.5) } };
       }
       return { type: 'pull', payload: {} };
     }
-    return { type: 'move', payload: { dx: Math.sign(target.x - player.x), dy: Math.sign(target.y - player.y) } };
+    const dx = target.x - player.x;
+    const dy = target.y - player.y;
+    return Math.abs(dx) >= Math.abs(dy)
+      ? { type: 'move', payload: { dx: Math.sign(dx), dy: 0 } }
+      : { type: 'move', payload: { dx: 0, dy: Math.sign(dy) } };
   },
 
   needsUpdateLoop: true,

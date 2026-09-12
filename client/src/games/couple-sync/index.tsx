@@ -19,6 +19,7 @@ export interface CoupleSyncPublicState {
   roundsWon: number;
   streak: number;
   bestStreak: number;
+  difficultyTier: number;
   lastEvent: string | null;
   finishReason: string | null;
   history: Array<{ index: number; type: RoundType; success: boolean }>;
@@ -34,12 +35,16 @@ export interface CoupleSyncPublicState {
     signalFired: boolean;
     signalAt: number | null;
     toleranceMs: number;
+    syncSpreadMs: number | null;
     endsAt: number;
     succeeded: boolean | null;
     detail: string | null;
   } | null;
   me: { acted: boolean; submitted: string | null; mistakes: number } | null;
-  players: Record<string, { acted: boolean; correct: number; mistakes: number; disconnected: boolean }>;
+  players: Record<
+    string,
+    { acted: boolean; correct: number; mistakes: number; disconnected: boolean }
+  >;
 }
 
 const ROUND_TITLE: Record<RoundType, string> = {
@@ -78,7 +83,8 @@ function CoupleSyncGame({
   const act = useCallback(
     (choice?: string) => {
       if (!canAct) return;
-      const action: GameAction = choice === undefined ? { type: 'act' } : { type: 'act', payload: { choice } };
+      const action: GameAction =
+        choice === undefined ? { type: 'act' } : { type: 'act', payload: { choice } };
       sendAction(action);
       vibrate('buttonPress');
     },
@@ -105,17 +111,74 @@ function CoupleSyncGame({
       play('countdown');
     } else if (event.startsWith('active:')) {
       play('gameStart');
+    } else if (event.startsWith('signal:')) {
+      play('score');
+      vibrate('success');
     } else if (event === 'finished' || event === 'timeout') {
       play('gameOver');
     }
   }, [state?.lastEvent, play, vibrate]);
 
-  if (phase === 'idle' || !round) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+          target.isContentEditable)
+      )
+        return;
+      if (!canAct || !round) return;
+      if (round.type === 'match') {
+        const index = Number(event.key) - 1;
+        const option = round.options[index];
+        if (option) {
+          event.preventDefault();
+          act(option);
+        }
+        return;
+      }
+      if ((event.key === ' ' || event.key === 'Enter') && round.type !== 'relay') {
+        event.preventDefault();
+        act();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [act, canAct, round]);
+
+  if (phase === 'idle') {
     return (
       <div className="space-y-4">
         <GameHUD players={players} myPlayerId={myPlayerId} />
         <div className="card grid place-items-center p-10 text-center">
           <p className="animate-pulse text-sm text-slate-400">Preparing the first round…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!round) {
+    const cleared = (state?.roundsWon ?? 0) * 2 >= (state?.totalRounds ?? 1);
+    return (
+      <div className="space-y-4">
+        <GameHUD
+          players={players.map((player) => ({ ...player, score: state?.teamScore ?? 0 }))}
+          myPlayerId={myPlayerId}
+          label="Final team score"
+        />
+        <div className="card space-y-3 p-8 text-center">
+          <p className="text-4xl" aria-hidden>
+            {cleared ? '🤝' : '💫'}
+          </p>
+          <h2 className="text-xl font-semibold text-white">
+            {cleared ? 'Challenge cleared!' : 'Keep practising together'}
+          </h2>
+          <p className="text-sm text-slate-300">
+            Won {state?.roundsWon ?? 0} of {state?.totalRounds ?? 0} rounds ·{' '}
+            {state?.teamScore ?? 0} points
+          </p>
+          <p className="text-xs text-slate-500">Best teamwork streak: {state?.bestStreak ?? 0}</p>
         </div>
       </div>
     );
@@ -142,6 +205,7 @@ function CoupleSyncGame({
         </Badge>
         <Badge tone="success">Team {state!.teamScore}</Badge>
         <Badge tone="default">Won {state!.roundsWon}</Badge>
+        <Badge tone="accent">Tier {state!.difficultyTier}/3</Badge>
         {state!.streak > 1 ? <Badge tone="warning">Streak x{state!.streak}</Badge> : null}
         <button
           type="button"
@@ -158,7 +222,12 @@ function CoupleSyncGame({
         <p className="text-sm text-slate-400">{ROUND_BRIEF[round.type]}</p>
         {phase === 'brief' ? <p className="text-xs text-amber-300">Get ready…</p> : null}
         {round.succeeded !== null ? (
-          <p className={cn('text-sm font-medium', round.succeeded ? 'text-emerald-300' : 'text-rose-300')}>
+          <p
+            className={cn(
+              'text-sm font-medium',
+              round.succeeded ? 'text-emerald-300' : 'text-rose-300',
+            )}
+          >
             {round.succeeded ? '✅ ' : '❌ '}
             {round.detail}
           </p>
@@ -174,7 +243,10 @@ function CoupleSyncGame({
                 Order: {orderNames.map((name, index) => `${index + 1}. ${name}`).join('  →  ')}
               </p>
             ) : (
-              <p className="text-xs text-slate-500">Window: {round.toleranceMs}ms</p>
+              <p className="text-xs text-slate-500">
+                Window: {round.toleranceMs}ms
+                {round.syncSpreadMs !== null ? ` · actual ${round.syncSpreadMs}ms` : ''}
+              </p>
             )}
             <Button onClick={() => act()} disabled={!canAct} className="min-w-48">
               {acted ? 'Waiting for partner…' : 'Tap now'}
@@ -209,7 +281,9 @@ function CoupleSyncGame({
 
         {round.type === 'match' ? (
           <div className="space-y-3">
-            <p className="text-center text-xs text-slate-500">Both partners must choose the same symbol.</p>
+            <p className="text-center text-xs text-slate-500">
+              Both partners must choose the same symbol.
+            </p>
             <div className="grid grid-cols-4 gap-2">
               {round.options.map((symbol) => (
                 <button
@@ -236,7 +310,9 @@ function CoupleSyncGame({
           <div className="space-y-3">
             {round.isCodeHolder ? (
               <div className="space-y-2 text-center">
-                <p className="text-xs text-slate-400">Read this out to your partner — they type it in.</p>
+                <p className="text-xs text-slate-400">
+                  Read this out to your partner — they type it in.
+                </p>
                 <p className="text-4xl font-bold tracking-[0.35em] text-amber-300">{round.code}</p>
               </div>
             ) : (
@@ -272,7 +348,13 @@ function CoupleSyncGame({
           const slot = state?.players?.[player.id];
           if (!slot) return null;
           return (
-            <span key={player.id}>
+            <span
+              key={player.id}
+              className={cn(
+                'rounded-full px-2 py-1 transition',
+                slot.acted && 'animate-pulse bg-emerald-500/15 text-emerald-300',
+              )}
+            >
               {player.nickname}: {slot.acted ? 'ready ✅' : 'waiting…'}
               {slot.disconnected ? ' (offline)' : ''}
             </span>

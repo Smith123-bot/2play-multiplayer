@@ -15,6 +15,8 @@ export default tseslint.config(
       '**/coverage/**',
       '**/*.config.js',
       'client/tailwind.config.js',
+      // Local QA scratch harness — gitignored, never shipped.
+      '.qa/**',
     ],
   },
   js.configs.recommended,

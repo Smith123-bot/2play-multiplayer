@@ -71,6 +71,16 @@ export interface CoupleMemoryState {
   finishReason: GameFinishReason | null;
   /** Cards currently face up awaiting resolution, in flip order. */
   pending: string[];
+  /**
+   * Per-AI-seat "do not re-request before" timestamp.
+   *
+   * `ctx.requestAI` is keyed per player, so re-requesting cancels the pending
+   * move. Without this throttle the update loop (every 250ms) kept resetting a
+   * 700ms AI timer and the callback never fired — the AI partner could not
+   * flip at all, which deadlocks a game whose whole rule is that the *other*
+   * partner flips the second card.
+   */
+  nextAIRequestAt: Record<string, number>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -86,6 +96,13 @@ export const LEVEL_CLEAR_SCORE = 150;
 export const TIME_BONUS_MAX = 200;
 export const RESOLVE_MS = 1_100;
 export const LEVEL_BREAK_MS = 2_600;
+/**
+ * Slack added on top of an AI move's nominal delay before `update()` may
+ * re-arm it. `ctx.requestAI` is keyed per player, so re-arming cancels the
+ * pending move; a tight margin lets a late-firing timer get cancelled and
+ * starves the AI (the bug this file's regression test guards).
+ */
+export const AI_REQUEST_GRACE_MS = 1_000;
 
 const SYMBOLS = [
   '★', '●', '▲', '■', '◆', '♥', '☀', '☾', '⚑', '⚙', '✿', '♪',
@@ -329,6 +346,7 @@ export const coupleMemoryGame: GameModule<CoupleMemoryState> = {
       lastPair: null,
       finishReason: null,
       pending: [],
+      nextAIRequestAt: {},
     };
     for (const player of players) state.players[player.id] = makePlayer();
     return state;
@@ -454,12 +472,23 @@ export const coupleMemoryGame: GameModule<CoupleMemoryState> = {
 
   update(state, _deltaTimeMs, ctx): void {
     if (state.phase !== 'playing') return;
+    const now = ctx.now();
     for (const view of ctx.players) {
       if (!view.isAI) continue;
       const player = state.players[view.id];
       if (!player || player.left || player.disconnected) continue;
+      // `requestAI` is keyed per player: asking again cancels the pending move.
+      // Only re-arm once the previous request should already have fired,
+      // otherwise this 250ms loop starves the AI forever.
+      if (now < (state.nextAIRequestAt[view.id] ?? 0)) continue;
       const difficulty = view.aiDifficulty ?? 'medium';
-      ctx.requestAI(view.id, difficulty === 'hard' ? 700 : difficulty === 'medium' ? 1_100 : 1_600);
+      const delay = difficulty === 'hard' ? 700 : difficulty === 'medium' ? 1_100 : 1_600;
+      ctx.requestAI(view.id, delay);
+      // The grace period has to absorb timer latency, not just the nominal
+      // delay: under load a `setTimeout` callback can fire hundreds of
+      // milliseconds late, and re-arming before it runs cancels the very move
+      // we are waiting for. A generous margin costs at most one idle tick.
+      state.nextAIRequestAt[view.id] = now + delay + AI_REQUEST_GRACE_MS;
     }
   },
 
@@ -541,6 +570,7 @@ export const coupleMemoryGame: GameModule<CoupleMemoryState> = {
       lastPair: null,
       finishReason: null,
       pending: [],
+      nextAIRequestAt: {},
     };
   },
 

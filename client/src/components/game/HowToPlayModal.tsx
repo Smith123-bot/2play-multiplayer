@@ -17,9 +17,8 @@ export interface HowToPlayContentProps {
 }
 
 function sectionsFor(game: GameMetadata): HowToPlay {
-  if (game.howToPlay) return game.howToPlay;
-  // Fallback derived from the metadata every game already has.
-  return {
+  // Derived from the metadata every game already has.
+  const derived: HowToPlay = {
     objective: game.description,
     steps: game.rules,
     controls: { mobile: game.controls, desktop: game.controls },
@@ -31,6 +30,14 @@ function sectionsFor(game: GameMetadata): HowToPlay {
       game.minPlayers === game.maxPlayers
         ? `${game.minPlayers} players`
         : `${game.minPlayers}–${game.maxPlayers} players`,
+  };
+  // A game may override any subset of the sections; everything else is derived.
+  const override = game.howToPlay;
+  if (!override) return derived;
+  return {
+    ...derived,
+    ...override,
+    controls: { ...derived.controls, ...(override.controls ?? {}) },
   };
 }
 

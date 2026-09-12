@@ -109,4 +109,84 @@ describe('RematchManager', () => {
     expect(room.rematchDeadline).toBeNull();
     expect(room.players.size).toBe(2);
   });
+
+  describe('human vs AI (Quick Play shape)', () => {
+    /** One connected human plus AI seats — the most common room on the platform. */
+    async function humanVsAiRoom(
+      target: Platform,
+      gameId = 'math-rush',
+      aiCount = 1,
+    ): Promise<Room> {
+      const host = await createPlayer(target, 'SoloAiHost');
+      const room = target.roomManager.createRoom({
+        gameId,
+        maxPlayers: 1 + aiCount,
+        isPrivate: true,
+        isQuickPlay: true,
+        host,
+      });
+      for (let seat = 0; seat < aiCount; seat += 1) {
+        target.roomManager.addAI(room, host.playerId, 'hard');
+      }
+      return room;
+    }
+
+    it('keeps the result and opens rematch voting instead of dumping the room to the lobby', async () => {
+      const room = await humanVsAiRoom(platform);
+      await finishedMatch(platform, room);
+
+      // Regression: the voter count used to be compared against the game's
+      // minPlayers (which counts AI seats), so a solo-vs-AI match was sent
+      // straight back to the lobby and the result was wiped before the player
+      // ever saw it.
+      expect(room.status).toBe('REMATCH_WAITING');
+      expect(room.gameResult).not.toBeNull();
+      expect(room.rematchDeadline).toBeGreaterThan(Date.now());
+      expect(room.players.size).toBe(2);
+      expect(room.aiPlayers).toHaveLength(1);
+    });
+
+    it('starts match #2 from a single human vote, keeping the AI seat', async () => {
+      const room = await humanVsAiRoom(platform);
+      await finishedMatch(platform, room);
+      const [host] = room.humanPlayers;
+
+      platform.rematchManager.vote(room, host!.id, true);
+
+      await waitFor(() => room.matchNumber === 2, { timeoutMs: 3000 });
+      expect(room.matchNumber).toBe(2);
+      expect(room.aiPlayers).toHaveLength(1);
+      expect(room.humanPlayers).toHaveLength(1);
+    });
+
+    it('counts AI seats for the minimum but still requires a connected human', () => {
+      const room = platform.roomManager.createRoom({
+        gameId: 'math-rush',
+        maxPlayers: 2,
+        isPrivate: true,
+        host: {
+          playerId: 'voter-1',
+          sessionToken: 'token-1',
+          nickname: 'Voter',
+          avatar: '🦊',
+          userId: null,
+          socketId: 'socket-voter-1',
+        },
+      });
+      platform.roomManager.addAI(room, 'voter-1', 'hard');
+
+      // 1 human + 1 AI satisfies math-rush's 2 seat minimum.
+      expect(platform.rematchManager.canRematch(room)).toBe(true);
+
+      // Dropping below the seat minimum makes a rematch impossible.
+      room.removePlayer(room.aiPlayers[0]!.id);
+      expect(platform.rematchManager.canRematch(room)).toBe(false);
+
+      // Seats are fine again, but a disconnected human cannot vote.
+      platform.roomManager.addAI(room, 'voter-1', 'hard');
+      expect(platform.rematchManager.canRematch(room)).toBe(true);
+      room.humanPlayers[0]!.markDisconnected(Date.now() + 60_000);
+      expect(platform.rematchManager.canRematch(room)).toBe(false);
+    });
+  });
 });

@@ -1,5 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createTestPlatform, type TestPlatform } from '../../test/harness';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createGameFixture,
+  createPlayer,
+  createTestPlatform,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
@@ -385,4 +390,79 @@ describe('Couple Memory', () => {
     finishMemory(state(), context(), 'timeout');
     expect(coupleMemoryGame.getAIMove?.(players[0]!.id, 'hard', state(), context())).toBeNull();
   });
+
+  /**
+   * Regression: the AI partner must actually be able to flip.
+   *
+   * `ctx.requestAI` is keyed per player, so requesting again cancels the pending
+   * move. `update()` used to request a 700ms AI move on every 250ms tick with no
+   * throttle, so the callback was perpetually reset and NEVER fired. Because the
+   * co-op rule forbids a player from flipping both cards, that deadlocked the
+   * whole game: the level always ran out the clock with zero pairs found.
+   */
+  it('the AI partner can move instead of being starved by the update loop', async () => {
+    const local = createTestPlatform();
+    try {
+      const host = await createPlayer(local.platform, 'CmSoloHost');
+      const solo = local.platform.roomManager.createRoom({
+        gameId: 'couple-memory',
+        maxPlayers: 2,
+        isPrivate: true,
+        host,
+      });
+      const ai = local.platform.roomManager.addAI(solo, host.playerId, 'hard');
+      solo.status = 'PLAYING';
+      solo.gameStartedAt = Date.now();
+      local.platform.gameManager.createState(solo);
+      local.platform.gameManager.start(solo);
+
+      const soloState = () => solo.gameState as CoupleMemoryState;
+      expect(soloState().phase).toBe('playing');
+
+      // Drive the production 250ms tick on FAKE timers: deterministic and
+      // instantaneous, while still exercising the throttle the live server
+      // depends on. Wait for the AI to OPEN a card. Which card it opens is a
+      // seeded-random choice, so the test must not depend on it guessing a
+      // pair — only on it being allowed to move at all.
+      vi.useFakeTimers();
+      try {
+        for (let tick = 0; tick < 60 && soloState().pending.length === 0; tick += 1) {
+          if (solo.status !== 'PLAYING') break;
+          local.platform.gameManager.update(solo, 250);
+          await vi.advanceTimersByTimeAsync(250);
+        }
+
+        // The regression: an unthrottled update() re-armed the keyed AI timer
+        // every 250ms, so its callback never fired and this stayed 0 forever.
+        expect(soloState().players[ai.id]!.flips).toBeGreaterThanOrEqual(1);
+        expect(soloState().pending.length).toBe(1);
+
+        const opened = soloState().cards.find((card) => card.id === soloState().pending[0])!;
+        expect(opened.flippedBy).toBe(ai.id);
+
+        // The co-op rule forbids one partner flipping both cards, so the human
+        // completes the pair the AI opened. This is deterministic: the twin is
+        // known from server state once the AI's card is face up.
+        const twin = soloState().cards.find(
+          (card) => !card.matched && !card.faceUp && card.symbol === opened.symbol,
+        )!;
+        expect(twin).toBeDefined();
+        const accepted = local.platform.gameManager.handleAction(solo, host.playerId, {
+          type: 'flip',
+          payload: { cardId: twin.id },
+        });
+        expect(accepted.accepted).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(soloState().pairsFound).toBe(1);
+      // The AI seat really did contribute to the pair.
+      expect(soloState().players[ai.id]!.matchesHelped).toBeGreaterThanOrEqual(1);
+      // And it must not have burned the level clock getting there.
+      expect(soloState().finishReason).not.toBe('timeout');
+    } finally {
+      local.destroy();
+    }
+  }, 30_000);
 });

@@ -155,7 +155,10 @@ export function GameDetailsScreen() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="How to play" subtitle={game.controls} />
+          <CardHeader
+            title="How to play"
+            subtitle={game.howToPlay?.objective ?? game.controls}
+          />
           <ol className="space-y-2 text-sm text-slate-300">
             {game.rules.map((rule, index) => (
               <li key={rule} className="flex gap-3">
@@ -169,6 +172,23 @@ export function GameDetailsScreen() {
         </Card>
 
         <div className="space-y-4">
+          <Card>
+            <CardHeader title="Controls" icon={<Gamepad2 className="h-4 w-4" />} />
+            <dl className="space-y-2.5 text-sm">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Mobile / touch
+                </dt>
+                <dd className="text-slate-300">{game.howToPlay?.controls?.mobile ?? game.controls}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Desktop
+                </dt>
+                <dd className="text-slate-300">{game.howToPlay?.controls?.desktop ?? game.controls}</dd>
+              </div>
+            </dl>
+          </Card>
           <Card>
             <CardHeader title="Scoring" />
             <p className="text-sm text-slate-300">{game.scoring}</p>

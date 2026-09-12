@@ -143,6 +143,75 @@ export function tryMagnetMove(
   return true;
 }
 
+/**
+ * Pure movement predicate: would this step land somewhere legal?
+ *
+ * Mirrors `tryMagnetMove` but never mutates the player, so the AI can probe
+ * several directions before committing. A step that is clamped against the
+ * arena boundary and therefore goes nowhere also counts as blocked — pushing
+ * into a wall is exactly the trap that used to freeze the AI.
+ */
+export function canMagnetMove(
+  player: MagnetPlayer,
+  dx: number,
+  dy: number,
+  obstacles: Array<{ x: number; y: number; radius: number }> = MAGNET_OBSTACLES,
+): boolean {
+  if (dx === 0 && dy === 0) return false;
+  const x = Math.max(0.4, Math.min(MAGNET_W - 0.4, player.x + dx * MOVE_STEP));
+  const y = Math.max(0.4, Math.min(MAGNET_H - 0.4, player.y + dy * MOVE_STEP));
+  if (x === player.x && y === player.y) return false;
+  return !obstacles.some(
+    (obstacle) => Math.hypot(x - obstacle.x, y - obstacle.y) < obstacle.radius + 0.38,
+  );
+}
+
+/** Diagonal steps are scaled so `hypot(dx, dy)` stays inside the server's 1.1 cap. */
+const DIAGONAL = 0.75;
+
+/** All eight unit directions the server accepts as a `move` intent. */
+const MOVE_DIRECTIONS: Array<{ dx: number; dy: number }> = [
+  { dx: 1, dy: 0 },
+  { dx: -1, dy: 0 },
+  { dx: 0, dy: 1 },
+  { dx: 0, dy: -1 },
+  { dx: DIAGONAL, dy: DIAGONAL },
+  { dx: DIAGONAL, dy: -DIAGONAL },
+  { dx: -DIAGONAL, dy: DIAGONAL },
+  { dx: -DIAGONAL, dy: -DIAGONAL },
+];
+
+/**
+ * Picks a step that actually makes progress toward `target`.
+ *
+ * Directions are ranked by how close the resulting position lands to the
+ * target, then the first one the server would accept is used. That keeps the
+ * historic feel (straight along the dominant axis wins when the route is clear)
+ * while sliding *around* an obstacle instead of backing away from it.
+ *
+ * Previously the AI always answered with the dominant axis, so whenever an
+ * obstacle sat between it and the gem it re-sent the same blocked intent for
+ * the rest of the match and visibly froze in place.
+ */
+export function pickPassableStep(
+  player: MagnetPlayer,
+  target: { x: number; y: number },
+  obstacles: Array<{ x: number; y: number; radius: number }> = MAGNET_OBSTACLES,
+): { dx: number; dy: number } {
+  const ranked = MOVE_DIRECTIONS.map((direction) => {
+    const x = Math.max(0.4, Math.min(MAGNET_W - 0.4, player.x + direction.dx * MOVE_STEP));
+    const y = Math.max(0.4, Math.min(MAGNET_H - 0.4, player.y + direction.dy * MOVE_STEP));
+    return { direction, distance: Math.hypot(target.x - x, target.y - y) };
+  }).sort((a, b) => a.distance - b.distance);
+
+  for (const { direction } of ranked) {
+    if (canMagnetMove(player, direction.dx, direction.dy, obstacles)) return direction;
+  }
+  // Fully boxed in: holding position is legal, and the next gem respawn or
+  // magnet pull will open a route again.
+  return { dx: 0, dy: 0 };
+}
+
 export function activateMagnet(
   playerId: string,
   state: MagnetState,
@@ -545,11 +614,9 @@ export const magnetThiefGame: GameModule<MagnetState> = {
       }
       return { type: 'pull', payload: {} };
     }
-    const dx = target.x - player.x;
-    const dy = target.y - player.y;
-    return Math.abs(dx) >= Math.abs(dy)
-      ? { type: 'move', payload: { dx: Math.sign(dx), dy: 0 } }
-      : { type: 'move', payload: { dx: 0, dy: Math.sign(dy) } };
+    // Steer around obstacles instead of repeating a blocked direction.
+    const step = pickPassableStep(player, target, state.obstacles);
+    return { type: 'move', payload: { dx: step.dx, dy: step.dy } };
   },
 
   needsUpdateLoop: true,

@@ -283,6 +283,20 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 💥 Chain Reaction Battle | strategy | 2–4 | yes | Trigger a node; the server owns chain length, multipliers and score |
 | 🔘 One Button Battle | reflex | 2–4 | yes | One tap, many contexts; server-owned timing windows |
 | 🌍 Split World | strategy | 2–4 | yes | Shared true world, per-player views; hidden tiles never leave the server |
+| 🎲 Ludo | strategy | 2–4 | yes | Server-rolled dice, token captures, safe squares, four tokens home |
+| ➡️ Arrow Puzzle | strategy | 2–4 | yes | Identical seeded boards, path-gated arrows, placement + speed bonuses |
+| ⚫ Black Blast | reflex | 2–4 | yes | Energy pulses, rich nodes, chain-depth bonus, combo multiplier to 4x |
+| 🤝 Couple Sync | coop | 2 | yes | Ten coordination rounds, shared team score, streak and speed bonuses |
+| 🃏 Couple Memory | coop | 2 | yes | Partners alternate flips, the hidden layout never leaves the server |
+| 🔴 Connect Four | strategy | 2 | yes | Gravity drops, server-checked four-in-a-row, winning line highlighted |
+| 🔤 Hangman | word | 2 | yes | Server-owned word, a correct letter keeps your turn, shared attempts |
+| 🅾️ SOS Game | strategy | 2 | yes | Place an S or an O, server-scored SOS lines, score and go again |
+| ♟️ Chess | strategy | 2 | yes | Castling, en passant, promotion, checkmate, stalemate, chess clock |
+| 🃏 Uno | strategy | 2–4 | yes | Server-dealt private hands, action cards, round-winner card scoring |
+| 🔺 Sim | strategy | 2 | yes | Claim edges on six dots — completing a triangle in your colour loses |
+| 🪟 Mirror Grid | strategy | 2–4 | yes | Reflection puzzles, level progression, wrong-submission penalty |
+| 💡 Fuse | strategy | 2–4 | yes | Rotate wire tiles until every source reaches its matching bulb |
+| 🁣 Domino Mind | strategy | 2–4 | yes | Build a domino chain, push the starter, hit every target |
 
 Every game is server-authoritative: clients send *intents*, the server decides
 legality, scores, winners and timers.

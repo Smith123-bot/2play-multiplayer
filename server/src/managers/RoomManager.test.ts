@@ -280,6 +280,68 @@ describe('RoomManager', () => {
     ).toThrow(AppError);
   });
 
+  it('keeps a live match running when a player leaves but enough seats remain', async () => {
+    // 3-seat math-rush room: 2 humans + 1 AI.
+    const host = await createPlayer(platform, 'DepHost');
+    const guest = await createPlayer(platform, 'DepGuest');
+    const room = platform.roomManager.createRoom({
+      gameId: 'math-rush',
+      maxPlayers: 3,
+      isPrivate: false,
+      host,
+    });
+    platform.roomManager.joinRoom({ roomId: room.id, player: guest });
+    platform.roomManager.addAI(room, host.playerId, 'hard');
+
+    for (const player of room.humanPlayers) {
+      platform.lobbyManager.setReady(room, player.id, true);
+    }
+    room.status = 'PLAYING';
+    room.gameStartedAt = Date.now();
+    platform.gameManager.createState(room);
+    platform.gameManager.start(room);
+    expect(room.players.size).toBe(3);
+
+    // The guest walks out mid-match. One human + one AI still satisfies the
+    // 2 seat minimum, so the match must continue rather than be abandoned.
+    platform.roomManager.leaveRoom(room, guest.playerId, 'leave');
+
+    expect(room.players.size).toBe(2);
+    expect(room.status).toBe('PLAYING');
+    expect(room.gameResult).toBeNull();
+    expect(room.aiPlayers).toHaveLength(1);
+  });
+
+  it('ends a live match once the remaining seats fall below the game minimum', async () => {
+    const host = await createPlayer(platform, 'AbnHost');
+    const guest = await createPlayer(platform, 'AbnGuest');
+    const room = platform.roomManager.createRoom({
+      gameId: 'math-rush',
+      maxPlayers: 2,
+      isPrivate: false,
+      host,
+    });
+    platform.roomManager.joinRoom({ roomId: room.id, player: guest });
+    for (const player of room.humanPlayers) {
+      platform.lobbyManager.setReady(room, player.id, true);
+    }
+    room.status = 'PLAYING';
+    room.gameStartedAt = Date.now();
+    platform.gameManager.createState(room);
+    platform.gameManager.start(room);
+
+    // No AI seats: one human left is below the 2 seat minimum, so the match
+    // cannot continue. (math-rush's own `playerLeft` hook may finish it first;
+    // either way the room must leave the playing state and end up in the lobby,
+    // because no rematch is possible with a single seat.)
+    platform.roomManager.leaveRoom(room, guest.playerId, 'leave');
+
+    expect(room.players.size).toBe(1);
+    expect(['PLAYING', 'COUNTDOWN', 'PAUSED']).not.toContain(room.status);
+    expect(room.status).toBe('LOBBY');
+    expect(platform.rematchManager.canRematch(room)).toBe(false);
+  });
+
   it('closes rooms that have been empty past the timeout', async () => {
     const shortHarness = createTestPlatform({ roomTimeoutMs: 10 });
     const host = await createPlayer(shortHarness.platform, 'SweepHost');

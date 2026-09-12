@@ -8,6 +8,7 @@ import { HostControls } from '../components/room/HostControls';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { CountdownOverlay } from '../components/game/CountdownOverlay';
 import { GameRenderer } from '../components/game/GameRenderer';
+import { HowToPlayModal } from '../components/game/HowToPlayModal';
 import { ResultPanel } from '../components/result/ResultPanel';
 import { RematchPanel } from '../components/rematch/RematchPanel';
 import { Button } from '../components/ui/Button';
@@ -47,6 +48,9 @@ export function RoomScreen() {
 
   const [reconnecting, setReconnecting] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Manual in-match guide: the 11 games that own `useHowToPlay` keep their
+  // auto-opening behaviour, every other game gets this on-demand button.
+  const [rulesOpen, setRulesOpen] = useState(false);
   const attempted = useRef<string | null>(null);
 
   useEffect(() => {
@@ -306,12 +310,28 @@ export function RoomScreen() {
           <ChatPanel messages={room.chat} myPlayerId={myPlayerId} className="h-[420px]" />
           {game ? (
             <Card>
-              <CardHeader title="Rules" subtitle={game.name} />
+              <CardHeader
+                title="Rules"
+                subtitle={game.name}
+                icon={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRulesOpen(true)}
+                    data-testid="room-how-to-play"
+                  >
+                    How to play
+                  </Button>
+                }
+              />
               <ul className="space-y-1.5 text-xs text-slate-400">
                 {game.rules.map((rule) => (
                   <li key={rule}>• {rule}</li>
                 ))}
               </ul>
+              {/* In-match guide for the 28 games that do not auto-open one;
+                  games owning `useHowToPlay` keep their own behaviour. */}
+              <HowToPlayModal game={game} open={rulesOpen} onClose={() => setRulesOpen(false)} />
             </Card>
           ) : null}
         </div>

@@ -328,6 +328,10 @@ export class RoomManager {
   private handleDepartureEffects(room: Room): void {
     const metadata = this.platform.registry.find(room.gameId)?.metadata;
     const minPlayers = metadata?.minPlayers ?? 2;
+    // Seats still in the room — AI opponents count, exactly like the lobby's
+    // `canStart`. Using the *human* count here wrongly abandoned matches that
+    // still had a full board (e.g. 1 human + 2 AI after a player left).
+    const seats = room.players.size;
     const humans = room.activeHumans.length;
 
     if (humans === 0) {
@@ -342,7 +346,7 @@ export class RoomManager {
       room.status === 'GAME_FINISHED'
     ) {
       // Rematch may continue with the remaining players if the minimum is met.
-      if (humans < minPlayers) {
+      if (!this.platform.rematchManager.canRematch(room)) {
         this.platform.lifecycleManager.returnToLobby(room, 'Not enough players for a rematch.');
       } else {
         room.clearRematchVotes();
@@ -353,7 +357,7 @@ export class RoomManager {
 
     if (
       (room.status === 'PLAYING' || room.status === 'COUNTDOWN' || room.status === 'PAUSED') &&
-      humans < minPlayers
+      seats < minPlayers
     ) {
       this.platform.lifecycleManager.abandonMatch(room, 'abandoned');
     }

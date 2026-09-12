@@ -37,6 +37,9 @@ export const REACTION_RACE_METADATA = {
   featured: true,
   hasRounds: true,
   defaultRounds: 5,
+  howToPlay: {
+    controls: { mobile: 'Tap the big reaction pad the instant GO appears.', desktop: 'Click the pad or press Space the instant GO appears.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -69,6 +72,9 @@ export const MEMORY_MATCH_METADATA = {
   tags: ['memory', 'turn-based', 'family', '2-4 players'],
   featured: true,
   gridOptions: ['4x4', '6x4', '6x6'],
+  howToPlay: {
+    controls: { mobile: 'Tap a face-down card to flip it.', desktop: 'Click a card to flip it.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -102,6 +108,9 @@ export const WORD_RACE_METADATA = {
   featured: true,
   hasRounds: true,
   defaultRounds: 3,
+  howToPlay: {
+    controls: { mobile: 'Type on the on-screen keyboard, then tap Submit.', desktop: 'Type your word and press Enter.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -133,6 +142,9 @@ export const DOTS_AND_BOXES_METADATA = {
   tags: ['strategy', 'turn-based', 'classic', '2-4 players'],
   featured: false,
   gridOptions: ['4x4', '6x6', '8x8'],
+  howToPlay: {
+    controls: { mobile: 'Tap the gap between two dots to draw a line.', desktop: 'Click a gap between two dots to draw a line.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -164,6 +176,9 @@ export const MATH_RUSH_METADATA = {
   winCondition: 'Score the most points across all questions.',
   tags: ['math', 'speed', 'skill', '2-4 players'],
   featured: true,
+  howToPlay: {
+    controls: { mobile: 'Tap the on-screen keypad, then tap Submit.', desktop: 'Type digits, minus and Backspace; press Enter to submit.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -196,6 +211,9 @@ export const BATTLE_2048_METADATA = {
   winCondition: 'Finish with a higher score than your rival.',
   tags: ['strategy', 'puzzle', 'numbers', '2 players'],
   featured: false,
+  howToPlay: {
+    controls: { mobile: 'Swipe across the board or use the on-screen D-pad.', desktop: 'Arrow keys or WASD slide every tile.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -228,6 +246,9 @@ export const MAZE_RACE_METADATA = {
   tags: ['reflex', 'maze', 'race', '2-4 players'],
   featured: false,
   gridOptions: ['11x11', '15x15', '19x19'],
+  howToPlay: {
+    controls: { mobile: 'Use the on-screen D-pad to step through the maze.', desktop: 'Arrow keys or WASD to move.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -262,6 +283,9 @@ export const WORD_SCRAMBLE_METADATA = {
   featured: false,
   hasRounds: true,
   defaultRounds: 5,
+  howToPlay: {
+    controls: { mobile: 'Type the letters on the on-screen keyboard, then tap Submit.', desktop: 'Type your answer and press Enter.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -295,6 +319,9 @@ export const SHAPE_MATCH_METADATA = {
   featured: false,
   hasRounds: true,
   defaultRounds: 10,
+  howToPlay: {
+    controls: { mobile: 'Tap the option that matches the target shape.', desktop: 'Click the option that matches the target shape.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -327,6 +354,9 @@ export const SNAKE_BATTLE_METADATA = {
   winCondition: 'Outlive your rival (or outhunt them on the fatal step).',
   tags: ['reflex', 'arcade', 'classic', '2 players'],
   featured: false,
+  howToPlay: {
+    controls: { mobile: 'Swipe across the board or use the on-screen D-pad.', desktop: 'Arrow keys or WASD to steer.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -360,6 +390,9 @@ export const TARGET_RUSH_METADATA = {
   featured: false,
   hasRounds: true,
   defaultRounds: 8,
+  howToPlay: {
+    controls: { mobile: 'Tap the highlighted target as fast as you can.', desktop: 'Click the highlighted target as fast as you can.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -393,6 +426,9 @@ export const PADDLE_DUEL_METADATA = {
   featured: false,
   hasRounds: true,
   defaultRounds: 7,
+  howToPlay: {
+    controls: { mobile: 'Drag up and down on the touch surface to slide your paddle.', desktop: 'Arrow Up / Arrow Down (or W / S) move the paddle.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -424,6 +460,9 @@ export const BRICK_BREAKER_METADATA = {
   winCondition: 'Score the most points (ties: earlier finish, then lives left).',
   tags: ['reflex', 'arcade', 'classic', '2 players'],
   featured: false,
+  howToPlay: {
+    controls: { mobile: 'Drag left and right on the touch surface to slide your paddle.', desktop: 'Arrow Left / Arrow Right (or A / D) move the paddle.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -457,6 +496,9 @@ export const PATTERN_MEMORY_METADATA = {
   featured: false,
   hasRounds: true,
   defaultRounds: 8,
+  howToPlay: {
+    controls: { mobile: 'Tap the tiles in the order they flashed.', desktop: 'Click the tiles in the order they flashed.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -491,6 +533,9 @@ export const DRAW_GUESS_METADATA = {
   featured: true,
   hasRounds: true,
   defaultRounds: 6,
+  howToPlay: {
+    controls: { mobile: 'Draw with your finger on the canvas; tap the guess field to answer.', desktop: 'Draw with the mouse; type a guess and press Enter.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -525,6 +570,9 @@ export const SECRET_ROLE_METADATA = {
   featured: true,
   hasRounds: true,
   defaultRounds: 4,
+  howToPlay: {
+    controls: { mobile: 'Tap the clue field to submit a clue and tap a player to vote.', desktop: 'Click the clue field to submit a clue and click a player to vote.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -558,6 +606,9 @@ export const COLOR_CLASH_METADATA = {
   featured: true,
   hasRounds: true,
   defaultRounds: 12,
+  howToPlay: {
+    controls: { mobile: 'Tap the labelled colour button that matches the prompt.', desktop: 'Click the labelled colour button that matches the prompt.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -589,6 +640,9 @@ export const TERRITORY_RUSH_METADATA = {
   winCondition: 'Own the most cells when the timer ends.',
   tags: ['reflex', 'territory', 'arcade', '2-4 players'],
   featured: true,
+  howToPlay: {
+    controls: { mobile: 'Swipe anywhere on the grid to change direction.', desktop: 'Arrow keys or WASD to steer.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -620,6 +674,9 @@ export const COIN_HUNTERS_METADATA = {
   winCondition: 'Hold the highest score when the arena clock ends.',
   tags: ['reflex', 'arcade', 'collection', '2-4 players'],
   featured: true,
+  howToPlay: {
+    controls: { mobile: 'Swipe anywhere on the arena to change direction.', desktop: 'Arrow keys or WASD to move.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -651,6 +708,9 @@ export const SHOP_RUSH_METADATA = {
   winCondition: 'Hold the highest checkout score when the shop closes.',
   tags: ['strategy', 'collection', 'arcade', '2-4 players'],
   featured: true,
+  howToPlay: {
+    controls: { mobile: 'Swipe to move, then tap Grab and Check out on the action buttons.', desktop: 'Arrow keys or WASD to move, E or Space to grab, Enter to check out at the till.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -683,6 +743,9 @@ export const FAKE_DOOR_METADATA = {
   featured: true,
   hasRounds: true,
   defaultRounds: 5,
+  howToPlay: {
+    controls: { mobile: 'Tap the door you believe is safe.', desktop: 'Click the door you believe is safe.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -713,6 +776,9 @@ export const MAGNET_THIEF_METADATA = {
   winCondition: 'Hold the highest score when the arena clock ends.',
   tags: ['strategy', 'collection', 'arcade', '2-4 players'],
   featured: true,
+  howToPlay: {
+    controls: { mobile: 'Swipe to move and tap the Pull or Repel buttons.', desktop: 'Arrow keys or WASD to move, E or Space to pull, Q to repel.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -745,6 +811,9 @@ export const CHAIN_REACTION_METADATA = {
   featured: true,
   hasRounds: true,
   defaultRounds: 4,
+  howToPlay: {
+    controls: { mobile: 'Tap a node you own to trigger its chain.', desktop: 'Click a node you own to trigger its chain.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -775,6 +844,9 @@ export const ONE_BUTTON_METADATA = {
   winCondition: 'Score the most points across the event sequence.',
   tags: ['reflex', 'timing', 'party', '2-4 players'],
   featured: true,
+  howToPlay: {
+    controls: { mobile: 'Tap the single big button when the cue tells you to.', desktop: 'Press Space or click the single button when the cue tells you to.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -809,6 +881,9 @@ export const SPLIT_WORLD_METADATA = {
   featured: true,
   hasRounds: true,
   defaultRounds: 5,
+  howToPlay: {
+    controls: { mobile: 'Swipe anywhere on the grid to move.', desktop: 'Arrow keys or WASD to move.' },
+  },
   version: '2.0.0',
 } satisfies GameMetadata;
 
@@ -840,6 +915,9 @@ export const LUDO_METADATA = {
   winCondition: 'Be the first to bring all your tokens home.',
   tags: ['board', 'classic', 'turn-based', 'family', '2-4 players'],
   featured: true,
+  howToPlay: {
+    controls: { mobile: 'Tap the dice to roll, then tap one of your tokens to move it.', desktop: 'Press Space or Enter to roll, then click a token to move it.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -873,6 +951,9 @@ export const ARROW_PUZZLE_METADATA = {
   featured: true,
   hasRounds: true,
   defaultRounds: 3,
+  howToPlay: {
+    controls: { mobile: 'Tap a tile to fire its arrow; tap Hint if you are stuck.', desktop: 'Click a tile to fire its arrow; use the Hint button if you are stuck.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -904,6 +985,9 @@ export const BLACK_BLAST_METADATA = {
   winCondition: 'Hold the highest score when the three minute clock expires.',
   tags: ['arcade', 'reflex', 'chain-reaction', 'combo', '2-4 players'],
   featured: true,
+  howToPlay: {
+    controls: { mobile: 'Tap a node to pulse it and tap Overcharge for the bigger blast.', desktop: 'Arrow keys or WASD to move, Space for a standard pulse, E to overcharge.' },
+  },
   version: '1.0.0',
 } satisfies GameMetadata;
 
@@ -1508,3 +1592,54 @@ export const DOMINO_MIND_METADATA = {
   },
   version: '1.0.0',
 } satisfies GameMetadata;
+
+
+/**
+ * Every shipped game, in registration order.
+ *
+ * Kept next to the definitions so the catalogue can never drift from the
+ * metadata itself. `GameLoader` (server) and the client registry still own
+ * *which* modules are actually loaded; this list is the canonical reference
+ * used by tests and by any consumer that needs the full catalogue.
+ */
+export const ALL_GAME_METADATA: readonly GameMetadata[] = [
+  REACTION_RACE_METADATA,
+  MEMORY_MATCH_METADATA,
+  WORD_RACE_METADATA,
+  DOTS_AND_BOXES_METADATA,
+  MATH_RUSH_METADATA,
+  BATTLE_2048_METADATA,
+  MAZE_RACE_METADATA,
+  WORD_SCRAMBLE_METADATA,
+  SHAPE_MATCH_METADATA,
+  SNAKE_BATTLE_METADATA,
+  TARGET_RUSH_METADATA,
+  PADDLE_DUEL_METADATA,
+  BRICK_BREAKER_METADATA,
+  PATTERN_MEMORY_METADATA,
+  DRAW_GUESS_METADATA,
+  SECRET_ROLE_METADATA,
+  COLOR_CLASH_METADATA,
+  TERRITORY_RUSH_METADATA,
+  COIN_HUNTERS_METADATA,
+  SHOP_RUSH_METADATA,
+  FAKE_DOOR_METADATA,
+  MAGNET_THIEF_METADATA,
+  CHAIN_REACTION_METADATA,
+  ONE_BUTTON_METADATA,
+  SPLIT_WORLD_METADATA,
+  LUDO_METADATA,
+  ARROW_PUZZLE_METADATA,
+  BLACK_BLAST_METADATA,
+  COUPLE_SYNC_METADATA,
+  COUPLE_MEMORY_METADATA,
+  CONNECT_FOUR_METADATA,
+  HANGMAN_METADATA,
+  SOS_GAME_METADATA,
+  CHESS_METADATA,
+  UNO_METADATA,
+  SIM_METADATA,
+  MIRROR_GRID_METADATA,
+  FUSE_METADATA,
+  DOMINO_MIND_METADATA,
+] as const;

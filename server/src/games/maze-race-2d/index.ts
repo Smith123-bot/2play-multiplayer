@@ -745,6 +745,10 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
     });
 
     const winners = ranked.length > 0 && state.finishOrder.length > 0 ? [ranked[0]!.id] : [];
+    // Nobody reached the flag (match cut short by a forfeit, an abandonment or
+    // the platform safety net): that is a draw, never a result with no winner
+    // and no draw flag — the client would render "Someone wins!".
+    const isDraw = winners.length === 0;
 
     const rankings: RankingDraft[] = ranked.map((player, index) => {
       const runner = state.runners[player.id];
@@ -754,7 +758,7 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
         rank: index + 1,
         score,
         isWinner: winners.includes(player.id),
-        isDraw: false,
+        isDraw,
         stats: {
           steps: runner?.steps ?? 0,
           finishMs: runner?.finishMs ?? -1,
@@ -766,7 +770,7 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
       };
     });
 
-    return { winners, isDraw: false, rankings, reason: state.finishReason ?? 'completed' };
+    return { winners, isDraw, rankings, reason: state.finishReason ?? 'completed' };
   },
 
   reset(state): MazeRaceState {

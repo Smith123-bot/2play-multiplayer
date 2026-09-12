@@ -41,3 +41,6 @@ coverage/
 .cache/
 .eslintcache
 .vite/
+
+# local QA scratch harness (not shipped)
+.qa/

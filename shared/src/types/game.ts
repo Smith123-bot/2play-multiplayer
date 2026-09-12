@@ -40,10 +40,15 @@ export interface GameMetadata {
   /** Optional per-game options surfaced in the lobby (e.g. grid sizes). */
   gridOptions?: string[];
   /**
-   * Structured How To Play content shown in the pre-match rules popup.
-   * Optional so existing games keep working unchanged.
+   * Structured How To Play content shown in the rules popup.
+   *
+   * Optional and partial: any field a game does not supply is derived from the
+   * flat metadata (`description`, `rules`, `controls`, `scoring`,
+   * `winCondition`, `estimatedDuration`) by the shared How To Play panel, so a
+   * game can adopt this incrementally — e.g. only override `controls` to split
+   * mobile from desktop.
    */
-  howToPlay?: HowToPlay;
+  howToPlay?: Partial<HowToPlay>;
   /** Round based games (best of N) expose a round count in the lobby. */
   hasRounds?: boolean;
   defaultRounds?: number;

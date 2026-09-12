@@ -40,7 +40,6 @@ export const REACTION_RACE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const MEMORY_MATCH_METADATA = {
   id: 'memory-match',
   name: 'Memory Match',
@@ -71,7 +70,6 @@ export const MEMORY_MATCH_METADATA = {
   gridOptions: ['4x4', '6x4', '6x6'],
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const WORD_RACE_METADATA = {
   id: 'word-race',
@@ -105,7 +103,6 @@ export const WORD_RACE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const DOTS_AND_BOXES_METADATA = {
   id: 'dots-and-boxes',
   name: 'Dots and Boxes',
@@ -136,7 +133,6 @@ export const DOTS_AND_BOXES_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const MATH_RUSH_METADATA = {
   id: 'math-rush',
   name: 'Math Rush',
@@ -166,7 +162,6 @@ export const MATH_RUSH_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const BATTLE_2048_METADATA = {
   id: '2048-battle',
@@ -199,7 +194,6 @@ export const BATTLE_2048_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const MAZE_RACE_METADATA = {
   id: 'maze-race-2d',
   name: 'Maze Race 2D',
@@ -230,7 +224,6 @@ export const MAZE_RACE_METADATA = {
   gridOptions: ['11x11', '15x15', '19x19'],
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const WORD_SCRAMBLE_METADATA = {
   id: 'word-scramble-battle',
@@ -265,7 +258,6 @@ export const WORD_SCRAMBLE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const SHAPE_MATCH_METADATA = {
   id: 'shape-match-battle',
   name: 'Shape Match Battle',
@@ -298,7 +290,6 @@ export const SHAPE_MATCH_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const SNAKE_BATTLE_METADATA = {
   id: 'snake-battle',
   name: 'Snake Battle',
@@ -329,38 +320,6 @@ export const SNAKE_BATTLE_METADATA = {
   featured: false,
   version: '1.0.0',
 } satisfies GameMetadata;
-
-
-export const TRAFFIC_DODGE_METADATA = {
-  id: 'traffic-dodge-race',
-  name: 'Traffic Dodge Race',
-  description:
-    'A five-lane arcade sprint: weave through oncoming traffic, survive the crashes and outrun your rival to the finish line.',
-  category: 'reflex' as const,
-  icon: '🏎️',
-  thumbnail: '🏎️',
-  minPlayers: 2,
-  maxPlayers: 2,
-  supportedPlayerCounts: [2],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'medium' as const,
-  controls: 'Switch lanes with A/D, the left/right arrow keys, swipe or the side buttons.',
-  rules: [
-    'Both racers share one five-lane road and accelerate automatically — steering is all you do.',
-    'Traffic ahead of you is generated from the server seed; every racer sees the same road.',
-    'Hitting a car stuns you for 1.5 seconds and drops you behind it — the race goes on.',
-    'The finish line is 2000 units away; the first racer across wins.',
-    'If the clock runs out, the racer closest to the finish wins.',
-  ],
-  scoring: 'Progress decides: finishing first wins, otherwise the furthest racer takes it.',
-  winCondition: 'Cross the finish line first (or lead at the timeout).',
-  tags: ['reflex', 'racing', 'arcade', '2 players'],
-  featured: false,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
 
 export const TARGET_RUSH_METADATA = {
   id: 'target-rush',
@@ -394,39 +353,6 @@ export const TARGET_RUSH_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
-export const CAPTURE_THE_FLAG_METADATA = {
-  id: 'capture-the-flag-2d',
-  name: 'Capture the Flag 2D',
-  description:
-    'Sneak across the arena, grab the enemy flag and carry it home — but one touch sends you back to your base. First team to three captures.',
-  category: 'strategy' as const,
-  icon: '🚩',
-  thumbnail: '🚩',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 180,
-  difficulty: 'medium' as const,
-  controls: 'Move one cell at a time with WASD / arrow keys, swipe or the D-pad.',
-  rules: [
-    'Two teams: with four players, seats 1 & 3 face seats 2 & 4; with two it is a duel.',
-    'Enter the enemy flag cell to pick the flag up — it moves with you.',
-    'Carry it onto your own base to score a capture; first team to 3 captures wins.',
-    'Moving onto an opponent tags them: they respawn at their base and any carried flag returns home.',
-    'Players standing on their own base cannot be tagged (no spawn camping).',
-    'If the clock runs out, the team with more captures wins.',
-  ],
-  scoring: '1 point per captured flag for the whole team.',
-  winCondition: 'Reach 3 captures or lead when the clock ends.',
-  tags: ['strategy', 'teams', 'arcade', '2-4 players'],
-  featured: false,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
 export const PADDLE_DUEL_METADATA = {
   id: 'paddle-duel',
   name: 'Paddle Duel',
@@ -459,7 +385,6 @@ export const PADDLE_DUEL_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const BRICK_BREAKER_METADATA = {
   id: 'brick-breaker-battle',
   name: 'Brick Breaker Battle',
@@ -489,7 +414,6 @@ export const BRICK_BREAKER_METADATA = {
   featured: false,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const PATTERN_MEMORY_METADATA = {
   id: 'pattern-memory-battle',
@@ -522,40 +446,6 @@ export const PATTERN_MEMORY_METADATA = {
   defaultRounds: 8,
   version: '1.0.0',
 } satisfies GameMetadata;
-
-
-export const BOMB_PASS_METADATA = {
-  id: 'bomb-pass-2d',
-  name: 'Bomb Pass 2D',
-  description:
-    'A cartoon firework is ticking and nobody wants to be holding it. Pass it around, watch the fuse shrink and dodge three strikes across eight frantic rounds.',
-  category: 'reflex' as const,
-  icon: '🧨',
-  thumbnail: '🧨',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'easy' as const,
-  controls: 'Tap a player to pass them the firework before the fuse burns out.',
-  rules: [
-    'A purely fictional cartoon firework starts with a random player and a server-timed fuse.',
-    'Only the holder can pass, and only to someone still in the game (never to themselves).',
-    'You must hold the firework for a moment before passing it on — no instant ping-pong.',
-    'Holding it when the fuse ends costs a strike; everyone else scores a point.',
-    'Three strikes and you are out. Last player standing, or fewest strikes after eight rounds, wins.',
-  ],
-  scoring: '1 point for surviving a round you are not holding the firework in.',
-  winCondition: 'Be the last player standing, or have the fewest strikes after eight rounds.',
-  tags: ['reflex', 'party', 'hot-potato', '2-4 players'],
-  featured: false,
-  hasRounds: true,
-  defaultRounds: 8,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
 
 export const DRAW_GUESS_METADATA = {
   id: 'draw-guess-battle',
@@ -590,7 +480,6 @@ export const DRAW_GUESS_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const SECRET_ROLE_METADATA = {
   id: 'secret-role',
   name: 'Secret Role',
@@ -624,39 +513,6 @@ export const SECRET_ROLE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
-export const PLATFORM_DASH_METADATA = {
-  id: 'platform-dash-2d',
-  name: 'Platform Dash 2D',
-  description:
-    'Race the same short 2D course. Jump, ride moving platforms, bounce on pads and hit checkpoints — the server simulates every step.',
-  category: 'reflex' as const,
-  icon: '🏃',
-  thumbnail: '🏃',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 180,
-  difficulty: 'medium' as const,
-  controls: 'Mobile: left / right / jump buttons. Desktop: A/D or arrows, Space or Arrow Up to jump.',
-  rules: [
-    'Everyone races the same server-picked 2D course (Summit, Caves or Skyway).',
-    'Move and jump — the server owns position, velocity, collisions and the finish line.',
-    'Falling respawns you at your last checkpoint with a short freeze; you are not eliminated.',
-    'Jump pads launch you up; moving and crumbling platforms are simulated on the server clock.',
-    'First to the flag wins rank 1; later finishers take the next ranks. Timeout ranks by distance.',
-  ],
-  scoring: '1st 100, 2nd 75, 3rd 50, 4th 25. Unfinished runners score 0.',
-  winCondition: 'Reach the finish first (or lead in distance when the clock ends).',
-  tags: ['reflex', 'platformer', 'race', '2-4 players'],
-  featured: false,
-  gridOptions: ['summit', 'caves', 'skyway'],
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
 export const COLOR_CLASH_METADATA = {
   id: 'color-clash',
   name: 'Color Clash',
@@ -689,7 +545,6 @@ export const COLOR_CLASH_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const TERRITORY_RUSH_METADATA = {
   id: 'territory-rush',
   name: 'Territory Rush',
@@ -719,69 +574,6 @@ export const TERRITORY_RUSH_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
-
-
-export const HEXA_CONQUEST_METADATA = {
-  id: 'hexa-conquest',
-  name: 'Hexa Conquest',
-  description:
-    'Expand across a hex map one adjacent tile at a time. Bonus tiles score extra, energy tiles fuel a Bridge special, and blocked tiles stay empty. Most territory when the board or clock ends wins.',
-  category: 'strategy' as const,
-  icon: '⬡',
-  thumbnail: '⬡',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 240,
-  difficulty: 'medium' as const,
-  controls: 'Tap an adjacent hex on your turn. Use Bridge to claim one non-adjacent tile.',
-  rules: [
-    'Players take timed turns. Capture a hex adjacent to your territory.',
-    'Normal tiles score 1, bonus tiles score 2, energy tiles grant a Bridge charge.',
-    'Blocked tiles cannot be captured. Starting hexes cannot be stolen.',
-    'Bridge (limited) claims one unowned hex that is not adjacent.',
-    'If the turn timer expires the turn passes. Highest score when the board fills or the match clock ends wins.',
-  ],
-  scoring: 'Tile value: normal 1, bonus 2, energy 1. Highest total wins.',
-  winCondition: 'Hold the highest territory score when the match ends.',
-  tags: ['strategy', 'hex', 'turn-based', '2-4 players'],
-  featured: false,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
-export const COLOR_TRAILS_METADATA = {
-  id: 'color-trails',
-  name: 'Color Trails',
-  description:
-    'A fast arcade dash: leave a fading coloured trail, scoop matching pickups, hit matching zones for combos, and avoid rival trails.',
-  category: 'reflex' as const,
-  icon: '🌀',
-  thumbnail: '🌀',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'easy' as const,
-  controls: 'Steer with WASD / arrows, swipe or the D-pad. Trails fade on the server clock.',
-  rules: [
-    'You always leave a short fading trail. Trails are not permanent territory.',
-    'Pick up a colour token: +10 and your combo colour updates.',
-    'Ride into a matching colour zone for +25 times your combo.',
-    'Clipping an opponent trail costs points, resets combo and briefly freezes you.',
-    'Highest score when the timer ends wins.',
-  ],
-  scoring: 'Pickup +10, matching zone +25 × combo. Trail hits −10.',
-  winCondition: 'Score the most points before the clock ends.',
-  tags: ['reflex', 'arcade', 'colour', '2-4 players'],
-  featured: false,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
 
 export const COIN_HUNTERS_METADATA = {
   id: 'coin-hunters-arena',
@@ -813,99 +605,6 @@ export const COIN_HUNTERS_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
-export const CASTLE_SIEGE_METADATA = {
-  id: 'castle-siege-2d',
-  name: 'Castle Siege 2D',
-  description:
-    'Defend your keep, raise walls and towers, capture the midfield and bombard rival castles. Energy, damage and captures are all server owned.',
-  category: 'strategy' as const,
-  icon: '🏰',
-  thumbnail: '🏰',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 180,
-  difficulty: 'medium' as const,
-  controls: 'Move with WASD / arrows / D-pad. Build, upgrade, fire and capture with the action buttons.',
-  rules: [
-    'Each player owns a castle with 100 hit points and a commander on the 2D field.',
-    'Energy regenerates on the server clock. Spend it to build walls, upgrade towers or fire.',
-    'Towers auto-fire at nearby commanders. Walls block movement and shots.',
-    'Stand on a capture node to earn hold points. Destroy every rival castle, or lead when the clock ends.',
-    'The server validates range, cooldowns, cost, damage and captures — clients never set HP.',
-  ],
-  scoring: 'Damage dealt + capture holds + remaining castle HP. Last castle standing wins outright.',
-  winCondition: 'Destroy every other castle, or hold the highest score when time expires.',
-  tags: ['strategy', 'defense', 'arcade', '2-4 players'],
-  featured: true,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
-export const TRAFFIC_CONTROL_METADATA = {
-  id: 'traffic-control-battle',
-  name: 'Traffic Control Battle',
-  description:
-    'Run your own intersection. Flip the lights, clear waves of cars and avoid jams — the server drives every vehicle.',
-  category: 'reflex' as const,
-  icon: '🚦',
-  thumbnail: '🚦',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'medium' as const,
-  controls: 'Tap Switch lights (or press Space / L) to flip north-south vs east-west green.',
-  rules: [
-    'Each player has a private crossroads. Cars spawn from four approaches.',
-    'Only one axis can be green. Cars wait on red and drive on green.',
-    'A car that exits scores. A jam (queue too long) is a penalty. Collisions in the box cost more.',
-    'Waves get faster as the match goes on. Highest valid score when the timer ends wins.',
-    'The server spawns, moves and scores every car. Clients only send light intents.',
-  ],
-  scoring: '+10 per cleared car, −15 per jam, −25 per collision. Equal scores are a draw.',
-  winCondition: 'Hold the highest score when the clock ends.',
-  tags: ['reflex', 'strategy', 'arcade', '2-4 players'],
-  featured: false,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
-export const MAGNET_MAZE_METADATA = {
-  id: 'magnet-maze',
-  name: 'Magnet Maze',
-  description:
-    'A top-down 2D maze race with magnetic currents. Flip your polarity, ride or fight the pull, collect crystals and reach the finish.',
-  category: 'reflex' as const,
-  icon: '🧲',
-  thumbnail: '🧲',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'medium' as const,
-  controls: 'WASD / arrows / swipe / D-pad to step. Flip polarity with F or the polarity button.',
-  rules: [
-    'Everyone races the same seeded 2D maze. Walls are real — only the server moves you.',
-    'Magnet tiles pull you with your polarity, or push you if you flip it.',
-    'Collect crystals for points. Spikes freeze you briefly. The finish cell must be occupied on the server.',
-    'You cannot declare a finish yourself. First verified arrival ranks 1; timeout ranks by crystals then distance.',
-  ],
-  scoring: 'Crystals + finish bonus. Faster verified finishers rank higher.',
-  winCondition: 'Reach the finish first (or lead crystals/distance if nobody finishes).',
-  tags: ['reflex', 'puzzle', 'maze', '2-4 players'],
-  featured: false,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
 export const SHOP_RUSH_METADATA = {
   id: 'shop-rush-battle',
   name: 'Shop Rush Battle',
@@ -935,73 +634,6 @@ export const SHOP_RUSH_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
-
-
-export const SHADOW_COPY_METADATA = {
-  id: 'shadow-copy-battle',
-  name: 'Shadow Copy Battle',
-  description:
-    'Move, collect and flip plates — then your previous path returns as a Shadow Copy. Plan this round so last round’s ghost holds a switch for you.',
-  category: 'strategy' as const,
-  icon: '🌑',
-  thumbnail: '🌑',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'medium' as const,
-  controls: 'WASD / arrows / swipe / D-pad to step one cell. The server records every legal step.',
-  rules: [
-    'Each short round you walk a 2D arena collecting crystals and standing on plates.',
-    'The server stores your validated steps. Next round a Shadow Copy replays them on the same clock.',
-    'Plates stay active while you or your shadow stand on them. Gates open only when every plate is held.',
-    'Gold crystals are yours. Violet crystals can only be collected by a Shadow Copy.',
-    'Shadows skip a blocked step and stay put — they never teleport and clients cannot submit a path.',
-  ],
-  scoring: 'Player crystal +100, shadow crystal +50, exit +75, efficient route +20. Highest total wins.',
-  winCondition: 'Hold the highest score after three rounds.',
-  tags: ['strategy', 'puzzle', 'shadow', '2-4 players'],
-  featured: true,
-  hasRounds: true,
-  defaultRounds: 3,
-  gridOptions: ['twin-plates', 'shadow-vault', 'relay-gate', 'split-loops', 'hazard-run'],
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
-export const ECHO_MAZE_METADATA = {
-  id: 'echo-maze',
-  name: 'Echo Maze',
-  description:
-    'Memorise the maze in a short preview, then race through fog. Your echo trail shows where you have already walked.',
-  category: 'memory' as const,
-  icon: '🌀',
-  thumbnail: '🌀',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'medium' as const,
-  controls: 'WASD / arrows / swipe / D-pad. Walls stay real even when the fog hides them.',
-  rules: [
-    'A short preview shows the full maze. Then selected walls vanish into fog.',
-    'Move one cell at a time. Hidden walls still block you — the server owns collisions.',
-    'Checkpoints score extra. Your echo trail is the last few validated steps.',
-    'Reach the exit first (or with the highest score) before the clock ends.',
-  ],
-  scoring: 'Finish +100, checkpoint +50, leftover time bonus. Highest total wins.',
-  winCondition: 'Hold the highest score when every runner finishes or the clock ends.',
-  tags: ['memory', 'maze', 'race', '2-4 players'],
-  featured: true,
-  hasRounds: true,
-  defaultRounds: 2,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
 
 export const FAKE_DOOR_METADATA = {
   id: 'fake-door-battle',
@@ -1034,37 +666,6 @@ export const FAKE_DOOR_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
-export const MOVING_ISLAND_METADATA = {
-  id: 'moving-island',
-  name: 'Moving Island',
-  description:
-    'Hop across 2D platforms that slide, blink and spin. Grab checkpoints before the islands drift away.',
-  category: 'reflex' as const,
-  icon: '🏝️',
-  thumbnail: '🏝️',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'medium' as const,
-  controls: 'WASD / arrows / swipe / D-pad to step onto a neighbouring platform cell.',
-  rules: [
-    'Platforms slide, blink or rotate on the server clock. Falling respawns you at your last checkpoint.',
-    'Stand on a checkpoint to lock it. Coins on islands score extra.',
-    'Reach the flag cell to finish. Nobody is eliminated for falling.',
-    'The server moves every platform and validates every step.',
-  ],
-  scoring: 'Coin +10, checkpoint +25, finish +100. Highest total when the clock ends wins.',
-  winCondition: 'Hold the highest score when time expires (finishers rank first on a tie).',
-  tags: ['reflex', 'platformer', 'arcade', '2-4 players'],
-  featured: true,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
 export const MAGNET_THIEF_METADATA = {
   id: 'magnet-thief',
   name: 'Magnet Thief',
@@ -1093,69 +694,6 @@ export const MAGNET_THIEF_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
-
-
-export const REVERSE_RACE_METADATA = {
-  id: 'reverse-race',
-  name: 'Reverse Race',
-  description:
-    'Every round flips the objective: finish first, finish second, hit an exact time, collect exactly N, or stop in the zone.',
-  category: 'reflex' as const,
-  icon: '🔄',
-  thumbnail: '🔄',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'medium' as const,
-  controls: 'WASD / arrows / swipe / D-pad. The current objective is shown above the track.',
-  rules: [
-    'Each round the server publishes a new target. Reaching the flag first is not always the win.',
-    'Objectives include exact time, second place, collect exactly N tokens, or stop inside the zone.',
-    'Movement, tokens, finish times and ranks are validated on the server.',
-    'Highest total after every round wins.',
-  ],
-  scoring: 'Up to 100 per round based on how closely you match the published objective.',
-  winCondition: 'Hold the highest score after four rounds.',
-  tags: ['reflex', 'race', 'party', '2-4 players'],
-  featured: true,
-  hasRounds: true,
-  defaultRounds: 4,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
-export const MIRROR_ARENA_METADATA = {
-  id: 'mirror-arena',
-  name: 'Mirror Arena',
-  description:
-    'Every step you take is mirrored across the arena. Use your twin to hold plates, grab crystals and open the gate.',
-  category: 'strategy' as const,
-  icon: '🪞',
-  thumbnail: '🪞',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'medium' as const,
-  controls: 'WASD / arrows / swipe / D-pad. Your mirror always moves opposite you.',
-  rules: [
-    'Your mirror is at (width-1-x, y). It is not a second player — it is you, flipped.',
-    'Plates stay active while you or a mirror stand on them. Gates open only when every plate is held.',
-    'Crystals can be collected by you or your mirror. Hazards freeze you briefly.',
-    'The exit only scores while the gates are open. The server owns collisions and the mirror.',
-  ],
-  scoring: 'Crystal +20, exit +80. Highest total when the clock ends wins.',
-  winCondition: 'Hold the highest score when time expires (exiters rank first on a tie).',
-  tags: ['strategy', 'puzzle', 'mirror', '2-4 players'],
-  featured: true,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
 
 export const CHAIN_REACTION_METADATA = {
   id: 'chain-reaction-battle',
@@ -1188,7 +726,6 @@ export const CHAIN_REACTION_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const ONE_BUTTON_METADATA = {
   id: 'one-button-battle',
   name: 'One Button Battle',
@@ -1217,7 +754,6 @@ export const ONE_BUTTON_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const SPLIT_WORLD_METADATA = {
   id: 'split-world',
@@ -1252,40 +788,6 @@ export const SPLIT_WORLD_METADATA = {
   version: '2.0.0',
 } satisfies GameMetadata;
 
-
-export const INVISIBLE_PATH_METADATA = {
-  id: 'invisible-path',
-  name: 'Invisible Path',
-
-  description:
-    'Memorise the glowing path, then cross the grid after it vanishes. Wrong tiles bounce you back.',
-  category: 'memory' as const,
-  icon: '✨',
-  thumbnail: '✨',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 140,
-  difficulty: 'medium' as const,
-  controls: 'WASD / arrows / swipe / D-pad. Only the server knows which tiles stay safe.',
-  rules: [
-    'A short preview shows the safe path (and a few decoy tiles). Then everything hides.',
-    'Step onto a safe tile to continue. A wrong tile stuns you and returns you to your last safe cell.',
-    'Checkpoints along the path score extra. Reach the finish cell to bank the round.',
-    'Paths grow longer each round. The safe set never leaves the server during play.',
-  ],
-  scoring: 'Safe step +5, checkpoint +30, finish +80, wrong tile −10. Highest total wins.',
-  winCondition: 'Hold the highest score after three rounds.',
-  tags: ['memory', 'puzzle', 'race', '2-4 players'],
-  featured: true,
-  hasRounds: true,
-  defaultRounds: 3,
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
 export const LUDO_METADATA = {
   id: 'ludo',
   name: 'Ludo',
@@ -1315,7 +817,6 @@ export const LUDO_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const ARROW_PUZZLE_METADATA = {
   id: 'arrow-puzzle',
@@ -1349,7 +850,6 @@ export const ARROW_PUZZLE_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const BLACK_BLAST_METADATA = {
   id: 'black-blast',
   name: 'Black Blast',
@@ -1379,113 +879,6 @@ export const BLACK_BLAST_METADATA = {
   featured: true,
   version: '1.0.0',
 } satisfies GameMetadata;
-
-
-export const LOVE_MAZE_METADATA = {
-  id: 'love-maze',
-  name: 'Love Maze',
-  description:
-    'Two partners, one maze. Hold switches, share keys and step onto the exit together to clear all ten levels.',
-  category: 'coop' as const,
-  icon: '🧩',
-  thumbnail: '🧩',
-  minPlayers: 2,
-  maxPlayers: 2,
-  supportedPlayerCounts: [2],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 600,
-  difficulty: 'medium' as const,
-  controls: 'WASD / arrows / swipe / D-pad.',
-  rules: [
-    'Ten handcrafted levels, one shared clock per level.',
-    'Switch A only responds to partner A; switch B only to partner B.',
-    'Pressure plates need both partners standing on them at once.',
-    'Hazards send you back to your last checkpoint and cost the team points.',
-    'The exit only opens when BOTH partners stand on it with every key collected.',
-  ],
-  scoring: 'Level cleared +200, key +40, checkpoint +15, co-op bonus +60, plus a time bonus. Hazards -25.',
-  winCondition: 'Clear levels together — the score is shared by the whole team.',
-  tags: ['co-op', 'couple', 'puzzle', 'maze', 'teamwork', '2 players'],
-  featured: true,
-  hasRounds: true,
-  defaultRounds: 10,
-  howToPlay: {
-    objective: 'Work together and reach the exit of every maze before the clock runs out.',
-    steps: [
-      'Move your character around the maze.',
-      'Tell your partner what you can see — you each have your own path.',
-      'Stand on your coloured switch to open your partner\u2019s door.',
-      'Step on pressure plates at the same time to unlock shared gates.',
-      'Collect every key, then BOTH stand on the exit to clear the level.',
-    ],
-    controls: { mobile: 'Swipe anywhere on the maze, or use the on-screen D-pad.', desktop: 'WASD or the arrow keys.' },
-    scoring: 'Level cleared +200, key +40, checkpoint +15, cooperation bonus +60, plus a speed bonus. Hazards cost 25.',
-    winCondition: 'Clear as many of the ten levels as you can. You win and lose as a team.',
-    timeLimit: 'Each level has its own clock, from 90 seconds up to 3 minutes.',
-    specialRules: [
-      'Switch A only works for partner A, switch B only for partner B.',
-      'One partner reaching the exit does nothing — you both have to be there.',
-      'Hazards return you to your last checkpoint, not to the start.',
-    ],
-    playerCount: '2 players (co-op)',
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
-export const SYNC_JUMP_METADATA = {
-  id: 'sync-jump',
-  name: 'Sync Jump',
-  description:
-    'A two lane obstacle run where staying side by side multiplies every point you score.',
-  category: 'coop' as const,
-  icon: '🏃',
-  thumbnail: '🏃',
-  minPlayers: 2,
-  maxPlayers: 2,
-  supportedPlayerCounts: [2],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 540,
-  difficulty: 'medium' as const,
-  controls: 'Left / right to run, a dedicated jump button or Space.',
-  rules: [
-    'Ten courses. Both partners run the same obstacle course in their own lane.',
-    'Jump over gaps and bars — running into one sends you back to your checkpoint.',
-    'The sync meter tracks how close together you are on the course.',
-    'A high sync meter multiplies every point you earn, up to 2x.',
-    'Both partners must reach the finish zone to clear a course.',
-  ],
-  scoring: 'Step +4 (x sync multiplier), checkpoint +20, course cleared +250, plus time and sync bonuses. Falls -30.',
-  winCondition: 'Clear courses as a pair. Score and result are shared.',
-  tags: ['co-op', 'couple', 'platformer', 'timing', 'teamwork', '2 players'],
-  featured: true,
-  hasRounds: true,
-  defaultRounds: 10,
-  howToPlay: {
-    objective: 'Run the obstacle course together and reach the finish side by side.',
-    steps: [
-      'Move right along the course.',
-      'Jump before a gap or a bar — you cannot walk through them.',
-      'Watch the sync meter: it rises when you are close together.',
-      'Touch checkpoints to bank your progress.',
-      'Both partners must stand in the finish zone to clear the course.',
-    ],
-    controls: { mobile: 'Left and right buttons plus a large jump button.', desktop: 'Arrow keys or A/D to run, Space or W to jump.' },
-    scoring: 'Each step forward scores 4, multiplied by up to 2x from your sync meter. Checkpoints +20, course cleared +250.',
-    winCondition: 'Clear as many of the ten courses as you can, together.',
-    timeLimit: 'Each course has its own clock, from 60 to 130 seconds.',
-    specialRules: [
-      'Drifting more than a few cells apart drains the sync meter and your multiplier.',
-      'A fall costs points but only sends you back to your last checkpoint.',
-      'One partner finishing early does not clear the course.',
-    ],
-    playerCount: '2 players (co-op)',
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
 
 export const COUPLE_SYNC_METADATA = {
   id: 'couple-sync',
@@ -1539,7 +932,6 @@ export const COUPLE_SYNC_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const COUPLE_MEMORY_METADATA = {
   id: 'couple-memory',
   name: 'Couple Memory',
@@ -1592,60 +984,6 @@ export const COUPLE_MEMORY_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
-export const BUILD_TOGETHER_METADATA = {
-  id: 'build-together',
-  name: 'Build Together',
-  description:
-    'Reproduce a blueprint from a limited supply of pieces — and each partner can only place their own colour.',
-  category: 'coop' as const,
-  icon: '🧱',
-  thumbnail: '🧱',
-  minPlayers: 2,
-  maxPlayers: 2,
-  supportedPlayerCounts: [2],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 660,
-  difficulty: 'medium' as const,
-  controls: 'Tap a piece then tap a cell to place it. Tap a placed piece to rotate it.',
-  rules: [
-    'Ten blueprints of increasing size and complexity.',
-    'Blue pieces can only be placed by partner A, green only by partner B.',
-    'Grey shared pieces can be placed by either partner.',
-    'From level 5 pieces must also be rotated to the correct angle.',
-    'The later levels give you an exact inventory with no spare pieces.',
-  ],
-  scoring: 'Correct piece +25, structure complete +250, plus time, accuracy and leftover-piece bonuses. Wrong placement -15.',
-  winCondition: 'Complete blueprints together — the score is shared by the team.',
-  tags: ['co-op', 'couple', 'puzzle', 'building', 'teamwork', '2 players'],
-  featured: true,
-  hasRounds: true,
-  defaultRounds: 10,
-  howToPlay: {
-    objective: 'Rebuild the blueprint exactly, using the limited pieces you have between you.',
-    steps: [
-      'Look at the blueprint — it shows which colour belongs in every cell.',
-      'Pick a piece from your supply, then tap the cell it belongs in.',
-      'You can only place your own colour, so tell your partner what you need.',
-      'On later levels, rotate a placed piece until it matches the target angle.',
-      'The structure completes the moment every cell is correct.',
-    ],
-    controls: { mobile: 'Tap a piece to select it, tap a cell to place it, tap a placed piece to rotate.', desktop: 'Click to select, place and rotate; right-click or the remove button clears a cell.' },
-    scoring: 'Each correct piece scores 25 and finishing a structure scores 250, plus bonuses for speed, accuracy and unused pieces.',
-    winCondition: 'Complete as many of the ten blueprints as you can, together.',
-    timeLimit: 'Each blueprint has its own clock, from 90 seconds to 3 minutes.',
-    specialRules: [
-      'Neither partner can complete a blueprint alone — the colours are locked to each of you.',
-      'A wrong piece still fills the cell; remove it before trying again.',
-      'The last two levels give you no spare pieces at all.',
-    ],
-    playerCount: '2 players (co-op)',
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
 export const CONNECT_FOUR_METADATA = {
   id: 'connect-four',
   name: 'Connect Four',
@@ -1695,7 +1033,6 @@ export const CONNECT_FOUR_METADATA = {
   },
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const HANGMAN_METADATA = {
   id: 'hangman',
@@ -1749,7 +1086,6 @@ export const HANGMAN_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const SOS_GAME_METADATA = {
   id: 'sos-game',
   name: 'SOS Game',
@@ -1800,7 +1136,6 @@ export const SOS_GAME_METADATA = {
   },
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const CHESS_METADATA = {
   id: 'chess',
@@ -1853,7 +1188,6 @@ export const CHESS_METADATA = {
   },
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const UNO_METADATA = {
   id: 'uno',
@@ -1915,7 +1249,6 @@ export const UNO_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const SIM_METADATA = {
   id: 'sim',
   name: 'Sim',
@@ -1965,65 +1298,6 @@ export const SIM_METADATA = {
   },
   version: '1.0.0',
 } satisfies GameMetadata;
-
-
-export const DOMINOES_METADATA = {
-  id: 'dominoes',
-  name: 'Dominoes',
-  description:
-    'Classic double-six draw dominoes. Match the open ends, empty your hand, and catch your opponents holding heavy tiles.',
-  category: 'strategy' as const,
-  icon: '🁫',
-  thumbnail: '🁫',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 420,
-  difficulty: 'medium' as const,
-  controls: 'Tap a tile, then tap the end of the chain you want to play it on.',
-  rules: [
-    'A full double-six set: 28 unique tiles from 0|0 to 6|6, shuffled by the server.',
-    'Two players get 7 tiles each; three or four players get 5 each. The rest form the boneyard.',
-    'The highest double opens the game. If nobody holds a double, the heaviest tile opens.',
-    'Place a tile whose value matches one of the two open ends \u2014 it is rotated for you automatically.',
-    'No legal tile? Draw from the boneyard until you can play, or until it is empty and you must pass.',
-    'Play your last tile to win, or win a blocked game by holding the fewest pips.',
-  ],
-  scoring:
-    'Emptying your hand scores every opponent\u2019s remaining pips. A blocked game is won by the lowest pip total, scoring the difference.',
-  winCondition: 'Empty your hand, or hold the fewest pips when the game is blocked.',
-  tags: ['tiles', 'classic', 'family', 'turn-based', '2-4 players'],
-  featured: true,
-  howToPlay: {
-    objective: 'Be the first to play all of your tiles \u2014 or be left holding the fewest pips if nobody can move.',
-    steps: [
-      'You are dealt a hand of tiles that only you can see.',
-      'The highest double opens the chain.',
-      'On your turn, tap one of your highlighted tiles, then tap the end of the chain it fits.',
-      'If nothing fits, draw from the boneyard until it does, or until the boneyard is empty.',
-      'Play your final tile to win the hand.',
-    ],
-    controls: {
-      mobile: 'Tap a tile to select it, then tap the left or right end of the chain.',
-      desktop: 'Click a tile, then click the end you want. Legal ends are highlighted.',
-    },
-    scoring:
-      'Emptying your hand scores the total pips left in every opponent\u2019s hand. In a blocked game, the lowest pip total wins and scores the difference against the others.',
-    winCondition: 'Empty your hand, or hold the fewest pips when the game blocks. An exact tie is a draw.',
-    timeLimit: '30 seconds per turn. Time out and a legal tile is played for you if one exists.',
-    specialRules: [
-      'Tiles are rotated automatically \u2014 you never have to flip one yourself.',
-      'Drawing continues until you have a playable tile or the boneyard is empty.',
-      'You may only pass when you have no legal tile AND the boneyard is empty.',
-      'When everyone passes in a row the game is blocked and scored on pips.',
-    ],
-    playerCount: '2\u20134 players',
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
 
 export const MIRROR_GRID_METADATA = {
   id: 'mirror-grid',
@@ -2082,7 +1356,6 @@ export const MIRROR_GRID_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
 export const FUSE_METADATA = {
   id: 'fuse',
   name: 'Fuse',
@@ -2139,7 +1412,6 @@ export const FUSE_METADATA = {
   },
   version: '1.0.0',
 } satisfies GameMetadata;
-
 
 export const DOMINO_MIND_METADATA = {
   id: 'domino-mind',

@@ -106,8 +106,10 @@ function WordRaceGame({
             disabled={!typing}
             maxLength={24}
             autoComplete="off"
+            autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
+            enterKeyHint="send"
             placeholder={typing ? `A ${state?.category ?? 'word'}…` : 'Waiting for the round'}
             onChange={(event) => setValue(event.target.value)}
             className="input pl-10"

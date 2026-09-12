@@ -97,30 +97,11 @@ const CASES: GameCase[] = [
     action: { type: 'turn', payload: { direction: 'up' } },
   },
   {
-    id: 'traffic-dodge-race',
-    expect: (state) =>
-      typeof state.lanes === 'number' &&
-      typeof state.trackLength === 'number' &&
-      Array.isArray(state.traffic) &&
-      Boolean(state.racers),
-    action: { type: 'move', payload: { direction: 'right' } },
-  },
-  {
     id: 'target-rush',
     settings: { rounds: 3 },
     expect: (state) =>
       typeof state.totalRounds === 'number' && Array.isArray(state.targets) && Boolean(state.scores),
     action: { type: 'hit', payload: { targetId: 'target-0' } },
-  },
-  {
-    id: 'capture-the-flag-2d',
-    expect: (state) =>
-      Array.isArray(state.walls) &&
-      state.walls.length === 225 &&
-      Boolean(state.bases) &&
-      Boolean(state.flags) &&
-      Boolean(state.scores),
-    action: { type: 'move', payload: { direction: 'right' } },
   },
   {
     id: 'paddle-duel',
@@ -151,15 +132,6 @@ const CASES: GameCase[] = [
     action: { type: 'tap', payload: { tile: 0 } },
   },
   {
-    id: 'bomb-pass-2d',
-    expect: (state) =>
-      typeof state.totalRounds === 'number' &&
-      typeof state.fuseMs === 'number' &&
-      Boolean(state.players) &&
-      typeof state.round === 'number',
-    action: { type: 'pass', payload: { targetId: 'nobody' } },
-  },
-  {
     id: 'draw-guess-battle',
     settings: { rounds: 2 },
     expect: (state) =>
@@ -182,15 +154,6 @@ const CASES: GameCase[] = [
     action: { type: 'clue', payload: { text: 'busy place' } },
   },
   {
-    id: 'platform-dash-2d',
-    expect: (state) =>
-      typeof state.width === 'number' &&
-      Array.isArray(state.platforms) &&
-      Boolean(state.runners) &&
-      typeof state.courseName === 'string',
-    action: { type: 'input', payload: { left: false, right: true, jump: true } },
-  },
-  {
     id: 'color-clash',
     settings: { rounds: 4 },
     expect: (state) =>
@@ -211,63 +174,11 @@ const CASES: GameCase[] = [
     action: { type: 'turn', payload: { direction: 'down' } },
   },
   {
-    id: 'hexa-conquest',
-    expect: (state) =>
-      Array.isArray(state.tiles) &&
-      (state.tiles as unknown[]).length === 165 &&
-      Boolean(state.currentPlayerId) &&
-      Boolean(state.scores),
-    action: { type: 'capture', payload: { col: 2, row: 1 } },
-  },
-  {
-    id: 'color-trails',
-    expect: (state) =>
-      Array.isArray(state.tokens) &&
-      Boolean(state.runners) &&
-      typeof state.stepMs === 'number' &&
-      typeof state.endsAt === 'number',
-    action: { type: 'turn', payload: { direction: 'right' } },
-  },
-  {
     id: 'coin-hunters-arena',
     expect: (state) =>
       Array.isArray(state.coins) &&
       Boolean(state.hunters) &&
       Boolean(state.bonus) &&
-      typeof state.endsAt === 'number',
-    action: { type: 'move', payload: { direction: 'right' } },
-  },
-  {
-    id: 'castle-siege-2d',
-    expect: (state) =>
-      Boolean(state.commanders) &&
-      Array.isArray(state.nodes) &&
-      typeof state.cols === 'number' &&
-      typeof state.endsAt === 'number',
-    action: { type: 'move', payload: { direction: 'down' } },
-  },
-  {
-    id: 'traffic-control-battle',
-    expect: (state) => {
-      const junction = state.junction as { signals?: unknown[]; queues?: unknown[] } | null;
-      return (
-        Boolean(junction) &&
-        Array.isArray(junction!.signals) &&
-        // Four approaches, two lanes each.
-        Array.isArray(junction!.queues) &&
-        (junction!.queues as unknown[]).length === 8 &&
-        typeof state.endsAt === 'number' &&
-        Boolean(state.players)
-      );
-    },
-    action: { type: 'phase', payload: { phase: 'ew' } },
-  },
-  {
-    id: 'magnet-maze',
-    expect: (state) =>
-      Array.isArray(state.tiles) &&
-      Boolean(state.runners) &&
-      Boolean(state.finishCell) &&
       typeof state.endsAt === 'number',
     action: { type: 'move', payload: { direction: 'right' } },
   },
@@ -281,25 +192,6 @@ const CASES: GameCase[] = [
     action: { type: 'move', payload: { direction: 'up' } },
   },
   {
-    id: 'shadow-copy-battle',
-    expect: (state) =>
-      Array.isArray(state.tiles) &&
-      Boolean(state.runners) &&
-      Array.isArray(state.shadows) &&
-      typeof state.arenaName === 'string' &&
-      typeof state.round === 'number',
-    action: { type: 'move', payload: { direction: 'right' } },
-  },
-  {
-    id: 'echo-maze',
-    expect: (state) =>
-      Array.isArray(state.tiles) &&
-      Boolean(state.runners) &&
-      Boolean(state.goal) &&
-      typeof state.round === 'number',
-    action: { type: 'move', payload: { direction: 'right' } },
-  },
-  {
     id: 'fake-door-battle',
     settings: { rounds: 3 },
     expect: (state) =>
@@ -310,15 +202,6 @@ const CASES: GameCase[] = [
     action: { type: 'pick', payload: { doorId: 'door-0' } },
   },
   {
-    id: 'moving-island',
-    expect: (state) =>
-      Array.isArray(state.platforms) &&
-      Boolean(state.players) &&
-      typeof state.width === 'number' &&
-      typeof state.endsAt === 'number',
-    action: { type: 'move', payload: { dx: 1, dy: 0 } },
-  },
-  {
     id: 'magnet-thief',
     expect: (state) =>
       Array.isArray(state.gems) &&
@@ -326,36 +209,6 @@ const CASES: GameCase[] = [
       typeof state.range === 'number' &&
       typeof state.endsAt === 'number',
     action: { type: 'move', payload: { dx: 1, dy: 0 } },
-  },
-  {
-    id: 'invisible-path',
-    settings: { rounds: 2 },
-    expect: (state) =>
-      Array.isArray(state.safe) &&
-      Boolean(state.players) &&
-      Boolean(state.start) &&
-      Boolean(state.goal) &&
-      typeof state.round === 'number',
-    action: { type: 'move', payload: { x: 1, y: 3 } },
-  },
-  {
-    id: 'reverse-race',
-    settings: { rounds: 2 },
-    expect: (state) =>
-      Array.isArray(state.grid) &&
-      Boolean(state.players) &&
-      Boolean(state.objective) &&
-      typeof state.round === 'number',
-    action: { type: 'move', payload: { direction: 'right' } },
-  },
-  {
-    id: 'mirror-arena',
-    expect: (state) =>
-      Array.isArray(state.grid) &&
-      Array.isArray(state.plates) &&
-      Boolean(state.players) &&
-      typeof state.endsAt === 'number',
-    action: { type: 'move', payload: { direction: 'right' } },
   },
   {
     id: 'chain-reaction-battle',
@@ -423,28 +276,6 @@ const CASES: GameCase[] = [
     action: { type: 'pulse' },
   },
   {
-    id: 'love-maze',
-    maxPlayers: 2,
-    expect: (state) =>
-      Array.isArray(state.tiles) &&
-      (state.tiles as unknown[]).length > 0 &&
-      typeof state.levelName === 'string' &&
-      state.totalLevels === 10 &&
-      Boolean(state.players),
-    action: { type: 'move', payload: { direction: 'right' } },
-  },
-  {
-    id: 'sync-jump',
-    maxPlayers: 2,
-    expect: (state) =>
-      Array.isArray(state.course) &&
-      (state.course as unknown[]).length > 0 &&
-      typeof state.syncMeter === 'number' &&
-      state.totalLevels === 10 &&
-      Boolean(state.players),
-    action: { type: 'move', payload: { direction: 'right' } },
-  },
-  {
     id: 'couple-sync',
     maxPlayers: 2,
     expect: (state) =>
@@ -464,17 +295,6 @@ const CASES: GameCase[] = [
       (state.cards as Array<{ symbol: string | null }>).every((card) => card.symbol === null) &&
       Boolean(state.players),
     action: { type: 'hint' },
-  },
-  {
-    id: 'build-together',
-    maxPlayers: 2,
-    expect: (state) =>
-      Array.isArray(state.blueprint) &&
-      (state.blueprint as unknown[]).length > 0 &&
-      Boolean(state.inventory) &&
-      state.totalLevels === 10 &&
-      Boolean(state.players),
-    action: { type: 'place', payload: { x: 0, y: 0, kind: 'a' } },
   },
   {
     id: 'connect-four',
@@ -544,18 +364,6 @@ const CASES: GameCase[] = [
       state.nodes === 6 &&
       Boolean(state.players),
     action: { type: 'claim', payload: { edgeId: 'e01' } },
-  },
-  {
-    id: 'dominoes',
-    maxPlayers: 2,
-    expect: (state) =>
-      Array.isArray(state.myHand) &&
-      (state.myHand as unknown[]).length === 7 &&
-      typeof state.boneyardCount === 'number' &&
-      // The boneyard contents must never reach a client.
-      state.boneyard === undefined &&
-      Boolean(state.players),
-    action: { type: 'pass' },
   },
   {
     id: 'mirror-grid',

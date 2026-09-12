@@ -5,6 +5,7 @@ import type { ClientGameModule, GameComponentProps } from '../registry/types';
 import { GameHUD } from '../../components/game/GameHUD';
 import { Badge } from '../../components/ui/Badge';
 import { cn } from '../../utils/cn';
+import { useServerDeadline } from '../../hooks/useCountdown';
 
 export interface PatternPlayerPublic {
   progress: number;
@@ -62,13 +63,13 @@ function PatternMemoryGame({
   const [tapped, setTapped] = useState<number | null>(null);
   const previousFlashKey = useRef<string | null>(null);
   const previousEvent = useRef<string | null>(null);
-  const [, forceTick] = useState(0);
 
   const phase = state?.phase ?? 'idle';
   const me = myPlayerId ? state?.players?.[myPlayerId] : undefined;
   const rival = players.find((player) => player.id !== myPlayerId);
   const rivalView = rival ? state?.players?.[rival.id] : undefined;
   const myTurn = phase === 'input' && !!me && !me.locked;
+  const inputLeftMs = useServerDeadline(state?.inputEndsAt ?? null);
 
   // Flash animation: light up the tile for most of the show step.
   const flashKey = `${state?.shown ?? 0}:${state?.flash ?? 'x'}`;
@@ -114,13 +115,6 @@ function PatternMemoryGame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastEvent]);
 
-  // Input countdown ticker.
-  useEffect(() => {
-    if (phase !== 'input') return;
-    const id = window.setInterval(() => forceTick((tick) => tick + 1), 250);
-    return () => window.clearInterval(id);
-  }, [phase]);
-
   if (phase === 'idle' || !state) {
     return (
       <div className="space-y-4">
@@ -142,9 +136,7 @@ function PatternMemoryGame({
 
   const revealed = state.revealPattern ?? null;
   const inputLeft =
-    state.inputEndsAt !== null
-      ? Math.max(0, (state.inputEndsAt - state.serverTime) / 1000)
-      : null;
+    state.inputEndsAt !== null ? Math.max(0, inputLeftMs / 1000) : null;
   const myScore = me?.score ?? 0;
   const rivalScore = rivalView?.score ?? 0;
   const iWon = phase === 'finished' && myScore > rivalScore;

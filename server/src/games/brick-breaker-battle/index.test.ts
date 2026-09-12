@@ -3,15 +3,19 @@ import { createGameFixture, createTestPlatform, waitFor, type TestPlatform } fro
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
+  ballSpeedForLevel,
   brickBreakerGame,
   brickRect,
   computeBreakerRanking,
+  effectivePaddleWidth,
   finishBreakerOnTimeout,
   isBrickIntent,
   launchBall,
   parkBall,
   predictBallX,
+  rowsForLevel,
   stepBreaker,
+  totalBricksFor,
   type BrickArena,
   type BrickBreakerState,
 } from './index';
@@ -163,12 +167,12 @@ describe('Brick Breaker Battle', () => {
   it('destroys a hit brick, scores its row value and reflects the ball', async () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const playerId = players[0]!.id;
-    aimAtBrick(playerId, 21); // bottom row (row 3), value 10
+    aimAtBrick(playerId, 21); // bottom row (row 3), value 15
     const a = arena(playerId);
     stepBreaker(state(), 50, context().now(), context());
     expect(a.bricks[21]).toBe(false);
     expect(a.destroyed).toBe(1);
-    expect(a.score).toBe(10); // chain 1 → x1
+    expect(a.score).toBe(15); // chain 1 → x1
     expect(a.ball.vy).toBeGreaterThan(0); // reflected downward
     expect(state().lastEvent).toBe(`brick:${playerId}`);
   });
@@ -179,15 +183,15 @@ describe('Brick Breaker Battle', () => {
     const a = arena(playerId);
     a.launchAt = null;
     a.chain = 1; // one brick already broken without a save
-    aimAtBrick(playerId, 22); // bottom row, value 10 → x2
+    aimAtBrick(playerId, 22); // bottom row, value 15 → x2
     stepBreaker(state(), 50, context().now(), context());
-    expect(a.score).toBe(20);
+    expect(a.score).toBe(30);
     expect(a.chain).toBe(2);
 
     a.chain = 5; // deep chain → capped x4
-    aimAtBrick(playerId, 23); // bottom row, value 10 → x4
+    aimAtBrick(playerId, 23); // bottom row, value 15 → x4
     stepBreaker(state(), 50, context().now(), context());
-    expect(a.score).toBe(20 + 40);
+    expect(a.score).toBe(30 + 60);
   });
 
   it('a paddle save reflects the ball and resets the chain', async () => {
@@ -228,7 +232,7 @@ describe('Brick Breaker Battle', () => {
     expect(state().lastEvent).toBe(`out:${playerId}`);
   });
 
-  it('clearing the wall banks the bonus and finishes the match when everyone is done', async () => {
+  it('clearing the wall levels up: bonus, extra life, bigger wall; match ends when everyone is done', async () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const [aId, bId] = players.map((player) => player.id);
     const a = arena(aId);
@@ -242,11 +246,27 @@ describe('Brick Breaker Battle', () => {
     const rect = brickRect(27);
     a.ball = { x: rect.x + rect.w / 2, y: rect.y + rect.h + 2, vx: 0, vy: -40 };
     stepBreaker(state(), 50, context().now(), context());
-    expect(a.score).toBe(100 + 10); // clear bonus + last brick (chain 1)
-    expect(a.done).toBe(true);
+    expect(a.score).toBe(100 + 15); // clear bonus (level 1) + last brick (chain 1)
+    expect(a.done).toBe(false); // level 2 spawns instead of ending the run
+    expect(a.level).toBe(2);
+    expect(a.levelsCleared).toBe(1);
+    expect(a.rows).toBe(5);
+    expect(a.bricks).toHaveLength(35); // 5 rows, all fresh
+    expect(a.bricks.every(Boolean)).toBe(true);
+    expect(a.lives).toBe(4); // +1 life on level up
+    expect(a.launchAt).not.toBeNull(); // ball re-parked
+    expect(state().lastEvent).toBe(`level:${aId}:2`);
 
     // Rival still running → match continues.
     expect(state().phase).toBe('playing');
+
+    // Player A runs out of lives on the bigger wall.
+    a.lives = 1;
+    a.launchAt = null;
+    a.ball = { x: 80, y: 70, vx: 0, vy: 60 };
+    a.paddleX = 20;
+    stepBreaker(state(), 50, context().now(), context());
+    expect(a.done).toBe(true);
 
     // Rival runs out of lives → both done → finished.
     b.lives = 1;
@@ -258,9 +278,109 @@ describe('Brick Breaker Battle', () => {
     expect(state().finishReason).toBe('completed');
 
     const draft = brickBreakerGame.getResult(state(), context());
-    expect(draft.winners).toEqual([aId]); // 110 > 0
+    expect(draft.winners).toEqual([aId]); // 115 > 0
     expect(draft.rankings[0]!.stats.bricks).toBe(28);
     expect(draft.rankings[0]!.stats.cleared).toBe(1);
+  });
+
+  it('difficulty scales with the level: faster launches, taller walls', () => {
+    expect(ballSpeedForLevel(1)).toBe(38);
+    expect(ballSpeedForLevel(2)).toBe(42);
+    expect(ballSpeedForLevel(3)).toBe(46);
+    expect(ballSpeedForLevel(99)).toBe(46); // capped
+    expect(rowsForLevel(1)).toBe(4);
+    expect(rowsForLevel(2)).toBe(5);
+    expect(rowsForLevel(3)).toBe(6);
+    expect(totalBricksFor(4)).toBe(28);
+    expect(totalBricksFor(5)).toBe(35);
+    expect(totalBricksFor(6)).toBe(42);
+  });
+
+  it('power-ups drop from broken bricks and are caught with the paddle', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const playerId = players[0]!.id;
+    const a = arena(playerId);
+
+    // Rigged PRNG: drop roll passes, kind roll selects "wide".
+    const queue = [0.01, 0.01];
+    const rigged = { ...context(), random: () => (queue.shift() ?? 1) as number };
+    aimAtBrick(playerId, 21);
+    stepBreaker(state(), 50, context().now(), rigged);
+    expect(a.bricks[21]).toBe(false);
+    expect(a.powerUps).toHaveLength(1);
+    expect(a.powerUps[0]!.kind).toBe('wide');
+
+    // Park the ball, park the paddle under the capsule and let it fall.
+    const capsule = a.powerUps[0]!;
+    parkBall(a, context().now());
+    a.paddleDir = 0;
+    a.paddleX = capsule.x;
+    for (let step = 0; step < 70; step += 1) {
+      stepBreaker(state(), 50, context().now(), context());
+      if (a.powerUps.length === 0) break;
+    }
+    expect(a.powerUps).toHaveLength(0); // caught
+    expect(a.wideUntil).toBeGreaterThan(context().now());
+    expect(effectivePaddleWidth(a, state().paddleWidth, context().now())).toBeCloseTo(
+      state().paddleWidth * 1.4,
+      5,
+    );
+    expect(state().lastEvent).toBe(`power:${playerId}:wide`);
+  });
+
+  it('life and points capsules apply their effects when caught', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const playerId = players[0]!.id;
+    const a = arena(playerId);
+
+    // Life capsule: drop passes, kind roll ≥ 0.75 → "life".
+    const lifeQueue = [0.01, 0.9];
+    aimAtBrick(playerId, 21);
+    stepBreaker(state(), 50, context().now(), { ...context(), random: () => (lifeQueue.shift() ?? 1) as number });
+    expect(a.powerUps[0]!.kind).toBe('life');
+    const lifeCapsule = a.powerUps[0]!;
+    parkBall(a, context().now());
+    a.paddleDir = 0;
+    a.paddleX = lifeCapsule.x;
+    for (let step = 0; step < 70; step += 1) {
+      stepBreaker(state(), 50, context().now(), context());
+      if (a.powerUps.length === 0) break;
+    }
+    expect(a.lives).toBe(4); // 3 + 1
+
+    // Points capsule: drop passes, kind roll 0.6 → "points".
+    const pointsQueue = [0.01, 0.6];
+    aimAtBrick(playerId, 22);
+    stepBreaker(state(), 50, context().now(), { ...context(), random: () => (pointsQueue.shift() ?? 1) as number });
+    expect(a.powerUps[0]!.kind).toBe('points');
+    const pointsCapsule = a.powerUps[0]!;
+    parkBall(a, context().now());
+    a.paddleDir = 0;
+    a.paddleX = pointsCapsule.x;
+    const scoreBefore = a.score;
+    for (let step = 0; step < 70; step += 1) {
+      stepBreaker(state(), 50, context().now(), context());
+      if (a.powerUps.length === 0) break;
+    }
+    expect(a.score).toBe(scoreBefore + 75);
+  });
+
+  it('a very fast ball cannot tunnel through the paddle (micro-stepped physics)', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const playerId = players[0]!.id;
+    const a = arena(playerId);
+    a.launchAt = null;
+    a.paddleX = 50;
+    a.paddleDir = 0;
+    // One 50ms step at this speed would travel ~9.5 units — straight past the
+    // paddle and out the floor if the simulation did not micro-step.
+    a.ball = { x: 50, y: 63.9, vx: 0, vy: 190 };
+    stepBreaker(state(), 50, context().now(), context());
+    expect(a.ball.vy).toBeLessThan(0); // saved, not missed
+    expect(a.ball.y).toBeLessThan(66);
+    expect(a.lives).toBe(3);
+    expect(a.chain).toBe(0); // save resets the combo
+    expect(state().lastEvent).toBe(`save:${playerId}`);
   });
 
   /* ---------------------------------------------------------------- */

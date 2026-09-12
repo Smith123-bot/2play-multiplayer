@@ -206,6 +206,29 @@ describe('Ludo', () => {
     expect(act(playerId, { type: 'move', payload: { tokenId: 'green-0' } }).accepted).toBe(false);
   });
 
+  it('numbers every move so clients can animate token paths without missing one', () => {
+    const [first, second] = players.map((player) => player.id);
+    expect(state().moveNumber).toBe(0);
+
+    setDice(first, 6);
+    act(first, { type: 'move', payload: { tokenId: state().legalMoves[0]!.tokenId } });
+    expect(state().moveNumber).toBe(1);
+    expect(state().lastMove).toMatchObject({ playerId: first, moveNumber: 1 });
+
+    // The counter is public and increments across seats.
+    setDice(second, 6);
+    act(second, { type: 'move', payload: { tokenId: state().legalMoves[0]!.tokenId } });
+    expect(state().moveNumber).toBe(2);
+    expect(state().lastMove).toMatchObject({ playerId: second, moveNumber: 2 });
+
+    const view = platform.gameManager.getPublicState(room, first) as {
+      moveNumber: number;
+      lastMove: { moveNumber: number; playerId: string } | null;
+    };
+    expect(view.moveNumber).toBe(2);
+    expect(view.lastMove).toMatchObject({ moveNumber: 2, playerId: second });
+  });
+
   it('rejects acting out of turn, in the wrong phase and after the match ends', () => {
     const [first, second] = players.map((player) => player.id);
     // Not your turn.

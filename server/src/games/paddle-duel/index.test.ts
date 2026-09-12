@@ -6,6 +6,10 @@ import {
   finishPaddleOnTimeout,
   launchServe,
   paddleDuelGame,
+  paddleSpeedFor,
+  PADDLE_SPEED_BASE,
+  PADDLE_SPEED_GAIN,
+  PADDLE_SPEED_MAX,
   predictBallY,
   resetPoint,
   scoreLimitFor,
@@ -174,6 +178,57 @@ describe('Paddle Duel', () => {
     expect(state().rallyHits).toBe(1);
     expect(state().paddles[players[0]!.id]!.rallies).toBe(1);
     expect(state().lastEvent).toBe('paddle');
+  });
+
+  it('a dead-centre paddle hit still leaves vertical motion (no flat ping-pong)', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const paddle = state().paddles[players[0]!.id]!; // left side
+    paddle.y = 30;
+    const ball = state().ball;
+    state().serveAt = null;
+    state().servingTo = null;
+    ball.x = 8;
+    ball.y = 30; // exactly paddle centre → rel = 0 → flat angle
+    ball.vx = -50;
+    ball.vy = 0;
+    stepDuel(state(), 50, context().now(), context());
+    const speed = Math.hypot(ball.vx, ball.vy);
+    expect(Math.abs(ball.vy)).toBeGreaterThanOrEqual(speed * 0.12 - 1e-9);
+    expect(speed).toBeCloseTo(53.5, 5); // 50 + 3.5 per hit
+    expect(ball.vx).toBeGreaterThan(0);
+  });
+
+  it('paddleSpeedFor scales with the ball and is capped', () => {
+    expect(paddleSpeedFor(0)).toBe(PADDLE_SPEED_BASE);
+    expect(paddleSpeedFor(40)).toBe(PADDLE_SPEED_BASE); // base ball speed → base paddle
+    expect(paddleSpeedFor(60)).toBeCloseTo(PADDLE_SPEED_BASE + 20 * PADDLE_SPEED_GAIN, 5);
+    expect(paddleSpeedFor(1000)).toBe(PADDLE_SPEED_MAX); // capped
+  });
+
+  it('paddles move faster while the ball is fast, and the public state says so', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const [leftId, rightId] = players.map((player) => player.id);
+    const ball = state().ball;
+    state().serveAt = null;
+    state().servingTo = null;
+    ball.x = 50;
+    ball.y = 30;
+    ball.vx = 48; // speed 60 → paddle speed 49
+    ball.vy = 36;
+
+    const left = state().paddles[leftId]!;
+    const right = state().paddles[rightId]!;
+    left.dir = 1;
+    right.dir = 1;
+    left.y = 30;
+    right.y = 30;
+    const expected = paddleSpeedFor(60) * 0.05; // one 50ms sub-step
+    stepDuel(state(), 50, context().now(), context());
+    expect(left.y).toBeCloseTo(30 + expected, 5);
+    expect(right.y).toBeCloseTo(30 + expected, 5);
+
+    const view = publicState() as { paddleSpeed?: number };
+    expect(view.paddleSpeed).toBeCloseTo(paddleSpeedFor(60), 5);
   });
 
   it('predictBallY folds wall reflections', () => {

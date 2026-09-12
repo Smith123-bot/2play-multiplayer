@@ -81,12 +81,26 @@ export interface BlastState {
   startedAt: number | null;
   endsAt: number | null;
   matchMs: number;
+  /** 0..2 — rises every WAVE_MS so the arena tightens as the match goes on. */
+  escalation: number;
   lastEvent: string | null;
   finishReason: GameFinishReason | null;
   pulseCounter: number;
   nextAIRequestAt: Record<string, number>;
   /** Rolling log the client animates (trimmed every tick). */
-  effects: Array<{ id: string; x: number; y: number; radius: number; ownerId: string; depth: number; at: number }>;
+  effects: Array<{
+    id: string;
+    x: number;
+    y: number;
+    radius: number;
+    ownerId: string;
+    depth: number;
+    at: number;
+    /** Points this detonation banked (after multiplier) — for score popups. */
+    gained: number;
+    /** Nodes consumed by this detonation. */
+    hits: number;
+  }>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -113,6 +127,31 @@ export const RICH_SCORE = 60;
 export const CHAIN_BONUS = 15;
 export const COMBO_STEP = 0.25;
 export const MAX_COMBO_MULTIPLIER = 4;
+/** Every WAVE_MS the arena escalates: +obstacles, slower energy respawn. */
+export const WAVE_MS = 60_000;
+export const WAVE_OBSTACLES = 2;
+export const RESPAWN_WAVE_PENALTY_MS = 2_000;
+export const MAX_ESCALATION = 2;
+/** Blast radius grows with the owner's live combo (+3% per step, capped). */
+export const COMBO_RADIUS_STEP = 0.03;
+export const COMBO_RADIUS_CAP_STEPS = 8;
+
+/** Radius for a pulse placed by a player with the given live combo. */
+export function pulseRadiusFor(combo: number): number {
+  const steps = Math.min(COMBO_RADIUS_CAP_STEPS, Math.max(0, combo));
+  return PULSE_RADIUS * (1 + steps * COMBO_RADIUS_STEP);
+}
+
+/** Escalation level for a point in time (0 before the first wave, capped at 2). */
+export function escalationFor(elapsedMs: number): number {
+  if (elapsedMs < WAVE_MS) return 0;
+  return Math.min(MAX_ESCALATION, Math.floor(elapsedMs / WAVE_MS));
+}
+
+/** Energy respawn delay grows with the escalation level. */
+export function energyRespawnMs(escalation: number): number {
+  return NODE_RESPAWN_MS + Math.min(MAX_ESCALATION, Math.max(0, escalation)) * RESPAWN_WAVE_PENALTY_MS;
+}
 
 const AI_INTERVAL: Record<AIDifficulty, number> = { easy: 1500, medium: 900, hard: 520 };
 
@@ -160,6 +199,32 @@ export function buildArena(random: () => number): ArenaNode[] {
   place('rich', 8);
   place('obstacle', 14);
   return nodes;
+}
+
+/**
+ * Adds `count` new obstacles on free cells (never on a player, an existing
+ * node or a pending pulse). Deterministic via the platform PRNG. Returns the
+ * number actually placed.
+ */
+export function addWaveObstacles(state: BlastState, count: number, random: () => number): number {
+  const taken = new Set<string>();
+  for (const node of state.nodes) taken.add(`${node.x}:${node.y}`);
+  for (const pulse of state.pulses) taken.add(`${pulse.x}:${pulse.y}`);
+  for (const player of Object.values(state.players)) taken.add(`${player.x}:${player.y}`);
+
+  let placed = 0;
+  let guard = 0;
+  while (placed < count && guard < count * 200) {
+    guard += 1;
+    const x = 1 + Math.floor(random() * (ARENA_COLS - 2));
+    const y = 1 + Math.floor(random() * (ARENA_ROWS - 2));
+    const key = `${x}:${y}`;
+    if (taken.has(key)) continue;
+    taken.add(key);
+    state.nodes.push({ id: `n${state.nodes.length}`, x, y, kind: 'obstacle', consumed: false, respawnAt: 0 });
+    placed += 1;
+  }
+  return placed;
 }
 
 function makePlayer(index: number): BlastPlayer {
@@ -218,13 +283,14 @@ export function detonate(state: BlastState, pulse: Pulse, ctx: GameContext): voi
     if (distance(node.x, node.y, pulse.x, pulse.y) > pulse.radius) continue;
 
     node.consumed = true;
-    node.respawnAt = now + NODE_RESPAWN_MS;
+    node.respawnAt = now + energyRespawnMs(state.escalation);
     hits += 1;
     gained += node.kind === 'rich' ? RICH_SCORE : ENERGY_SCORE;
     // Rich nodes propagate the chain.
     if (node.kind === 'rich' && pulse.depth < MAX_CHAIN_DEPTH) chained.push(node);
   }
 
+  let banked = 0;
   if (owner && hits > 0) {
     // Chain depth bonus.
     gained += pulse.depth * CHAIN_BONUS * hits;
@@ -235,7 +301,8 @@ export function detonate(state: BlastState, pulse: Pulse, ctx: GameContext): voi
     owner.bestCombo = Math.max(owner.bestCombo, owner.combo);
     const multiplier = Math.min(MAX_COMBO_MULTIPLIER, 1 + (owner.combo - 1) * COMBO_STEP);
 
-    owner.score += Math.round(gained * multiplier);
+    banked = Math.round(gained * multiplier);
+    owner.score += banked;
     owner.hits += hits;
     if (pulse.depth > 0) owner.chains += 1;
     state.lastEvent = pulse.depth > 0 ? `chain:${pulse.ownerId}:${pulse.depth}` : `blast:${pulse.ownerId}`;
@@ -254,6 +321,8 @@ export function detonate(state: BlastState, pulse: Pulse, ctx: GameContext): voi
     ownerId: pulse.ownerId,
     depth: pulse.depth,
     at: now,
+    gained: banked,
+    hits,
   });
 
   // Queue the chain reactions.
@@ -305,6 +374,7 @@ export const blackBlastGame: GameModule<BlastState> = {
       startedAt: null,
       endsAt: null,
       matchMs: MATCH_MS,
+      escalation: 0,
       lastEvent: null,
       finishReason: null,
       pulseCounter: 0,
@@ -361,6 +431,7 @@ export const blackBlastGame: GameModule<BlastState> = {
     state.phase = 'playing';
     state.startedAt = ctx.now();
     state.endsAt = ctx.now() + state.matchMs;
+    state.escalation = 0;
     state.finishReason = null;
     state.lastEvent = 'start';
     state.nextAIRequestAt = {};
@@ -431,7 +502,7 @@ export const blackBlastGame: GameModule<BlastState> = {
       x: player.x,
       y: player.y,
       detonateAt: now + FUSE_MS,
-      radius: PULSE_RADIUS,
+      radius: pulseRadiusFor(player.combo),
       depth: 0,
       detonated: false,
     });
@@ -440,11 +511,24 @@ export const blackBlastGame: GameModule<BlastState> = {
     return actionAccepted();
   },
 
-  /** The simulation heartbeat: detonations, respawns, AI and combo decay. */
+  /** The simulation heartbeat: detonations, respawns, waves, AI and combo decay. */
   update(state, _deltaTimeMs, ctx): void {
     if (state.phase !== 'playing') return;
     const now = ctx.now();
     let changed = false;
+
+    // Escalation waves: every WAVE_MS the arena grows tighter.
+    if (state.startedAt !== null) {
+      const level = escalationFor(now - state.startedAt);
+      if (level > state.escalation) {
+        state.escalation = level;
+        const placed = addWaveObstacles(state, WAVE_OBSTACLES, ctx.random);
+        if (placed > 0) {
+          state.lastEvent = `wave:${level}`;
+          changed = true;
+        }
+      }
+    }
 
     // Detonate every pulse whose fuse has run out.
     const due = state.pulses.filter((pulse) => !pulse.detonated && pulse.detonateAt <= now);
@@ -568,6 +652,7 @@ export const blackBlastGame: GameModule<BlastState> = {
       players: Object.fromEntries(seats.map((id, index) => [id, makePlayer(index)])),
       startedAt: null,
       endsAt: null,
+      escalation: 0,
       lastEvent: null,
       finishReason: null,
       nextAIRequestAt: {},
@@ -596,6 +681,7 @@ export const blackBlastGame: GameModule<BlastState> = {
       rows: state.rows,
       endsAt: state.endsAt,
       serverTime: now,
+      escalation: state.escalation,
       lastEvent: state.lastEvent,
       finishReason: state.finishReason,
       nodes: state.nodes
@@ -650,7 +736,7 @@ export const blackBlastGame: GameModule<BlastState> = {
       (node) =>
         !node.consumed &&
         node.kind !== 'obstacle' &&
-        distance(node.x, node.y, bot.x, bot.y) <= PULSE_RADIUS,
+        distance(node.x, node.y, bot.x, bot.y) <= pulseRadiusFor(bot.combo),
     );
     const richHere = wouldHit.some((node) => node.kind === 'rich');
     const threshold = difficulty === 'hard' ? 2 : difficulty === 'medium' ? 2 : 1;

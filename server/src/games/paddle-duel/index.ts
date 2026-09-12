@@ -74,11 +74,17 @@ const PADDLE_INSET = 3;
 const BALL_R = 1;
 const STEP_MS = 50;
 const MAX_SUBSTEPS = 6;
-const PADDLE_SPEED = 42; // units per second
+const PADDLE_SPEED = 42; // units per second (base)
+/** Paddles keep pace as the ball accelerates, so late rallies stay winnable. */
+export const PADDLE_SPEED_BASE = PADDLE_SPEED;
+export const PADDLE_SPEED_MAX = 56;
+export const PADDLE_SPEED_GAIN = 0.35;
 const BALL_SPEED_START = 40;
 const BALL_SPEED_INC = 3.5;
 const BALL_SPEED_MAX = 78;
 const MAX_BOUNCE_DEG = 55;
+/** A paddle bounce always leaves some vertical component — flat rallies stall. */
+export const MIN_VY_RATIO = 0.12;
 const SERVE_DELAY_MS = 1200;
 const SERVE_ANGLE_MAX_DEG = 30;
 const MATCH_MS = 3 * 60 * 1000;
@@ -87,6 +93,12 @@ const SCORE_LIMIT_MIN = 3;
 const SCORE_LIMIT_MAX = 15;
 const AI_REQUEST_INTERVAL_MS = 180;
 const MISS_MARGIN = 4; // ball must fully exit before a point is called
+
+/** Paddle speed for the current ball speed: base + a fraction of the gains. */
+export function paddleSpeedFor(ballSpeed: number): number {
+  const gained = Math.max(0, ballSpeed - BALL_SPEED_START);
+  return Math.min(PADDLE_SPEED_MAX, PADDLE_SPEED_BASE + gained * PADDLE_SPEED_GAIN);
+}
 
 export function isPaddleIntent(value: unknown): value is PaddleIntent {
   return value === 'up' || value === 'down' || value === 'stop';
@@ -176,8 +188,18 @@ function bounceOffPaddle(state: PaddleDuelState, paddle: PaddlePlayerState, ctx:
   const rel = Math.min(1, Math.max(-1, (state.ball.y - paddle.y) / half));
   const angle = rel * (MAX_BOUNCE_DEG * Math.PI) / 180;
   const dir = paddle.side === 'left' ? 1 : -1;
-  state.ball.vx = Math.cos(angle) * speed * dir;
-  state.ball.vy = Math.sin(angle) * speed;
+  let vx = Math.cos(angle) * speed * dir;
+  let vy = Math.sin(angle) * speed;
+  // A dead-centre hit must not produce a perfectly flat trajectory: the ball
+  // would ping-pong horizontally forever. Guarantee a minimum vertical share.
+  const minVy = speed * MIN_VY_RATIO;
+  if (Math.abs(vy) < minVy) {
+    vy = (vy < 0 || (vy === 0 && ctx.random() < 0.5) ? -1 : 1) * minVy;
+    const vxSquared = Math.max(0, speed * speed - vy * vy);
+    vx = (vx < 0 ? -1 : 1) * Math.sqrt(vxSquared);
+  }
+  state.ball.vx = vx;
+  state.ball.vy = vy;
   state.ball.x = paddleFace(paddle.side) + state.ballRadius * dir + dir * 0.01;
   state.rallyHits += 1;
   paddle.rallies += 1;
@@ -198,11 +220,15 @@ export function stepDuel(state: PaddleDuelState, deltaTimeMs: number, now: numbe
     guard += 1;
     const dt = state.stepMs / 1000;
 
-    // Paddles chase their intent, clamped inside the arena.
+    // Paddles chase their intent, clamped inside the arena. They speed up as
+    // the ball does so long rallies remain playable.
+    const liveBallSpeed =
+      state.serveAt !== null ? BALL_SPEED_START : Math.hypot(state.ball.vx, state.ball.vy);
+    const paddleSpeed = paddleSpeedFor(liveBallSpeed);
     for (const paddle of Object.values(state.paddles)) {
       paddle.y = Math.min(
         state.height - state.paddleHeight / 2,
-        Math.max(state.paddleHeight / 2, paddle.y + paddle.dir * PADDLE_SPEED * dt),
+        Math.max(state.paddleHeight / 2, paddle.y + paddle.dir * paddleSpeed * dt),
       );
     }
 
@@ -558,12 +584,15 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
   },
 
   getPublicState(state, _viewerId, ctx) {
+    const liveBallSpeed =
+      state.serveAt !== null ? BALL_SPEED_START : Math.hypot(state.ball.vx, state.ball.vy);
     return {
       phase: state.phase,
       width: state.width,
       height: state.height,
       paddleWidth: state.paddleWidth,
       paddleHeight: state.paddleHeight,
+      paddleSpeed: paddleSpeedFor(liveBallSpeed),
       ballRadius: state.ballRadius,
       ball: { ...state.ball },
       serveAt: state.serveAt,

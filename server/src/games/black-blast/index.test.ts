@@ -5,6 +5,7 @@ import type { GameContext, GamePlayerView } from '../GameModule';
 import {
   ARENA_COLS,
   ARENA_ROWS,
+  applyWavePattern,
   blackBlastGame,
   buildArena,
   CHAIN_BONUS,
@@ -18,10 +19,13 @@ import {
   isBlocked,
   MAX_COMBO_MULTIPLIER,
   NODE_RESPAWN_MS,
+  OVERCHARGE_ENERGY_COST,
   PULSE_COOLDOWN_MS,
   PULSE_ENERGY_COST,
   PULSE_RADIUS,
   RICH_SCORE,
+  WAVE_CLEAR_BONUS,
+  waveTargetFor,
   type BlastState,
 } from './index';
 import type { Room } from '../../rooms/Room';
@@ -537,13 +541,87 @@ describe('Black Blast', () => {
     addNode('n1', 5, 5, 'energy');
     addNode('n2', 6, 5, 'energy');
     addNode('n3', 5, 6, 'rich');
+    addNode('n4', 4, 5, 'energy');
     const action = blackBlastGame.getAIMove?.(playerId, 'hard', state(), context());
     expect(action?.type).toBe('pulse');
+    expect(action?.payload?.mode).toBe('overcharge');
   });
 
   it('AI stops once the match is over', () => {
     const playerId = players[0]!.id;
     finishBlast(state(), context(), 'timeout');
     expect(blackBlastGame.getAIMove?.(playerId, 'hard', state(), context())).toBeNull();
+  });
+
+  it('makes overcharge a validated high-cost, high-radius strategic action', () => {
+    const playerId = players[0]!.id;
+    const body = state().players[playerId]!;
+    body.energy = OVERCHARGE_ENERGY_COST - 1;
+    expect(act(playerId, { type: 'pulse', payload: { mode: 'overcharge' } }).accepted).toBe(false);
+    body.energy = 100;
+    expect(act(playerId, { type: 'pulse', payload: { mode: 'overcharge' } }).accepted).toBe(true);
+    expect(body.energy).toBe(100 - OVERCHARGE_ENERGY_COST);
+    expect(state().pulses[0]).toMatchObject({ mode: 'overcharge' });
+    expect(state().pulses[0]!.radius).toBeGreaterThan(PULSE_RADIUS);
+    expect(
+      blackBlastGame.validateAction(
+        playerId,
+        { type: 'pulse', payload: { mode: 'nuclear' } },
+        state(),
+        context(),
+      ).valid,
+    ).toBe(false);
+  });
+
+  it('reshapes later waves deterministically and awards each target once', () => {
+    const playerId = players[0]!.id;
+    clearArena();
+    for (let index = 0; index < 20; index += 1)
+      addNode(`wave-${index}`, index % 10, Math.floor(index / 10) + 2);
+    state().wave = 5;
+    applyWavePattern(state(), () => 0.37);
+    expect(state().waveTheme).toBe('pressure');
+    expect(state().waveTarget).toBe(waveTargetFor(5));
+    expect(state().nodes.filter((node) => node.kind === 'rich')).toHaveLength(2);
+    expect(state().nodes.filter((node) => node.kind === 'obstacle')).toHaveLength(3);
+
+    const body = state().players[playerId]!;
+    body.x = 4;
+    body.y = 2;
+    body.waveHits = state().waveTarget - 1;
+    const before = body.score;
+    detonate(
+      state(),
+      {
+        id: 'target',
+        ownerId: playerId,
+        x: 4,
+        y: 2,
+        detonateAt: 0,
+        radius: 1,
+        depth: 0,
+        detonated: false,
+      },
+      context(),
+    );
+    expect(body.wavesCleared).toBe(1);
+    expect(body.score).toBeGreaterThanOrEqual(before + WAVE_CLEAR_BONUS * 5);
+    const scoreAfterClear = body.score;
+    detonate(
+      state(),
+      {
+        id: 'again',
+        ownerId: playerId,
+        x: 4,
+        y: 2,
+        detonateAt: 0,
+        radius: 1,
+        depth: 0,
+        detonated: false,
+      },
+      context(),
+    );
+    expect(body.wavesCleared).toBe(1);
+    expect(body.score - scoreAfterClear).toBeLessThan(WAVE_CLEAR_BONUS * 5);
   });
 });

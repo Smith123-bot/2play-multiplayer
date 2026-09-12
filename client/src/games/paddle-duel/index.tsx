@@ -10,6 +10,7 @@ export interface PaddlePublic {
   side: 'left' | 'right';
   y: number;
   dir: number;
+  latestInputSeq: number;
   score: number;
   rallies: number;
   bestRally: number;
@@ -31,6 +32,13 @@ export interface PaddleDuelPublicState {
   rallyHits: number;
   pointNumber: number;
   lastHit: { x: number; y: number; at: number } | null;
+  lastImpact: {
+    id: number;
+    kind: 'paddle' | 'wall' | 'point';
+    x: number;
+    y: number;
+    at: number;
+  } | null;
   scoreLimit: number;
   startedAt: number | null;
   endsAt: number | null;
@@ -53,6 +61,7 @@ function PaddleDuelGame({
   const clockOffset = useRef(0); // serverTime - Date.now()
   const lastIntent = useRef(0);
   const activeIntent = useRef<'up' | 'down' | 'stop' | null>(null);
+  const inputSequence = useRef(0);
   const previousEvent = useRef<string | null>(null);
   const previousScore = useRef(0);
   const [, setFrame] = useState(0);
@@ -67,7 +76,8 @@ function PaddleDuelGame({
   // snapshot using the server clock. Visual only — the server stays the truth.
   useEffect(() => {
     if (state) clockOffset.current = state.serverTime - Date.now();
-  }, [state]);
+    if (me) inputSequence.current = Math.max(inputSequence.current, me.latestInputSeq);
+  }, [state, me]);
 
   const playing = phase === 'playing';
   useEffect(() => {
@@ -89,11 +99,20 @@ function PaddleDuelGame({
     (direction: 'up' | 'down' | 'stop') => {
       if (!canPlay || activeIntent.current === direction) return;
       activeIntent.current = direction;
-      sendAction({ type: 'move', payload: { direction } } satisfies GameAction);
+      inputSequence.current += 1;
+      sendAction({
+        type: 'move',
+        payload: { direction, sequence: inputSequence.current },
+      } satisfies GameAction);
       vibrate('buttonPress');
     },
     [canPlay, sendAction, vibrate],
   );
+
+  useEffect(() => {
+    // A point reset or remount must never leave a deduplicated held intent stuck.
+    activeIntent.current = null;
+  }, [state?.pointNumber, phase]);
 
   // Keyboard: W/S + arrows (never while typing in chat/inputs).
   useEffect(() => {
@@ -132,9 +151,12 @@ function PaddleDuelGame({
 
   // Event feedback.
   const lastEvent = state?.lastEvent ?? null;
+  const eventIdentity = lastEvent
+    ? `${lastEvent}:${state?.lastImpact?.id ?? state?.pointNumber ?? 0}`
+    : null;
   useEffect(() => {
-    if (lastEvent === previousEvent.current) return;
-    previousEvent.current = lastEvent;
+    if (eventIdentity === previousEvent.current) return;
+    previousEvent.current = eventIdentity;
     if (!lastEvent) return;
     if (lastEvent === 'paddle') play('click');
     else if (lastEvent === 'wall') play('notification');
@@ -191,20 +213,34 @@ function PaddleDuelGame({
     ? Math.max(0, (Date.now() + clockOffset.current - state.serverTime) / 1000)
     : 0;
   const clampY = (y: number) => Math.min(height - ph / 2, Math.max(ph / 2, y));
+  const reflectY = (value: number) => {
+    const low = br;
+    const span = height - br - low;
+    let folded = (((value - low) % (2 * span)) + 2 * span) % (2 * span);
+    if (folded > span) folded = 2 * span - folded;
+    return folded + low;
+  };
   const myY = me ? clampY(me.y + me.dir * PADDLE_SPEED * elapsedS) : height / 2;
   const rivalY = rivalPaddle
     ? clampY(rivalPaddle.y + rivalPaddle.dir * PADDLE_SPEED * elapsedS)
     : height / 2;
   const frozen = state.serveAt !== null;
   const bx = frozen ? width / 2 : Math.min(width + 4, Math.max(-4, ball.x + ball.vx * elapsedS));
-  const by = frozen ? height / 2 : Math.min(height, Math.max(0, ball.y + ball.vy * elapsedS));
+  const by = frozen ? height / 2 : reflectY(ball.y + ball.vy * elapsedS);
   const trail = frozen
     ? []
     : Array.from({ length: 6 }, (_entry, index) => {
         const age = (index + 1) * 0.018;
         return { x: bx - ball.vx * age, y: by - ball.vy * age, opacity: (6 - index) / 18 };
       });
-  const hitVisible = state.lastHit && Date.now() + clockOffset.current - state.lastHit.at < 320;
+  const prediction = frozen
+    ? []
+    : Array.from({ length: 9 }, (_entry, index) => {
+        const future = (index + 1) * 0.075;
+        return { x: bx + ball.vx * future, y: reflectY(by + ball.vy * future) };
+      }).filter((point) => point.x >= 0 && point.x <= width);
+  const impactVisible =
+    state.lastImpact && Date.now() + clockOffset.current - state.lastImpact.at < 460;
 
   const serveCountdown =
     frozen && state.serveAt !== null
@@ -281,7 +317,10 @@ function PaddleDuelGame({
           aria-label="Paddle duel arena"
           className="relative w-full touch-none overflow-hidden rounded-2xl border border-white/10 bg-black/60 select-none"
           style={{ aspectRatio: `${width} / ${height}` }}
-          onPointerDown={(event) => onTouch(event.clientY, event.currentTarget)}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            onTouch(event.clientY, event.currentTarget);
+          }}
           onPointerMove={(event) => {
             if (event.buttons > 0 || event.pointerType === 'touch')
               onTouch(event.clientY, event.currentTarget);
@@ -324,6 +363,22 @@ function PaddleDuelGame({
               aria-label="Rival paddle"
             />
           ) : null}
+          {/* A short reflected trajectory preview communicates the authoritative velocity
+              without claiming future paddle collisions. */}
+          {prediction.map((dot, index) => (
+            <div
+              key={`prediction-${index}`}
+              className="pointer-events-none absolute rounded-full bg-cyan-300"
+              style={{
+                width: pct(br * 0.55, width),
+                height: pct(br * 0.55, height),
+                left: pct(dot.x - br * 0.275, width),
+                top: pct(dot.y - br * 0.275, height),
+                opacity: 0.32 - index * 0.025,
+              }}
+              aria-hidden
+            />
+          ))}
           {/* Ball trail uses visual extrapolation only; physics remains server-owned. */}
           {trail.map((dot, index) => (
             <div
@@ -339,14 +394,28 @@ function PaddleDuelGame({
               aria-hidden
             />
           ))}
-          {hitVisible && state.lastHit ? (
+          {impactVisible && state.lastImpact ? (
             <div
-              className="pointer-events-none absolute animate-ping rounded-full border-2 border-amber-300"
+              key={state.lastImpact.id}
+              className={cn(
+                'pointer-events-none absolute animate-ping rounded-full border-2',
+                state.lastImpact.kind === 'point'
+                  ? 'border-rose-400'
+                  : state.lastImpact.kind === 'wall'
+                    ? 'border-cyan-300'
+                    : 'border-amber-300',
+              )}
               style={{
-                width: pct(br * 5, width),
-                height: pct(br * 5, height),
-                left: pct(state.lastHit.x - br * 2.5, width),
-                top: pct(state.lastHit.y - br * 2.5, height),
+                width: pct(br * (state.lastImpact.kind === 'point' ? 9 : 5), width),
+                height: pct(br * (state.lastImpact.kind === 'point' ? 9 : 5), height),
+                left: pct(
+                  state.lastImpact.x - br * (state.lastImpact.kind === 'point' ? 4.5 : 2.5),
+                  width,
+                ),
+                top: pct(
+                  state.lastImpact.y - br * (state.lastImpact.kind === 'point' ? 4.5 : 2.5),
+                  height,
+                ),
               }}
               aria-hidden
             />
@@ -409,7 +478,8 @@ function PaddleDuelGame({
         </button>
       </div>
       <p className="text-center text-xs text-slate-500">
-        W/S, arrows, drag on the arena or hold the buttons — the server simulates every bounce.
+        W/S, arrows, drag or hold. Move through contact to add controlled spin; dots preview
+        wall-reflected flight. Every input and bounce is server validated.
       </p>
     </div>
   );

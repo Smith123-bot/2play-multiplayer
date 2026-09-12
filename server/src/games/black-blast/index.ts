@@ -29,6 +29,8 @@ import { actionAccepted, actionRejected } from '../GameModule';
 /* ------------------------------------------------------------------ */
 
 export type BlastPhase = 'idle' | 'playing' | 'finished';
+export type BlastMode = 'standard' | 'overcharge';
+export type WaveTheme = 'calm' | 'surge' | 'maze' | 'cascade' | 'pressure' | 'finale';
 export type NodeKind = 'energy' | 'rich' | 'obstacle';
 
 export interface ArenaNode {
@@ -53,6 +55,7 @@ export interface Pulse {
   /** 0 for a player-placed pulse, 1+ for chain-triggered pulses. */
   depth: number;
   detonated: boolean;
+  mode?: BlastMode;
 }
 
 export interface BlastPlayer {
@@ -70,6 +73,9 @@ export interface BlastPlayer {
   /** Server-owned charge spent on pulses and restored over time / by hits. */
   energy: number;
   maxEnergy: number;
+  waveHits: number;
+  wavesCleared: number;
+  lastClearedWave: number;
   disconnected: boolean;
   left: boolean;
 }
@@ -93,6 +99,8 @@ export interface BlastState {
   maxWave: number;
   waveEndsAt: number | null;
   waveMs: number;
+  waveTarget: number;
+  waveTheme: WaveTheme;
   /** Rolling log the client animates (trimmed every tick). */
   effects: Array<{
     id: string;
@@ -102,6 +110,7 @@ export interface BlastState {
     ownerId: string;
     depth: number;
     at: number;
+    mode: BlastMode;
   }>;
 }
 
@@ -128,6 +137,11 @@ export const ENERGY_REGEN_PER_SECOND = 12;
 export const ENERGY_PER_HIT = 4;
 export const WAVE_MS = 30_000;
 export const MAX_WAVE = 6;
+export const OVERCHARGE_ENERGY_COST = 52;
+export const OVERCHARGE_RADIUS = 3.55;
+export const OVERCHARGE_COOLDOWN_MS = 2_100;
+export const WAVE_CLEAR_BONUS = 120;
+export const WAVE_THEMES: WaveTheme[] = ['calm', 'surge', 'maze', 'cascade', 'pressure', 'finale'];
 
 export const ENERGY_SCORE = 20;
 export const RICH_SCORE = 60;
@@ -198,6 +212,9 @@ function makePlayer(index: number): BlastPlayer {
     comboUntil: 0,
     energy: MAX_ENERGY,
     maxEnergy: MAX_ENERGY,
+    waveHits: 0,
+    wavesCleared: 0,
+    lastClearedWave: 0,
     disconnected: false,
     left: false,
   };
@@ -236,6 +253,8 @@ export function detonate(state: BlastState, pulse: Pulse, ctx: GameContext): voi
   let gained = 0;
   let hits = 0;
   const chained: ArenaNode[] = [];
+  let clearedWave = false;
+  const mode = pulse.mode ?? 'standard';
 
   for (const node of state.nodes) {
     if (node.consumed || node.kind === 'obstacle') continue;
@@ -246,12 +265,18 @@ export function detonate(state: BlastState, pulse: Pulse, ctx: GameContext): voi
     hits += 1;
     gained += node.kind === 'rich' ? RICH_SCORE : ENERGY_SCORE;
     // Rich nodes propagate the chain.
-    if (node.kind === 'rich' && pulse.depth < MAX_CHAIN_DEPTH) chained.push(node);
+    if (
+      pulse.depth < MAX_CHAIN_DEPTH &&
+      (node.kind === 'rich' || (mode === 'overcharge' && chained.length < 2))
+    ) {
+      chained.push(node);
+    }
   }
 
   if (owner && hits > 0) {
     // Chain depth bonus.
     gained += pulse.depth * CHAIN_BONUS * hits;
+    if (mode === 'overcharge') gained = Math.round(gained * 1.35);
 
     // Combo builds while the player keeps landing pulses in the window.
     owner.combo = now <= owner.comboUntil ? owner.combo + 1 : 1;
@@ -262,9 +287,19 @@ export function detonate(state: BlastState, pulse: Pulse, ctx: GameContext): voi
     owner.score += Math.round(gained * multiplier);
     owner.energy = Math.min(owner.maxEnergy, owner.energy + hits * ENERGY_PER_HIT);
     owner.hits += hits;
+    owner.waveHits += hits;
+    if (owner.waveHits >= state.waveTarget && owner.lastClearedWave < state.wave) {
+      owner.lastClearedWave = state.wave;
+      owner.wavesCleared += 1;
+      owner.score += WAVE_CLEAR_BONUS * state.wave;
+      state.lastEvent = `wave-clear:${pulse.ownerId}:${state.wave}`;
+      clearedWave = true;
+    }
     if (pulse.depth > 0) owner.chains += 1;
-    state.lastEvent =
-      pulse.depth > 0 ? `chain:${pulse.ownerId}:${pulse.depth}` : `blast:${pulse.ownerId}`;
+    if (!clearedWave) {
+      state.lastEvent =
+        pulse.depth > 0 ? `chain:${pulse.ownerId}:${pulse.depth}` : `blast:${pulse.ownerId}`;
+    }
   } else if (owner) {
     // A pulse that hits nothing breaks the combo.
     owner.combo = 0;
@@ -280,6 +315,7 @@ export function detonate(state: BlastState, pulse: Pulse, ctx: GameContext): voi
     ownerId: pulse.ownerId,
     depth: pulse.depth,
     at: now,
+    mode,
   });
 
   // Queue the chain reactions.
@@ -294,8 +330,33 @@ export function detonate(state: BlastState, pulse: Pulse, ctx: GameContext): voi
       radius: pulse.radius * 0.9,
       depth: pulse.depth + 1,
       detonated: false,
+      mode,
     });
   }
+}
+
+export function waveTargetFor(wave: number): number {
+  return 10 + wave * 4;
+}
+
+/** Deterministically reshapes the existing arena without moving players. */
+export function applyWavePattern(state: BlastState, random: () => number): void {
+  const occupied = new Set(Object.values(state.players).map((player) => `${player.x}:${player.y}`));
+  const candidates = state.nodes.filter(
+    (node) => node.kind === 'energy' && !occupied.has(`${node.x}:${node.y}`),
+  );
+  // Seeded shuffle means every server/client match sees one fair canonical pattern.
+  for (let index = candidates.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(random() * (index + 1));
+    [candidates[index], candidates[swap]] = [candidates[swap]!, candidates[index]!];
+  }
+  const richCount = [0, 3, 1, 4, 2, 5][state.wave - 1] ?? 0;
+  const obstacleCount = [0, 0, 2, 1, 3, 3][state.wave - 1] ?? 0;
+  for (const node of candidates.slice(0, richCount)) node.kind = 'rich';
+  for (const node of candidates.slice(richCount, richCount + obstacleCount)) node.kind = 'obstacle';
+  state.waveTheme = WAVE_THEMES[state.wave - 1] ?? 'finale';
+  state.waveTarget = waveTargetFor(state.wave);
+  for (const player of Object.values(state.players)) player.waveHits = 0;
 }
 
 export function finishBlast(state: BlastState, ctx: GameContext, reason: GameFinishReason): void {
@@ -339,6 +400,8 @@ export const blackBlastGame: GameModule<BlastState> = {
       maxWave: MAX_WAVE,
       waveEndsAt: null,
       waveMs: WAVE_MS,
+      waveTarget: waveTargetFor(1),
+      waveTheme: 'calm',
       effects: [],
     };
     players.forEach((player, index) => {
@@ -395,6 +458,8 @@ export const blackBlastGame: GameModule<BlastState> = {
     state.lastEvent = 'start';
     state.nextAIRequestAt = {};
     state.wave = 1;
+    state.waveTarget = waveTargetFor(1);
+    state.waveTheme = 'calm';
     state.waveEndsAt = ctx.now() + state.waveMs;
     ctx.markStateChanged();
     ctx.schedule(state.matchMs, () => finishBlast(state, ctx, 'timeout'), 'gameDuration', 'match');
@@ -426,7 +491,11 @@ export const blackBlastGame: GameModule<BlastState> = {
     if (action.type === 'pulse') {
       // Cooldown is enforced server-side: spamming the button changes nothing.
       if (ctx.now() < player.cooldownUntil) return { valid: false, reason: 'Still recharging.' };
-      if (player.energy < PULSE_ENERGY_COST) return { valid: false, reason: 'Not enough energy.' };
+      const mode = action.payload?.mode ?? 'standard';
+      if (mode !== 'standard' && mode !== 'overcharge')
+        return { valid: false, reason: 'Invalid pulse mode.' };
+      const cost = mode === 'overcharge' ? OVERCHARGE_ENERGY_COST : PULSE_ENERGY_COST;
+      if (player.energy < cost) return { valid: false, reason: 'Not enough energy.' };
       return { valid: true };
     }
 
@@ -455,10 +524,14 @@ export const blackBlastGame: GameModule<BlastState> = {
     if (action.type !== 'pulse') return actionRejected('Unknown action.');
     const now = ctx.now();
     if (now < player.cooldownUntil) return actionRejected('Still recharging.');
-    if (player.energy < PULSE_ENERGY_COST) return actionRejected('Not enough energy.');
+    const mode = action.payload?.mode ?? 'standard';
+    if (mode !== 'standard' && mode !== 'overcharge') return actionRejected('Invalid pulse mode.');
+    const cost = mode === 'overcharge' ? OVERCHARGE_ENERGY_COST : PULSE_ENERGY_COST;
+    if (player.energy < cost) return actionRejected('Not enough energy.');
 
-    player.energy -= PULSE_ENERGY_COST;
-    player.cooldownUntil = now + PULSE_COOLDOWN_MS;
+    player.energy -= cost;
+    player.cooldownUntil =
+      now + (mode === 'overcharge' ? OVERCHARGE_COOLDOWN_MS : PULSE_COOLDOWN_MS);
     state.pulseCounter += 1;
     state.pulses.push({
       id: `p${state.pulseCounter}`,
@@ -466,11 +539,12 @@ export const blackBlastGame: GameModule<BlastState> = {
       x: player.x,
       y: player.y,
       detonateAt: now + FUSE_MS,
-      radius: PULSE_RADIUS + (state.wave - 1) * 0.08,
+      radius: mode === 'overcharge' ? OVERCHARGE_RADIUS : PULSE_RADIUS + (state.wave - 1) * 0.08,
       depth: 0,
       detonated: false,
+      mode,
     });
-    state.lastEvent = `charge:${playerId}`;
+    state.lastEvent = `charge:${playerId}:${mode}`;
     ctx.markStateChanged();
     return actionAccepted();
   },
@@ -495,6 +569,7 @@ export const blackBlastGame: GameModule<BlastState> = {
     // enlarge fresh pulses, rewarding deliberate movement and chain planning.
     if (state.waveEndsAt !== null && now >= state.waveEndsAt && state.wave < state.maxWave) {
       state.wave += 1;
+      applyWavePattern(state, ctx.random);
       state.waveEndsAt = now + state.waveMs;
       state.lastEvent = `wave:${state.wave}`;
       for (const node of state.nodes) {
@@ -615,6 +690,7 @@ export const blackBlastGame: GameModule<BlastState> = {
           hits: entry?.hits ?? 0,
           chains: entry?.chains ?? 0,
           bestCombo: entry?.bestCombo ?? 0,
+          wavesCleared: entry?.wavesCleared ?? 0,
         },
       };
     });
@@ -643,6 +719,8 @@ export const blackBlastGame: GameModule<BlastState> = {
       nextAIRequestAt: {},
       wave: 1,
       waveEndsAt: null,
+      waveTarget: waveTargetFor(1),
+      waveTheme: 'calm',
     };
   },
 
@@ -673,7 +751,10 @@ export const blackBlastGame: GameModule<BlastState> = {
       wave: state.wave,
       maxWave: state.maxWave,
       waveEndsAt: state.waveEndsAt,
+      waveTarget: state.waveTarget,
+      waveTheme: state.waveTheme,
       pulseEnergyCost: PULSE_ENERGY_COST,
+      overchargeEnergyCost: OVERCHARGE_ENERGY_COST,
       nodes: state.nodes
         .filter((node) => !node.consumed)
         .map((node) => ({ id: node.id, x: node.x, y: node.y, kind: node.kind })),
@@ -687,6 +768,7 @@ export const blackBlastGame: GameModule<BlastState> = {
           detonateAt: pulse.detonateAt,
           radius: pulse.radius,
           depth: pulse.depth,
+          mode: pulse.mode ?? 'standard',
         })),
       effects: state.effects.map((effect) => ({ ...effect })),
       me: me
@@ -697,6 +779,8 @@ export const blackBlastGame: GameModule<BlastState> = {
             score: me.score,
             energy: me.energy,
             maxEnergy: me.maxEnergy,
+            waveHits: me.waveHits,
+            wavesCleared: me.wavesCleared,
           }
         : null,
       players: Object.fromEntries(
@@ -712,6 +796,8 @@ export const blackBlastGame: GameModule<BlastState> = {
             chains: player.chains,
             energy: player.energy,
             maxEnergy: player.maxEnergy,
+            waveHits: player.waveHits,
+            wavesCleared: player.wavesCleared,
             disconnected: player.disconnected,
           },
         ]),
@@ -740,7 +826,12 @@ export const blackBlastGame: GameModule<BlastState> = {
       bot.energy >= PULSE_ENERGY_COST &&
       (wouldHit.length >= threshold || (richHere && difficulty !== 'easy'))
     ) {
-      return { type: 'pulse' };
+      const useOvercharge =
+        difficulty === 'hard' &&
+        richHere &&
+        wouldHit.length >= 4 &&
+        bot.energy >= OVERCHARGE_ENERGY_COST;
+      return { type: 'pulse', payload: { mode: useOvercharge ? 'overcharge' : 'standard' } };
     }
 
     // Otherwise walk toward the most valuable nearby cluster.

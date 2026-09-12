@@ -116,12 +116,17 @@ export interface LudoState {
   finishedOrder: string[];
   lastEvent: string | null;
   lastMove: {
+    id: number;
     playerId: string;
     tokenId: string;
     from: number;
     to: number;
+    /** Every authoritative progress value crossed, used for visual step animation. */
+    path: number[];
     captured: string | null;
+    capturedFrom: number | null;
   } | null;
+  moveCounter: number;
   finishReason: GameFinishReason | null;
   rollsThisMatch: number;
 }
@@ -447,6 +452,7 @@ export const ludoGame: GameModule<LudoState> = {
       finishedOrder: [],
       lastEvent: null,
       lastMove: null,
+      moveCounter: 0,
       finishReason: null,
       rollsThisMatch: 0,
     };
@@ -510,6 +516,7 @@ export const ludoGame: GameModule<LudoState> = {
     state.finishReason = null;
     state.rollsThisMatch = 0;
     state.lastMove = null;
+    state.moveCounter = 0;
     state.phase = 'awaiting-roll';
     state.lastEvent = 'start';
     const first = state.turnOrder[0];
@@ -640,12 +647,14 @@ export const ludoGame: GameModule<LudoState> = {
 
     // Capture is recomputed from the authoritative board, not trusted from the move.
     let captured: string | null = null;
+    let capturedFrom: number | null = null;
     if (move.to < TRACK_LENGTH) {
       const cell = trackIndexFor(slot.seatIndex, move.to);
       const victimId = captureAt(state, slot.seatIndex, cell);
       if (victimId) {
         const victim = findToken(state, victimId);
         if (victim) {
+          capturedFrom = victim.progress;
           victim.progress = -1;
           captured = victimId;
           slot.captures += 1;
@@ -661,7 +670,22 @@ export const ludoGame: GameModule<LudoState> = {
       reachedHome = true;
     }
 
-    state.lastMove = { playerId, tokenId, from: move.from, to: move.to, captured };
+    state.moveCounter += 1;
+    const firstStep = move.entersBoard ? 0 : move.from + 1;
+    const path = Array.from(
+      { length: Math.max(1, move.to - firstStep + 1) },
+      (_entry, index) => firstStep + index,
+    );
+    state.lastMove = {
+      id: state.moveCounter,
+      playerId,
+      tokenId,
+      from: move.from,
+      to: move.to,
+      path,
+      captured,
+      capturedFrom,
+    };
     state.lastEvent = captured
       ? `capture:${playerId}`
       : reachedHome
@@ -792,6 +816,7 @@ export const ludoGame: GameModule<LudoState> = {
       finishedOrder: [],
       lastEvent: null,
       lastMove: null,
+      moveCounter: 0,
       finishReason: null,
       rollsThisMatch: 0,
     };
@@ -825,7 +850,7 @@ export const ludoGame: GameModule<LudoState> = {
       tokensToWin: state.tokensToWin,
       finishedOrder: [...state.finishedOrder],
       lastEvent: state.lastEvent,
-      lastMove: state.lastMove ? { ...state.lastMove } : null,
+      lastMove: state.lastMove ? { ...state.lastMove, path: [...state.lastMove.path] } : null,
       finishReason: state.finishReason,
       serverTime: ctx.now(),
       boardSize: BOARD_SIZE,

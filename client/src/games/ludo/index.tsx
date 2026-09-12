@@ -42,11 +42,14 @@ export interface LudoPublicState {
   finishedOrder: string[];
   lastEvent: string | null;
   lastMove: {
+    id: number;
     playerId: string;
     tokenId: string;
     from: number;
     to: number;
+    path: number[];
     captured: string | null;
+    capturedFrom: number | null;
   } | null;
   finishReason: string | null;
   serverTime: number;
@@ -233,8 +236,13 @@ function LudoGame({
 
   /** Maps every token to a grid cell for rendering. */
   const placed = useMemo(() => {
-    const result: Array<{ token: LudoTokenView; cell: Cell; seatIndex: number; playerId: string }> =
-      [];
+    const result: Array<{
+      token: LudoTokenView;
+      cell: Cell;
+      seatIndex: number;
+      playerId: string;
+      tokenIndex: number;
+    }> = [];
     if (!state?.players) return result;
     for (const [playerId, slot] of Object.entries(state.players)) {
       slot.tokens.forEach((token, index) => {
@@ -255,11 +263,33 @@ function LudoGame({
         } else if (token.cell !== null && token.cell !== undefined) {
           cell = state.trackCells?.[token.cell];
         }
-        if (cell) result.push({ token, cell, seatIndex: slot.seatIndex, playerId });
+        if (cell)
+          result.push({ token, cell, seatIndex: slot.seatIndex, playerId, tokenIndex: index });
       });
     }
     return result;
   }, [state]);
+
+  const cellForProgress = useCallback(
+    (seat: number, progress: number, tokenIndex: number): Cell | undefined => {
+      if (!state) return undefined;
+      if (progress < 0) return state.yardCells?.[seat]?.[tokenIndex];
+      if (progress >= state.finishDistance) {
+        const homes = [
+          { x: 7, y: 6 },
+          { x: 8, y: 7 },
+          { x: 7, y: 8 },
+          { x: 6, y: 7 },
+        ];
+        return homes[seat % 4];
+      }
+      if (progress >= state.trackLength)
+        return state.homeStretchCells?.[seat]?.[progress - state.trackLength];
+      const absolute = ((state.startIndex?.[seat] ?? 0) + progress) % state.trackLength;
+      return state.trackCells?.[absolute];
+    },
+    [state],
+  );
 
   const movableTokenIds = useMemo(
     () => new Set((state?.legalMoves ?? []).map((move) => move.tokenId)),
@@ -407,8 +437,6 @@ function LudoGame({
           else if (trackIndex !== undefined) background = 'rgba(255,255,255,0.10)';
           if (isCenter) background = 'rgba(255,255,255,0.16)';
 
-          const occupants = placed.filter((entry) => entry.cell.x === x && entry.cell.y === y);
-
           return (
             <div
               key={key}
@@ -432,40 +460,86 @@ function LudoGame({
                   ★
                 </span>
               ) : null}
-              {occupants.map((entry, position) => {
-                const movable =
-                  canMove && movableTokenIds.has(entry.token.id) && entry.playerId === myPlayerId;
-                return (
-                  <motion.button
-                    key={entry.token.id}
-                    type="button"
-                    layout
-                    layoutId={`ludo-${entry.token.id}`}
-                    whileTap={movable ? { scale: 0.82 } : undefined}
-                    animate={movable ? { scale: [1, 1.12, 1] } : { scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-                    disabled={!movable}
-                    onClick={() => movable && moveToken(entry.token.id)}
-                    aria-label={
-                      movable ? `Move token ${entry.token.id}` : `Token ${entry.token.id}`
-                    }
-                    className={cn(
-                      'absolute rounded-full border border-black/40',
-                      movable && 'ring-2 ring-white ring-offset-1 ring-offset-black/40',
-                    )}
-                    style={{
-                      backgroundColor: SEAT_COLOR[entry.seatIndex] ?? '#94a3b8',
-                      inset: '14%',
-                      transform: `translate(${position * 12}%, ${position * 12}%)`,
-                      cursor: movable ? 'pointer' : 'default',
-                      zIndex: movable ? 5 : 1,
-                    }}
-                  />
-                );
-              })}
             </div>
           );
         })}
+
+        {/* Tokens live in one overlay so Framer can animate every server-authored
+            board step instead of jumping between unrelated grid-cell parents. */}
+        <div className="pointer-events-none absolute inset-1" aria-live="polite">
+          {placed.map((entry) => {
+            const movable =
+              canMove && movableTokenIds.has(entry.token.id) && entry.playerId === myPlayerId;
+            const move = state.lastMove;
+            let motionCells: Cell[] = [entry.cell];
+            if (move?.tokenId === entry.token.id) {
+              const from = cellForProgress(entry.seatIndex, move.from, entry.tokenIndex);
+              motionCells = [
+                from,
+                ...move.path.map((step) =>
+                  cellForProgress(entry.seatIndex, step, entry.tokenIndex),
+                ),
+              ].filter((cell): cell is Cell => Boolean(cell));
+            } else if (move?.captured === entry.token.id && move.capturedFrom !== null) {
+              const from = cellForProgress(entry.seatIndex, move.capturedFrom, entry.tokenIndex);
+              const yard = cellForProgress(entry.seatIndex, -1, entry.tokenIndex);
+              motionCells = [from, yard].filter((cell): cell is Cell => Boolean(cell));
+            }
+            const sameCell = placed.filter(
+              (other) => other.cell.x === entry.cell.x && other.cell.y === entry.cell.y,
+            );
+            const stackIndex = Math.max(
+              0,
+              sameCell.findIndex((other) => other.token.id === entry.token.id),
+            );
+            const offset = stackIndex * 0.12;
+            const left = motionCells.map((cell) => `${((cell.x + 0.16 + offset) / size) * 100}%`);
+            const top = motionCells.map((cell) => `${((cell.y + 0.16 + offset) / size) * 100}%`);
+            const isLatest = move?.tokenId === entry.token.id || move?.captured === entry.token.id;
+            return (
+              <motion.button
+                key={`${entry.token.id}-${isLatest ? move?.id : 'still'}`}
+                type="button"
+                disabled={!movable}
+                onClick={() => movable && moveToken(entry.token.id)}
+                aria-label={movable ? `Move token ${entry.token.id}` : `Token ${entry.token.id}`}
+                initial={
+                  isLatest
+                    ? {
+                        left: left[0],
+                        top: top[0],
+                        scale: move?.captured === entry.token.id ? 1.3 : 0.9,
+                      }
+                    : false
+                }
+                animate={{ left, top, scale: movable ? [1, 1.12, 1] : 1 }}
+                transition={{
+                  left: {
+                    duration: Math.min(1.2, Math.max(0.22, motionCells.length * 0.11)),
+                    ease: 'easeInOut',
+                  },
+                  top: {
+                    duration: Math.min(1.2, Math.max(0.22, motionCells.length * 0.11)),
+                    ease: 'easeInOut',
+                  },
+                  scale: { duration: 0.7, repeat: movable ? Infinity : 0 },
+                }}
+                className={cn(
+                  'pointer-events-auto absolute rounded-full border-2 border-black/50 shadow-lg',
+                  movable && 'z-20 ring-2 ring-white ring-offset-2 ring-offset-black/40',
+                )}
+                style={{
+                  width: `${(0.7 / size) * 100}%`,
+                  aspectRatio: '1',
+                  backgroundColor: SEAT_COLOR[entry.seatIndex] ?? '#94a3b8',
+                  boxShadow: `0 0 ${movable ? 14 : 7}px ${SEAT_COLOR[entry.seatIndex] ?? '#94a3b8'}`,
+                }}
+              >
+                <span className="sr-only">{entry.token.id}</span>
+              </motion.button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Dice + controls */}

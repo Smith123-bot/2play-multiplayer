@@ -9,9 +9,20 @@ import { cn } from '../../utils/cn';
 export interface BrickArenaPublic {
   paddleX: number;
   paddleDir: number;
+  latestInputSeq: number;
   ball: { x: number; y: number; vx: number; vy: number };
   launchAt: number | null;
   bricks: boolean[];
+  brickHp: number[];
+  brickMaxHp: number[];
+  levelBrickCount: number;
+  lastImpact: {
+    id: number;
+    brickIndex: number;
+    kind: 'crack' | 'destroy';
+    remainingHp: number;
+    at: number;
+  } | null;
   destroyed: number;
   chain: number;
   level: number;
@@ -51,6 +62,12 @@ export interface BrickBreakerPublicState {
 
 const PADDLE_SPEED = 55; // units/s — mirrors the server
 
+const BRICK_WIDTH = 13;
+const BRICK_HEIGHT = 4;
+const BRICK_GAP = 1;
+const BRICK_OFFSET_X = 1.5;
+const BRICK_OFFSET_Y = 6;
+
 const ROW_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa'];
 
 function BrickBreakerGame({
@@ -64,6 +81,7 @@ function BrickBreakerGame({
   const clockOffset = useRef(0);
   const lastIntent = useRef(0);
   const activeIntent = useRef<'left' | 'right' | 'stop' | null>(null);
+  const inputSequence = useRef(0);
   const previousEvent = useRef<string | null>(null);
   const [, setFrame] = useState(0);
 
@@ -75,7 +93,8 @@ function BrickBreakerGame({
 
   useEffect(() => {
     if (state) clockOffset.current = state.serverTime - Date.now();
-  }, [state]);
+    if (me) inputSequence.current = Math.max(inputSequence.current, me.latestInputSeq);
+  }, [state, me]);
 
   const playing = phase === 'playing';
   useEffect(() => {
@@ -97,11 +116,19 @@ function BrickBreakerGame({
     (direction: 'left' | 'right' | 'stop') => {
       if (!canPlay || activeIntent.current === direction) return;
       activeIntent.current = direction;
-      sendAction({ type: 'move', payload: { direction } } satisfies GameAction);
+      inputSequence.current += 1;
+      sendAction({
+        type: 'move',
+        payload: { direction, sequence: inputSequence.current },
+      } satisfies GameAction);
       vibrate('buttonPress');
     },
     [canPlay, sendAction, vibrate],
   );
+
+  useEffect(() => {
+    activeIntent.current = null;
+  }, [me?.level, phase]);
 
   // Keyboard: A/D + arrows (never while typing in chat/inputs).
   useEffect(() => {
@@ -140,13 +167,17 @@ function BrickBreakerGame({
 
   // Event feedback.
   const lastEvent = state?.lastEvent ?? null;
+  const eventIdentity = lastEvent
+    ? `${lastEvent}:${me?.lastImpact?.id ?? 0}:${rivalArena?.lastImpact?.id ?? 0}`
+    : null;
   useEffect(() => {
-    if (lastEvent === previousEvent.current) return;
-    previousEvent.current = lastEvent;
+    if (eventIdentity === previousEvent.current) return;
+    previousEvent.current = eventIdentity;
     if (!lastEvent) return;
     const [kind, actor] = lastEvent.split(':');
     const mine = actor === myPlayerId;
     if (kind === 'brick') play('click');
+    else if (kind === 'crack') play('notification');
     else if (kind === 'power') {
       play('correct');
       if (mine) vibrate('success');
@@ -170,7 +201,7 @@ function BrickBreakerGame({
       vibrate(iWon ? 'victory' : 'error');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastEvent]);
+  }, [eventIdentity, lastEvent]);
 
   if (phase === 'idle' || !state) {
     return (
@@ -191,7 +222,6 @@ function BrickBreakerGame({
     paddleY,
     ballRadius: br,
     brickCols,
-    brickRows,
   } = state;
   const elapsedS = state
     ? Math.max(0, (Date.now() + clockOffset.current - state.serverTime) / 1000)
@@ -225,6 +255,8 @@ function BrickBreakerGame({
             opacity: (5 - index) / 18,
           };
         });
+    const impactVisible =
+      arenaView.lastImpact && Date.now() + clockOffset.current - arenaView.lastImpact.at < 520;
 
     return (
       <div key={label} className="min-w-0 flex-1 space-y-1">
@@ -265,6 +297,16 @@ function BrickBreakerGame({
               : 'border-white/10',
           )}
           style={{ aspectRatio: `${width} / ${height}` }}
+          onPointerDown={
+            isMine && canPlay
+              ? (event) => {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const touchX = ((event.clientX - rect.left) / rect.width) * width;
+                  sendMove(touchX < arenaView.paddleX ? 'left' : 'right');
+                }
+              : undefined
+          }
           onPointerMove={
             isMine && canPlay
               ? (event) => {
@@ -285,27 +327,65 @@ function BrickBreakerGame({
           onPointerUp={isMine && canPlay ? () => sendMove('stop') : undefined}
           onPointerCancel={isMine && canPlay ? () => sendMove('stop') : undefined}
         >
-          {/* bricks */}
-          {arenaView.bricks.map((alive, index) =>
-            alive ? (
+          {/* Bricks use the same world-space rectangles as server collision geometry. */}
+          {arenaView.bricks.map((alive, index) => {
+            if (!alive) return null;
+            const row = Math.floor(index / brickCols);
+            const col = index % brickCols;
+            const hp = arenaView.brickHp[index] ?? 1;
+            const maxHp = arenaView.brickMaxHp[index] ?? 1;
+            return (
               <div
-                key={index}
-                className="absolute rounded-[2px]"
+                key={`${arenaView.level}-${index}`}
+                className="absolute overflow-hidden rounded-[2px] border border-black/20 transition-opacity"
+                aria-label={`Brick ${index + 1}, ${hp} hit${hp === 1 ? '' : 's'} remaining`}
                 style={{
-                  width: `${(100 / brickCols) * 0.94}%`,
-                  height: `${(100 / ((height / 4) * brickRows)) * 0.8}%`,
-                  left: `${(index % brickCols) * (100 / brickCols) + (100 / brickCols) * 0.03}%`,
-                  top: `${(Math.floor(index / brickCols) * 100) / brickRows + 1.2}%`,
-                  backgroundColor:
-                    ROW_COLORS[
-                      (Math.floor(index / brickCols) + arenaView.level - 1) % ROW_COLORS.length
-                    ],
-                  boxShadow: `0 0 ${arenaView.level * 2}px currentColor`,
-                  opacity: 0.9,
+                  width: pct(BRICK_WIDTH, width),
+                  height: pct(BRICK_HEIGHT, height),
+                  left: pct(BRICK_OFFSET_X + col * (BRICK_WIDTH + BRICK_GAP), width),
+                  top: pct(BRICK_OFFSET_Y + row * (BRICK_HEIGHT + BRICK_GAP), height),
+                  backgroundColor: ROW_COLORS[(row + arenaView.level - 1) % ROW_COLORS.length],
+                  boxShadow:
+                    maxHp > 1
+                      ? 'inset 0 0 0 1px rgba(255,255,255,.65), 0 0 5px currentColor'
+                      : '0 0 3px currentColor',
+                  opacity: hp / maxHp > 0.5 ? 0.95 : 0.55,
                 }}
-              />
-            ) : null,
-          )}
+              >
+                {maxHp > 1 ? (
+                  <span className="absolute inset-y-0 left-1/2 w-px bg-white/60" />
+                ) : null}
+              </div>
+            );
+          })}
+          {impactVisible && arenaView.lastImpact
+            ? (() => {
+                const row = Math.floor(arenaView.lastImpact.brickIndex / brickCols);
+                const col = arenaView.lastImpact.brickIndex % brickCols;
+                const cx = BRICK_OFFSET_X + col * (BRICK_WIDTH + BRICK_GAP) + BRICK_WIDTH / 2;
+                const cy = BRICK_OFFSET_Y + row * (BRICK_HEIGHT + BRICK_GAP) + BRICK_HEIGHT / 2;
+                return Array.from(
+                  { length: arenaView.lastImpact.kind === 'destroy' ? 7 : 3 },
+                  (_entry, spark) => (
+                    <span
+                      key={`${arenaView.lastImpact?.id}-${spark}`}
+                      className="pointer-events-none absolute h-1 w-1 animate-ping rounded-full bg-amber-200"
+                      style={{
+                        left: pct(
+                          cx + Math.cos((spark * Math.PI * 2) / 7) * (2 + (spark % 3)),
+                          width,
+                        ),
+                        top: pct(
+                          cy + Math.sin((spark * Math.PI * 2) / 7) * (1 + (spark % 2)),
+                          height,
+                        ),
+                        animationDelay: `${spark * 25}ms`,
+                      }}
+                    />
+                  ),
+                );
+              })()
+            : null}
           {/* paddle */}
           <div
             className={cn('absolute rounded-full', isMine ? 'bg-indigo-400' : 'bg-emerald-400')}
@@ -346,7 +426,7 @@ function BrickBreakerGame({
           {arenaView.done ? (
             <div className="absolute inset-0 grid place-items-center bg-black/60">
               <span className="text-sm font-bold text-white">
-                {arenaView.destroyed >= brickCols * brickRows ? 'Cleared! 🧱' : 'Out of lives'}
+                {arenaView.levelsCleared >= state.maxLevels ? 'Cleared! 🧱' : 'Out of lives'}
               </span>
             </div>
           ) : null}
@@ -372,8 +452,8 @@ function BrickBreakerGame({
 
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="primary">
-          Level {me?.level ?? 1}/{state.maxLevels} · {me?.bricksBroken ?? 0} bricks ·{' '}
-          {me?.score ?? 0} pts
+          Level {me?.level ?? 1}/{state.maxLevels} · {me?.destroyed ?? 0}/{me?.levelBrickCount ?? 0}{' '}
+          wall · {me?.bricksBroken ?? 0} total · {me?.score ?? 0} pts
         </Badge>
         {me?.powerUp ? <Badge tone="success">Power-up: {me.powerUp}</Badge> : null}
         {me && me.chain > 1 ? <Badge tone="warning">Combo x{Math.min(4, me.chain)}</Badge> : null}
@@ -416,8 +496,9 @@ function BrickBreakerGame({
         </button>
       </div>
       <p className="text-center text-xs text-slate-500">
-        A/D, arrows, drag or hold. Clear three faster levels; every ninth brick grants a
-        server-owned power-up.
+        A/D, arrows, drag or hold. Conquer a classic wall, reinforced diamond and gated fortress.
+        Bright split bricks take two hits; every ninth destruction grants a balanced server-owned
+        power-up.
       </p>
     </div>
   );

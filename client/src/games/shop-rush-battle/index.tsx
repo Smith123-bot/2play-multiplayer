@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type ComponentType } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
 import { SHOP_RUSH_METADATA, type GameAction } from '@2play/shared';
 import type { ClientGameModule, GameComponentProps } from '../registry/types';
@@ -6,7 +6,7 @@ import { GameHUD } from '../../components/game/GameHUD';
 import { Badge } from '../../components/ui/Badge';
 import { cn } from '../../utils/cn';
 
-export type ShopItem = 'milk' | 'bread' | 'eggs' | 'apples' | 'cereal' | 'candy';
+export type ShopItem = 'milk' | 'bread' | 'eggs' | 'apples' | 'cereal' | 'juice' | 'rice' | 'candy';
 
 export interface ShopPublicState {
   phase: 'idle' | 'playing' | 'finished';
@@ -20,6 +20,7 @@ export interface ShopPublicState {
   finishReason: string | null;
   lastEvent: string | null;
   serverTime: number;
+  eventSeq: number;
   shoppers: Record<
     string,
     {
@@ -29,6 +30,14 @@ export interface ShopPublicState {
       list: ShopItem[];
       score: number;
       checkouts: number;
+      combo: number;
+      bestCombo: number;
+      correctItems: number;
+      wrongItems: number;
+      missedOrders: number;
+      orderNumber: number;
+      orderDeadline: number;
+      latestInputSeq: number;
       disconnected: boolean;
       basketSize: number;
     }
@@ -37,9 +46,24 @@ export interface ShopPublicState {
 
 const DPAD = [
   { direction: 'up' as const, icon: ArrowUp, label: 'Move up', area: 'col-start-2 row-start-1' },
-  { direction: 'left' as const, icon: ArrowLeft, label: 'Move left', area: 'col-start-1 row-start-2' },
-  { direction: 'down' as const, icon: ArrowDown, label: 'Move down', area: 'col-start-2 row-start-2' },
-  { direction: 'right' as const, icon: ArrowRight, label: 'Move right', area: 'col-start-3 row-start-2' },
+  {
+    direction: 'left' as const,
+    icon: ArrowLeft,
+    label: 'Move left',
+    area: 'col-start-1 row-start-2',
+  },
+  {
+    direction: 'down' as const,
+    icon: ArrowDown,
+    label: 'Move down',
+    area: 'col-start-2 row-start-2',
+  },
+  {
+    direction: 'right' as const,
+    icon: ArrowRight,
+    label: 'Move right',
+    area: 'col-start-3 row-start-2',
+  },
 ];
 const SEAT = ['#818cf8', '#34d399', '#f472b6', '#fbbf24'];
 const ITEM_EMOJI: Record<ShopItem, string> = {
@@ -48,6 +72,8 @@ const ITEM_EMOJI: Record<ShopItem, string> = {
   eggs: '🥚',
   apples: '🍎',
   cereal: '🥣',
+  juice: '🧃',
+  rice: '🍚',
   candy: '🍬',
 };
 
@@ -61,17 +87,29 @@ function ShopRushGame({
 }: GameComponentProps<ShopPublicState>) {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const previousEvent = useRef<string | null>(null);
+  const inputSequence = useRef(0);
+  const [, setClock] = useState(0);
   const phase = state?.phase ?? 'idle';
   const me = myPlayerId ? state?.shoppers?.[myPlayerId] : undefined;
   const playing = phase === 'playing' && Boolean(me);
 
+  useEffect(() => {
+    if (!playing) return;
+    const timer = window.setInterval(() => setClock((value) => value + 1), 250);
+    return () => window.clearInterval(timer);
+  }, [playing]);
+
   const move = useCallback(
     (direction: 'up' | 'down' | 'left' | 'right') => {
       if (!playing) return;
-      sendAction({ type: 'move', payload: { direction } } satisfies GameAction);
+      inputSequence.current = Math.max(inputSequence.current, me?.latestInputSeq ?? -1) + 1;
+      sendAction({
+        type: 'move',
+        payload: { direction, sequence: inputSequence.current },
+      } satisfies GameAction);
       vibrate('buttonPress');
     },
-    [playing, sendAction, vibrate],
+    [playing, me?.latestInputSeq, sendAction, vibrate],
   );
 
   const pickup = useCallback(() => {
@@ -105,7 +143,12 @@ function ShopRushGame({
         D: 'right',
       };
       const target = event.target as HTMLElement | null;
-      if (target && (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) || target.isContentEditable)) return;
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+          target.isContentEditable)
+      )
+        return;
       if (event.key === 'e' || event.key === 'E' || event.key === ' ') {
         event.preventDefault();
         pickup();
@@ -130,7 +173,10 @@ function ShopRushGame({
     if (lastEvent === previousEvent.current) return;
     previousEvent.current = lastEvent;
     if (!lastEvent) return;
-    if (lastEvent.startsWith('checkout:') && lastEvent.includes(myPlayerId ?? '')) {
+    if (lastEvent.startsWith('missed:') && lastEvent.includes(myPlayerId ?? '')) {
+      play('wrong');
+      vibrate('error');
+    } else if (lastEvent.startsWith('checkout:') && lastEvent.includes(myPlayerId ?? '')) {
       play('score');
       vibrate('success');
     } else if (lastEvent.startsWith('pickup:') && lastEvent.includes(myPlayerId ?? '')) {
@@ -152,17 +198,51 @@ function ShopRushGame({
   return (
     <div className="space-y-4">
       <GameHUD
-        players={players.map((player) => ({ ...player, score: state.shoppers?.[player.id]?.score ?? player.score }))}
+        players={players.map((player) => ({
+          ...player,
+          score: state.shoppers?.[player.id]?.score ?? player.score,
+        }))}
         myPlayerId={myPlayerId}
         deadline={state.endsAt ?? null}
         label="Shop clock"
       />
+      {me ? (
+        <div className="card flex items-center justify-between gap-3 p-3">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-slate-400">
+              Customer order {me.orderNumber}
+            </p>
+            <p className="text-sm font-semibold text-white">
+              {me.list.length} items · {me.checkouts} served
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-slate-400">Order time</p>
+            <p className="font-bold tabular-nums text-amber-300">
+              {Math.max(
+                0,
+                Math.ceil(
+                  (me.orderDeadline - (Date.now() + (state.serverTime - Date.now()))) / 1000,
+                ),
+              )}
+              s
+            </p>
+          </div>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         {me?.list.map((item) => (
           <Badge key={item} tone={me.inventory.includes(item) ? 'success' : 'primary'}>
             {ITEM_EMOJI[item]} {item}
           </Badge>
         ))}
+        {me && me.combo > 1 ? <Badge tone="success">Service streak x{me.combo}</Badge> : null}
+        {me ? (
+          <Badge tone="default">
+            Accuracy{' '}
+            {Math.round((me.correctItems / Math.max(1, me.correctItems + me.wrongItems)) * 100)}%
+          </Badge>
+        ) : null}
         {phase === 'finished' ? <Badge tone="accent">Shop closed</Badge> : null}
       </div>
       <div
@@ -262,7 +342,8 @@ function ShopRushGame({
         </div>
       </div>
       <p className="text-center text-xs text-slate-500">
-        Your list is private. Stand next to a shelf to pick up, then checkout at the till. The server owns the basket.
+        Orders grow from 2 to 4 items and get faster. Complete accurate carts before the customer
+        timer for time and streak bonuses; wrong items reduce server-owned scoring.
       </p>
     </div>
   );

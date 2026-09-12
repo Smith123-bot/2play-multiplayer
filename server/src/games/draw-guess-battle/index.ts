@@ -47,6 +47,7 @@ export interface DrawRound {
   drawerId: string;
   word: string;
   category: DrawCategory;
+  difficulty: 'easy' | 'medium' | 'hard';
   startedAt: number;
   endsAt: number;
   strokes: DrawStroke[];
@@ -71,6 +72,7 @@ export interface DrawGuessState {
   startedAt: number | null;
   finishReason: GameFinishReason | null;
   lastEvent: string | null;
+  eventSeq: number;
 }
 
 const DEFAULT_ROUNDS = 6;
@@ -85,9 +87,20 @@ const MAX_STROKES = 180;
 const MAX_POINT_BATCH = 24;
 const BRUSH_MIN = 2;
 const BRUSH_MAX = 28;
-const PALETTE = ['#111827', '#ef4444', '#3b82f6', '#22c55e', '#eab308', '#f97316', '#a855f7', '#78350f', '#ffffff'];
+const PALETTE = [
+  '#111827',
+  '#ef4444',
+  '#3b82f6',
+  '#22c55e',
+  '#eab308',
+  '#f97316',
+  '#a855f7',
+  '#78350f',
+  '#ffffff',
+];
 const GUESS_POINTS = [100, 75, 50, 25];
 const DRAWER_BONUS = 40;
+const FAST_GUESS_BONUS_MAX = 40;
 
 const AI_GUESS_DELAY: Record<AIDifficulty, number> = { easy: 14_000, medium: 8_000, hard: 3_500 };
 const AI_GUESS_JITTER: Record<AIDifficulty, number> = { easy: 10_000, medium: 6_000, hard: 2_500 };
@@ -113,7 +126,9 @@ function isTool(value: unknown): value is DrawTool {
 
 function activeIds(ctx: GameContext, state: DrawGuessState): string[] {
   return ctx.players
-    .filter((player) => (player.isAI || player.isConnected) && state.scores[player.id] !== undefined)
+    .filter(
+      (player) => (player.isAI || player.isConnected) && state.scores[player.id] !== undefined,
+    )
     .map((player) => player.id);
 }
 
@@ -125,9 +140,17 @@ function guessersOf(state: DrawGuessState, ctx: GameContext): string[] {
 export function pickPrompt(
   used: string[],
   rng: () => number,
+  difficulty: 'easy' | 'medium' | 'hard' = 'medium',
 ): { word: string; category: DrawCategory } {
-  const unused = WORD_BANK.filter((entry) => !used.includes(entry.word));
-  const pool = unused.length > 0 ? unused : WORD_BANK;
+  const suitable = WORD_BANK.filter((entry) =>
+    difficulty === 'easy'
+      ? entry.word.length <= 5
+      : difficulty === 'medium'
+        ? entry.word.length <= 8
+        : entry.word.length > 5,
+  );
+  const unused = suitable.filter((entry) => !used.includes(entry.word));
+  const pool = unused.length > 0 ? unused : suitable.length > 0 ? suitable : WORD_BANK;
   return pool[Math.floor(rng() * pool.length)]!;
 }
 
@@ -156,7 +179,9 @@ export function beginDrawRound(state: DrawGuessState, ctx: GameContext): void {
     finishDrawMatch(state, ctx, 'abandoned');
     return;
   }
-  const prompt = pickPrompt(state.usedWords, ctx.random);
+  const progress = state.round / Math.max(1, state.totalRounds);
+  const difficulty = progress <= 1 / 3 ? 'easy' : progress <= 2 / 3 ? 'medium' : 'hard';
+  const prompt = pickPrompt(state.usedWords, ctx.random, difficulty);
   state.usedWords.push(prompt.word);
   if (state.usedWords.length >= WORD_BANK.length) state.usedWords = [prompt.word];
 
@@ -166,6 +191,7 @@ export function beginDrawRound(state: DrawGuessState, ctx: GameContext): void {
     drawerId,
     word: prompt.word,
     category: prompt.category,
+    difficulty,
     startedAt: now,
     endsAt: now + state.prepareMs + state.drawMs,
     strokes: [],
@@ -214,7 +240,8 @@ export function openDrawing(state: DrawGuessState, ctx: GameContext): void {
       continue;
     }
     const difficulty = player.aiDifficulty ?? 'medium';
-    const delay = AI_GUESS_DELAY[difficulty] + Math.floor(ctx.random() * AI_GUESS_JITTER[difficulty]);
+    const delay =
+      AI_GUESS_DELAY[difficulty] + Math.floor(ctx.random() * AI_GUESS_JITTER[difficulty]);
     ctx.requestAI(player.id, delay);
   }
 }
@@ -252,7 +279,11 @@ export function beginNextDrawRound(state: DrawGuessState, ctx: GameContext): voi
   beginDrawRound(state, ctx);
 }
 
-export function finishDrawMatch(state: DrawGuessState, ctx: GameContext, reason: GameFinishReason): void {
+export function finishDrawMatch(
+  state: DrawGuessState,
+  ctx: GameContext,
+  reason: GameFinishReason,
+): void {
   if (state.phase === 'finished') return;
   state.phase = 'finished';
   state.finishReason = reason;
@@ -292,6 +323,7 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       startedAt: null,
       finishReason: null,
       lastEvent: null,
+      eventSeq: 0,
     };
   },
 
@@ -312,7 +344,10 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       return;
     }
     if (state.phase === 'drawing') maybeEndRoundEarly(state, ctx);
-    if (state.phase !== 'finished' && activeIds(ctx, state).filter((id) => id !== playerId).length === 0) {
+    if (
+      state.phase !== 'finished' &&
+      activeIds(ctx, state).filter((id) => id !== playerId).length === 0
+    ) {
       finishDrawMatch(state, ctx, 'abandoned');
     }
   },
@@ -328,15 +363,27 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
     state.startedAt = ctx.now();
     state.finishReason = null;
     const worstCase = state.totalRounds * (state.prepareMs + state.drawMs + state.revealMs) + 8000;
-    ctx.schedule(worstCase, () => finishDrawMatch(state, ctx, 'timeout'), 'gameDuration', 'match-timeout');
+    ctx.schedule(
+      worstCase,
+      () => finishDrawMatch(state, ctx, 'timeout'),
+      'gameDuration',
+      'match-timeout',
+    );
     beginDrawRound(state, ctx);
   },
 
   validateAction(playerId, action, state): ValidationResult {
-    if (action.type === 'stroke' || action.type === 'clear') {
-      if (state.phase !== 'drawing') return { valid: false, reason: 'Drawing is not open right now.' };
-      if (state.current?.drawerId !== playerId) return { valid: false, reason: 'Only the drawer can sketch.' };
+    if (action.type === 'stroke' || action.type === 'clear' || action.type === 'undo') {
+      if (state.phase !== 'drawing')
+        return { valid: false, reason: 'Drawing is not open right now.' };
+      if (state.current?.drawerId !== playerId)
+        return { valid: false, reason: 'Only the drawer can sketch.' };
       if (action.type === 'clear') return { valid: true };
+      if (action.type === 'undo') {
+        if ((state.current?.strokes.length ?? 0) === 0)
+          return { valid: false, reason: 'Nothing to undo.' };
+        return { valid: true };
+      }
       const points = action.payload?.points;
       if (!Array.isArray(points) || points.length === 0 || points.length > MAX_POINT_BATCH) {
         return { valid: false, reason: 'Send a short stroke of points.' };
@@ -348,17 +395,22 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       if (typeof color !== 'string' || !PALETTE.includes(color)) {
         return { valid: false, reason: 'Pick a colour from the palette.' };
       }
-      if (!isTool(action.payload?.tool)) return { valid: false, reason: 'Use the brush or eraser.' };
+      if (!isTool(action.payload?.tool))
+        return { valid: false, reason: 'Use the brush or eraser.' };
       return { valid: true };
     }
     if (action.type === 'guess') {
-      if (state.phase !== 'drawing') return { valid: false, reason: 'Guessing is not open right now.' };
-      if (state.current?.drawerId === playerId) return { valid: false, reason: 'The drawer cannot guess.' };
+      if (state.phase !== 'drawing')
+        return { valid: false, reason: 'Guessing is not open right now.' };
+      if (state.current?.drawerId === playerId)
+        return { valid: false, reason: 'The drawer cannot guess.' };
       if (state.current?.solvedOrder.includes(playerId)) {
         return { valid: false, reason: 'You already guessed this word.' };
       }
-      const text = typeof action.payload?.text === 'string' ? normalizeGuess(action.payload.text) : '';
-      if (!text || text.length > MAX_GUESS_LENGTH) return { valid: false, reason: 'Type a short guess.' };
+      const text =
+        typeof action.payload?.text === 'string' ? normalizeGuess(action.payload.text) : '';
+      if (!text || text.length > MAX_GUESS_LENGTH)
+        return { valid: false, reason: 'Type a short guess.' };
       return { valid: true };
     }
     return { valid: false, reason: 'Unknown action.' };
@@ -368,12 +420,25 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
     const round = state.current;
     if (!round) return actionRejected('No round is running.');
 
+    if (action.type === 'undo') {
+      if (state.phase !== 'drawing' || round.drawerId !== playerId) {
+        return actionRejected('Only the drawer can undo.');
+      }
+      if (round.strokes.length === 0) return actionRejected('Nothing to undo.');
+      round.strokes.pop();
+      state.eventSeq += 1;
+      state.lastEvent = `undo:${state.eventSeq}`;
+      ctx.markStateChanged();
+      return actionAccepted();
+    }
+
     if (action.type === 'clear') {
       if (state.phase !== 'drawing' || round.drawerId !== playerId) {
         return actionRejected('Only the drawer can clear the canvas.');
       }
       round.strokes = [];
-      state.lastEvent = 'clear';
+      state.eventSeq += 1;
+      state.lastEvent = `clear:${state.eventSeq}`;
       ctx.markStateChanged();
       return actionAccepted();
     }
@@ -406,8 +471,10 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
         tool,
         points,
       });
-      if (round.strokes.length > MAX_STROKES) round.strokes.splice(0, round.strokes.length - MAX_STROKES);
-      state.lastEvent = 'stroke';
+      if (round.strokes.length > MAX_STROKES)
+        round.strokes.splice(0, round.strokes.length - MAX_STROKES);
+      state.eventSeq += 1;
+      state.lastEvent = `stroke:${state.eventSeq}`;
       ctx.markStateChanged();
       return actionAccepted();
     }
@@ -415,23 +482,30 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
     if (action.type === 'guess') {
       if (state.phase !== 'drawing') return actionRejected('Guessing is not open right now.');
       if (round.drawerId === playerId) return actionRejected('The drawer cannot guess.');
-      if (round.solvedOrder.includes(playerId)) return actionRejected('You already guessed this word.');
-      const text = typeof action.payload?.text === 'string' ? normalizeGuess(action.payload.text) : '';
+      if (round.solvedOrder.includes(playerId))
+        return actionRejected('You already guessed this word.');
+      const text =
+        typeof action.payload?.text === 'string' ? normalizeGuess(action.payload.text) : '';
       if (!text) return actionRejected('Type a guess.');
       const correct = text === normalizeGuess(round.word);
       round.guesses.push({ playerId, text, correct, at: ctx.now() });
       if (correct) {
-        const points = guessPointsFor(round.solvedOrder.length);
+        const placementPoints = guessPointsFor(round.solvedOrder.length);
+        const remainingRatio = Math.max(0, (round.endsAt - ctx.now()) / Math.max(1, state.drawMs));
+        const speedBonus = Math.round(FAST_GUESS_BONUS_MAX * remainingRatio);
+        const points = placementPoints + speedBonus;
         round.solvedOrder.push(playerId);
         state.scores[playerId] = (state.scores[playerId] ?? 0) + points;
         state.solvedCount[playerId] = (state.solvedCount[playerId] ?? 0) + 1;
         state.scores[round.drawerId] = (state.scores[round.drawerId] ?? 0) + DRAWER_BONUS;
-        state.lastEvent = `correct:${playerId}`;
+        state.eventSeq += 1;
+        state.lastEvent = `correct:${playerId}:${points}:${state.eventSeq}`;
         ctx.markStateChanged();
         maybeEndRoundEarly(state, ctx);
         return actionAccepted();
       }
-      state.lastEvent = `wrong:${playerId}`;
+      state.eventSeq += 1;
+      state.lastEvent = `wrong:${playerId}:${state.eventSeq}`;
       ctx.markStateChanged();
       return actionAccepted();
     }
@@ -478,7 +552,9 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       return (state.solvedCount[b.id] ?? 0) - (state.solvedCount[a.id] ?? 0);
     });
     const top = state.scores[ranked[0]?.id ?? ''] ?? 0;
-    const winners = ranked.filter((player) => (state.scores[player.id] ?? 0) === top).map((player) => player.id);
+    const winners = ranked
+      .filter((player) => (state.scores[player.id] ?? 0) === top)
+      .map((player) => player.id);
     const rankings: RankingDraft[] = ranked.map((player) => {
       const score = state.scores[player.id] ?? 0;
       const rank = ranked.filter((other) => (state.scores[other.id] ?? 0) > score).length + 1;
@@ -494,11 +570,17 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
         },
       };
     });
-    return { winners, isDraw: winners.length > 1, rankings, reason: state.finishReason ?? 'completed' };
+    return {
+      winners,
+      isDraw: winners.length > 1,
+      rankings,
+      reason: state.finishReason ?? 'completed',
+    };
   },
 
   reset(state): DrawGuessState {
-    const zero = (table: Record<string, number>) => Object.fromEntries(Object.keys(table).map((id) => [id, 0]));
+    const zero = (table: Record<string, number>) =>
+      Object.fromEntries(Object.keys(table).map((id) => [id, 0]));
     return {
       ...state,
       phase: 'idle',
@@ -513,6 +595,7 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       startedAt: null,
       finishReason: null,
       lastEvent: null,
+      eventSeq: 0,
     };
   },
 
@@ -540,6 +623,22 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       drawMs: state.drawMs,
       drawerId: current?.drawerId ?? null,
       category: current?.category ?? null,
+      difficulty: current?.difficulty ?? 'easy',
+      hint:
+        current && !isDrawer && !reveal
+          ? current.word
+              .split('')
+              .map((char, index) =>
+                char === ' '
+                  ? ' '
+                  : index === 0 ||
+                      (ctx.now() - current.startedAt > state.drawMs * 0.55 &&
+                        index === current.word.length - 1)
+                    ? char
+                    : '_',
+              )
+              .join('')
+          : null,
       word: isDrawer || reveal ? (current?.word ?? null) : null,
       endsAt: current?.endsAt ?? null,
       strokes: current
@@ -555,7 +654,7 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       guesses: current
         ? current.guesses.map((guess) => ({
             playerId: guess.playerId,
-            text: guess.text,
+            text: guess.correct && !isDrawer && !reveal ? 'solved it' : guess.text,
             correct: guess.correct,
           }))
         : [],
@@ -565,6 +664,7 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       palette: [...PALETTE],
       finishReason: state.finishReason,
       lastEvent: state.lastEvent,
+      eventSeq: state.eventSeq,
       serverTime: ctx.now(),
     };
   },
@@ -585,7 +685,12 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       }
       return {
         type: 'stroke',
-        payload: { color: PALETTE[Math.floor(rng() * (PALETTE.length - 1))]!, size: 8, tool: 'brush', points },
+        payload: {
+          color: PALETTE[Math.floor(rng() * (PALETTE.length - 1))]!,
+          size: 8,
+          tool: 'brush',
+          points,
+        },
       };
     }
     if (state.phase !== 'drawing') return null;

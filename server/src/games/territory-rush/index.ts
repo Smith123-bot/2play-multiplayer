@@ -33,6 +33,8 @@ export interface RushRunner {
   owner: number;
   captures: number;
   deaths: number;
+  largestCapture: number;
+  latestInputSeq: number;
   disconnected: boolean;
   left: boolean;
 }
@@ -42,6 +44,10 @@ export interface TerritoryRushState {
   cols: number;
   rows: number;
   grid: number[];
+  walls: number[];
+  layout: 'open' | 'crossroads' | 'islands';
+  stage: number;
+  nextStageAt: number | null;
   runners: Record<string, RushRunner>;
   stepMs: number;
   stepIndex: number;
@@ -98,7 +104,11 @@ function inBounds(cols: number, rows: number, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < cols && y < rows;
 }
 
-function spawnAnchor(seat: number, cols: number, rows: number): { x: number; y: number; direction: RushDirection } {
+function spawnAnchor(
+  seat: number,
+  cols: number,
+  rows: number,
+): { x: number; y: number; direction: RushDirection } {
   const inset = 2;
   if (seat === 0) return { x: inset, y: inset, direction: 'right' };
   if (seat === 1) return { x: cols - 1 - inset, y: inset, direction: 'left' };
@@ -106,7 +116,14 @@ function spawnAnchor(seat: number, cols: number, rows: number): { x: number; y: 
   return { x: cols - 1 - inset, y: rows - 1 - inset, direction: 'left' };
 }
 
-export function paintHome(grid: number[], cols: number, rows: number, cx: number, cy: number, owner: number): number[] {
+export function paintHome(
+  grid: number[],
+  cols: number,
+  rows: number,
+  cx: number,
+  cy: number,
+  owner: number,
+): number[] {
   const home: number[] = [];
   for (let dy = -HOME_RADIUS; dy <= HOME_RADIUS; dy += 1) {
     for (let dx = -HOME_RADIUS; dx <= HOME_RADIUS; dx += 1) {
@@ -149,7 +166,7 @@ export function captureEnclosed(
   const outside = new Uint8Array(total);
   const queue: number[] = [];
   const tryPush = (i: number) => {
-    if (i < 0 || i >= total || outside[i] === 1) return;
+    if (i < 0 || i >= total || outside[i] === 1 || protectedCells.has(i)) return;
     if (grid[i] !== 0) return;
     outside[i] = 1;
     queue.push(i);
@@ -197,12 +214,16 @@ function trailSet(runner: RushRunner): Set<number> {
   return new Set(runner.trail);
 }
 
-export function stepTerritory(state: TerritoryRushState, ctx: GameContext): { captures: string[]; cuts: string[] } {
+export function stepTerritory(
+  state: TerritoryRushState,
+  ctx: GameContext,
+): { captures: string[]; cuts: string[] } {
   const outcome = { captures: [] as string[], cuts: [] as string[] };
   if (state.phase !== 'playing') return outcome;
   const now = ctx.now();
   const { cols, rows, grid } = state;
   const protectedCells = allHomes(state);
+  for (const wall of state.walls) protectedCells.add(wall);
 
   const ids = Object.keys(state.runners).filter((id) => {
     const runner = state.runners[id]!;
@@ -221,14 +242,24 @@ export function stepTerritory(state: TerritoryRushState, ctx: GameContext): { ca
   for (const id of ids) {
     const runner = state.runners[id]!;
     if (now < runner.frozenUntil) {
-      plans.set(id, { x: runner.x, y: runner.y, i: cellIndex(cols, runner.x, runner.y), stay: true });
+      plans.set(id, {
+        x: runner.x,
+        y: runner.y,
+        i: cellIndex(cols, runner.x, runner.y),
+        stay: true,
+      });
       continue;
     }
     const d = DELTA[runner.direction];
     const nx = runner.x + d.dx;
     const ny = runner.y + d.dy;
-    if (!inBounds(cols, rows, nx, ny)) {
-      plans.set(id, { x: runner.x, y: runner.y, i: cellIndex(cols, runner.x, runner.y), stay: true });
+    if (!inBounds(cols, rows, nx, ny) || state.walls.includes(cellIndex(cols, nx, ny))) {
+      plans.set(id, {
+        x: runner.x,
+        y: runner.y,
+        i: cellIndex(cols, runner.x, runner.y),
+        stay: true,
+      });
       continue;
     }
     plans.set(id, { x: nx, y: ny, i: cellIndex(cols, nx, ny), stay: false });
@@ -268,7 +299,8 @@ export function stepTerritory(state: TerritoryRushState, ctx: GameContext): { ca
     if (occupiers.length < 2) continue;
     for (const id of occupiers) {
       const runner = state.runners[id]!;
-      const onLand = grid[cellIndex(cols, runner.x, runner.y)] === runner.owner && runner.trail.length === 0;
+      const onLand =
+        grid[cellIndex(cols, runner.x, runner.y)] === runner.owner && runner.trail.length === 0;
       if (!onLand) dead.add(id);
     }
   }
@@ -296,19 +328,24 @@ export function stepTerritory(state: TerritoryRushState, ctx: GameContext): { ca
       const gained = captureEnclosed(grid, cols, rows, runner.owner, runner.trail, protectedCells);
       runner.trail = [];
       runner.captures += 1;
+      runner.largestCapture = Math.max(runner.largestCapture, gained);
       outcome.captures.push(id);
       state.lastEvent = `capture:${id}:${gained}`;
     }
   }
 
   state.stepIndex += 1;
-  if (outcome.cuts.length > 0 && !state.lastEvent?.startsWith('capture:')) {
+  if (outcome.cuts.length > 0 && outcome.captures.length === 0) {
     state.lastEvent = `cut:${outcome.cuts.join('+')}`;
   }
   return outcome;
 }
 
-export function finishTerritory(state: TerritoryRushState, ctx: GameContext, reason: GameFinishReason): void {
+export function finishTerritory(
+  state: TerritoryRushState,
+  ctx: GameContext,
+  reason: GameFinishReason,
+): void {
   if (state.phase === 'finished') return;
   state.phase = 'finished';
   state.finishReason = reason;
@@ -317,7 +354,13 @@ export function finishTerritory(state: TerritoryRushState, ctx: GameContext, rea
   ctx.finish(reason);
 }
 
-function makeRunner(seat: number, owner: number, cols: number, rows: number, grid: number[]): RushRunner {
+function makeRunner(
+  seat: number,
+  owner: number,
+  cols: number,
+  rows: number,
+  grid: number[],
+): RushRunner {
   const spawn = spawnAnchor(seat, cols, rows);
   const home = paintHome(grid, cols, rows, spawn.x, spawn.y, owner);
   return {
@@ -332,9 +375,43 @@ function makeRunner(seat: number, owner: number, cols: number, rows: number, gri
     owner,
     captures: 0,
     deaths: 0,
+    largestCapture: 0,
+    latestInputSeq: -1,
     disconnected: false,
     left: false,
   };
+}
+
+export function buildRushWalls(
+  layout: TerritoryRushState['layout'],
+  cols: number,
+  rows: number,
+  protectedCells: Set<number> = new Set(),
+): number[] {
+  const walls = new Set<number>();
+  const add = (x: number, y: number) => {
+    const index = cellIndex(cols, x, y);
+    if (inBounds(cols, rows, x, y) && !protectedCells.has(index)) walls.add(index);
+  };
+  if (layout === 'crossroads') {
+    for (let y = 5; y < rows - 5; y += 1)
+      if (Math.abs(y - rows / 2) > 2) add(Math.floor(cols / 2), y);
+    for (let x = 8; x < cols - 8; x += 1)
+      if (Math.abs(x - cols / 2) > 3) add(x, Math.floor(rows / 2));
+  } else if (layout === 'islands') {
+    for (const [cx, cy] of [
+      [cols * 0.35, rows * 0.35],
+      [cols * 0.65, rows * 0.65],
+      [cols * 0.65, rows * 0.35],
+      [cols * 0.35, rows * 0.65],
+    ]) {
+      add(Math.floor(cx), Math.floor(cy));
+      add(Math.floor(cx) + 1, Math.floor(cy));
+      add(Math.floor(cx), Math.floor(cy) + 1);
+      add(Math.floor(cx) + 1, Math.floor(cy) + 1);
+    }
+  }
+  return [...walls];
 }
 
 export const territoryRushGame: GameModule<TerritoryRushState> = {
@@ -357,6 +434,10 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       cols,
       rows,
       grid,
+      walls: [],
+      layout: 'open',
+      stage: 1,
+      nextStageAt: null,
       runners,
       stepMs: STEP_MS,
       stepIndex: 0,
@@ -402,9 +483,16 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
     ctx.players.forEach((player, index) => {
       runners[player.id] = makeRunner(index, index + 1, cols, rows, grid);
     });
+    const layout: TerritoryRushState['layout'] =
+      ctx.seed % 3 === 0 ? 'islands' : ctx.seed % 2 === 0 ? 'crossroads' : 'open';
     state.cols = cols;
     state.rows = rows;
     state.grid = grid;
+    state.layout = layout;
+    state.walls = buildRushWalls(layout, cols, rows, allHomes({ ...state, runners }));
+    state.stage = 1;
+    state.stepMs = STEP_MS;
+    state.nextStageAt = ctx.now() + state.durationMs / 3;
     state.runners = runners;
     state.stepIndex = 0;
     state.accumulatorMs = 0;
@@ -415,18 +503,33 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
     state.lastEvent = 'start';
     state.nextAIRequestAt = {};
     ctx.markStateChanged();
-    ctx.schedule(state.durationMs, () => finishTerritory(state, ctx, 'timeout'), 'gameDuration', 'match-timeout');
+    ctx.schedule(
+      state.durationMs,
+      () => finishTerritory(state, ctx, 'timeout'),
+      'gameDuration',
+      'match-timeout',
+    );
   },
 
   validateAction(playerId, action, state): ValidationResult {
     if (action.type !== 'turn') return { valid: false, reason: 'Unknown action.' };
     if (state.phase !== 'playing') return { valid: false, reason: 'The match is not running.' };
     const direction = action.payload?.direction;
-    if (!isRushDirection(direction)) return { valid: false, reason: 'Use up, down, left or right.' };
+    if (!isRushDirection(direction))
+      return { valid: false, reason: 'Use up, down, left or right.' };
     const runner = state.runners[playerId];
     if (!runner || runner.left) return { valid: false, reason: 'You are not in this match.' };
     const effective = runner.pending ?? runner.direction;
-    if (REVERSE[effective] === direction) return { valid: false, reason: 'You cannot reverse instantly.' };
+    if (REVERSE[effective] === direction)
+      return { valid: false, reason: 'You cannot reverse instantly.' };
+    const sequence = action.payload?.sequence;
+    if (
+      sequence !== undefined &&
+      (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+    )
+      return { valid: false, reason: 'Invalid input sequence.' };
+    if (typeof sequence === 'number' && sequence <= runner.latestInputSeq)
+      return { valid: false, reason: 'Stale input.' };
     return { valid: true };
   },
 
@@ -436,6 +539,15 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
     if (!isRushDirection(direction)) return actionRejected('Invalid direction.');
     const runner = state.runners[playerId];
     if (!runner || state.phase !== 'playing') return actionRejected('You cannot steer right now.');
+    const sequence = action.payload?.sequence;
+    if (
+      sequence !== undefined &&
+      (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+    )
+      return actionRejected('Invalid input sequence.');
+    if (typeof sequence === 'number' && sequence <= runner.latestInputSeq)
+      return actionRejected('Stale input.');
+    if (typeof sequence === 'number') runner.latestInputSeq = sequence;
     const effective = runner.pending ?? runner.direction;
     if (REVERSE[effective] === direction) return actionRejected('You cannot reverse instantly.');
     if (effective === direction) return actionAccepted(false);
@@ -445,6 +557,14 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
 
   update(state, deltaTimeMs, ctx): void {
     if (state.phase !== 'playing') return;
+    const now = ctx.now();
+    if (state.nextStageAt !== null && now >= state.nextStageAt && state.stage < 3) {
+      state.stage += 1;
+      state.stepMs = state.stage === 2 ? 220 : 190;
+      state.nextStageAt = state.startedAt! + (state.durationMs * state.stage) / 3;
+      state.lastEvent = `stage:${state.stage}`;
+      ctx.markStateChanged();
+    }
     for (const player of ctx.players) {
       if (!player.isAI) continue;
       const runner = state.runners[player.id];
@@ -461,8 +581,9 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
     while (state.accumulatorMs >= state.stepMs && state.phase === 'playing' && guard < 4) {
       state.accumulatorMs -= state.stepMs;
       guard += 1;
-      const outcome = stepTerritory(state, ctx);
-      if (outcome.captures.length > 0 || outcome.cuts.length > 0) ctx.markStateChanged();
+      stepTerritory(state, ctx);
+      // Every authoritative movement step must reach all clients, not only captures.
+      ctx.markStateChanged();
     }
   },
 
@@ -478,7 +599,9 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
 
   checkWinCondition(state): string[] | null {
     if (state.phase !== 'finished') return null;
-    const entries = Object.entries(state.runners).map(([id, runner]) => [id, countCells(state.grid, runner.owner)] as const);
+    const entries = Object.entries(state.runners).map(
+      ([id, runner]) => [id, countCells(state.grid, runner.owner)] as const,
+    );
     if (entries.length === 0) return [];
     const best = Math.max(...entries.map(([, n]) => n));
     return entries.filter(([, n]) => n === best).map(([id]) => id);
@@ -523,10 +646,16 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
           percent: Math.round((cells / Math.max(1, total)) * 100),
           captures: state.runners[player.id]?.captures ?? 0,
           deaths: state.runners[player.id]?.deaths ?? 0,
+          largestCapture: state.runners[player.id]?.largestCapture ?? 0,
         },
       };
     });
-    return { winners, isDraw: winners.length > 1, rankings, reason: state.finishReason ?? 'completed' };
+    return {
+      winners,
+      isDraw: winners.length > 1,
+      rankings,
+      reason: state.finishReason ?? 'completed',
+    };
   },
 
   reset(state): TerritoryRushState {
@@ -542,7 +671,12 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       ...state,
       phase: 'idle',
       grid,
+      walls: [],
+      layout: 'open',
+      stage: 1,
+      nextStageAt: null,
       runners,
+      stepMs: STEP_MS,
       stepIndex: 0,
       accumulatorMs: 0,
       startedAt: null,
@@ -566,6 +700,10 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       cols: state.cols,
       rows: state.rows,
       grid: encodeGrid(state.grid),
+      walls: [...state.walls],
+      layout: state.layout,
+      stage: state.stage,
+      nextStageAt: state.nextStageAt,
       stepMs: state.stepMs,
       stepIndex: state.stepIndex,
       startedAt: state.startedAt,
@@ -590,6 +728,8 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
               percent: Math.round((cells / Math.max(1, total)) * 1000) / 10,
               captures: runner.captures,
               deaths: runner.deaths,
+              largestCapture: runner.largestCapture,
+              latestInputSeq: runner.latestInputSeq,
               frozenUntil: runner.frozenUntil,
               disconnected: runner.disconnected,
             },
@@ -609,12 +749,15 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       const n = { x: runner.x + DELTA[dir].dx, y: runner.y + DELTA[dir].dy };
       if (!inBounds(cols, rows, n.x, n.y)) return false;
       const i = cellIndex(cols, n.x, n.y);
-      if (runner.trail.includes(i)) return false;
+      if (state.walls.includes(i) || runner.trail.includes(i)) return false;
       return true;
     });
     const pool = safe.length > 0 ? safe : options;
     if (difficulty === 'easy' && ctx.random() < 0.45) {
-      return { type: 'turn', payload: { direction: pool[Math.floor(ctx.random() * pool.length)]! } };
+      return {
+        type: 'turn',
+        payload: { direction: pool[Math.floor(ctx.random() * pool.length)]! },
+      };
     }
     if (runner.trail.length > (difficulty === 'hard' ? 14 : 22)) {
       const homeward = pool.reduce((best, dir) => {
@@ -633,7 +776,9 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       const n = { x: runner.x + DELTA[dir].dx, y: runner.y + DELTA[dir].dy };
       return grid[cellIndex(cols, n.x, n.y)] !== runner.owner;
     });
-    const chosen = (prefer.length > 0 ? prefer : pool)[Math.floor(ctx.random() * (prefer.length > 0 ? prefer.length : pool.length))]!;
+    const chosen = (prefer.length > 0 ? prefer : pool)[
+      Math.floor(ctx.random() * (prefer.length > 0 ? prefer.length : pool.length))
+    ]!;
     return { type: 'turn', payload: { direction: chosen } };
   },
 

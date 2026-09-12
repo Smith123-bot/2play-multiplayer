@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createTestPlatform, waitFor, type TestPlatform } from '../../test/harness';
+import {
+  createGameFixture,
+  createTestPlatform,
+  waitFor,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
+  buildRushWalls,
   captureEnclosed,
   cellIndex,
   countCells,
@@ -42,7 +48,10 @@ describe('Territory Rush', () => {
       grid: string;
       cols: number;
       rows: number;
-      runners: Record<string, { x: number; y: number; owner: number; cells: number; trail: unknown[] }>;
+      runners: Record<
+        string,
+        { x: number; y: number; owner: number; cells: number; trail: unknown[] }
+      >;
     };
 
   it('starts each player with a home territory on a bounded grid', async () => {
@@ -76,14 +85,24 @@ describe('Territory Rush', () => {
     runner.direction = 'right';
     runner.pending = null;
     expect(
-      territoryRushGame.validateAction(playerId, { type: 'turn', payload: { direction: 'left' } }, state(), context())
-        .valid,
+      territoryRushGame.validateAction(
+        playerId,
+        { type: 'turn', payload: { direction: 'left' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
-    expect(territoryRushGame.validateAction(playerId, { type: 'dash' }, state(), context()).valid).toBe(false);
+    expect(
+      territoryRushGame.validateAction(playerId, { type: 'dash' }, state(), context()).valid,
+    ).toBe(false);
     state().phase = 'finished';
     expect(
-      territoryRushGame.validateAction(playerId, { type: 'turn', payload: { direction: 'up' } }, state(), context())
-        .valid,
+      territoryRushGame.validateAction(
+        playerId,
+        { type: 'turn', payload: { direction: 'up' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
   });
 
@@ -190,9 +209,43 @@ describe('Territory Rush', () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const playerId = players[0]!.id;
     const dir = state().runners[playerId]!.direction;
-    const first = platform.gameManager.handleAction(room, playerId, { type: 'turn', payload: { direction: dir } });
-    const second = platform.gameManager.handleAction(room, playerId, { type: 'turn', payload: { direction: dir } });
+    const first = platform.gameManager.handleAction(room, playerId, {
+      type: 'turn',
+      payload: { direction: dir },
+    });
+    const second = platform.gameManager.handleAction(room, playerId, {
+      type: 'turn',
+      payload: { direction: dir },
+    });
     expect(first.accepted).toBe(true);
     expect(second.accepted).toBe(true);
+  });
+
+  it('builds distinct authoritative maps and rejects stale steering', async () => {
+    expect(buildRushWalls('open', 40, 24)).toHaveLength(0);
+    expect(buildRushWalls('crossroads', 40, 24).length).toBeGreaterThan(0);
+    expect(buildRushWalls('islands', 40, 24)).not.toEqual(buildRushWalls('crossroads', 40, 24));
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const id = players[0]!.id;
+    expect(
+      platform.gameManager.handleAction(room, id, {
+        type: 'turn',
+        payload: { direction: 'down', sequence: 5 },
+      }).accepted,
+    ).toBe(true);
+    expect(
+      platform.gameManager.handleAction(room, id, {
+        type: 'turn',
+        payload: { direction: 'down', sequence: 4 },
+      }).accepted,
+    ).toBe(false);
+  });
+
+  it('accelerates authoritative movement across three match stages', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    state().nextStageAt = context().now() - 1;
+    territoryRushGame.update(state(), 1, context());
+    expect(state().stage).toBe(2);
+    expect(state().stepMs).toBe(220);
   });
 });

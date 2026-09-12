@@ -32,6 +32,8 @@ export interface PaddlePlayerState {
   dir: -1 | 0 | 1;
   score: number;
   rallies: number; // paddle hits
+  bestRally: number;
+  pointStreak: number;
   disconnected: boolean;
   left: boolean;
 }
@@ -64,6 +66,8 @@ export interface PaddleDuelState {
   finishReason: GameFinishReason | null;
   lastEvent: string | null;
   nextAIRequestAt: Record<string, number>;
+  pointNumber: number;
+  lastHit: { x: number; y: number; at: number } | null;
 }
 
 const ARENA_W = 100;
@@ -72,8 +76,8 @@ const PADDLE_W = 2;
 const PADDLE_H = 12;
 const PADDLE_INSET = 3;
 const BALL_R = 1;
-const STEP_MS = 50;
-const MAX_SUBSTEPS = 6;
+const STEP_MS = 16;
+const MAX_SUBSTEPS = 20;
 const PADDLE_SPEED = 42; // units per second
 const BALL_SPEED_START = 40;
 const BALL_SPEED_INC = 3.5;
@@ -122,7 +126,12 @@ export function foldRange(value: number, low: number, high: number): number {
 }
 
 /** Predicts the ball's y when it reaches a side (walls reflect). For AI + tests. */
-export function predictBallY(ball: PaddleBall, targetX: number, height: number, radius: number): number {
+export function predictBallY(
+  ball: PaddleBall,
+  targetX: number,
+  height: number,
+  radius: number,
+): number {
   if (ball.vx === 0) return ball.y;
   const t = (targetX - ball.x) / ball.vx;
   if (t <= 0) return ball.y;
@@ -140,7 +149,7 @@ export function resetPoint(state: PaddleDuelState, servingTo: PaddleSide, now: n
 /** Launches the ball after the serve delay. Exported for tests. */
 export function launchServe(state: PaddleDuelState, ctx: GameContext): void {
   if (state.serveAt === null || state.servingTo === null) return;
-  const angle = (ctx.random() * 2 - 1) * (SERVE_ANGLE_MAX_DEG * Math.PI) / 180;
+  const angle = ((ctx.random() * 2 - 1) * (SERVE_ANGLE_MAX_DEG * Math.PI)) / 180;
   const dir = state.servingTo === 'left' ? -1 : 1;
   state.ball = {
     x: ARENA_W / 2,
@@ -158,7 +167,12 @@ function scorePoint(state: PaddleDuelState, scorerSide: PaddleSide, ctx: GameCon
   const scorer = sideOf(state.paddles, scorerSide);
   if (scorer) {
     state.paddles[scorer]!.score += 1;
+    state.paddles[scorer]!.pointStreak += 1;
+    for (const [id, paddle] of Object.entries(state.paddles)) {
+      if (id !== scorer) paddle.pointStreak = 0;
+    }
   }
+  state.pointNumber += 1;
   state.lastEvent = `point:${scorer ?? scorerSide}`;
   ctx.markStateChanged();
   if (scorer && state.paddles[scorer]!.score >= state.scoreLimit) {
@@ -170,17 +184,23 @@ function scorePoint(state: PaddleDuelState, scorerSide: PaddleSide, ctx: GameCon
 }
 
 /** Reflects the ball off a paddle, angled by where it struck. */
-function bounceOffPaddle(state: PaddleDuelState, paddle: PaddlePlayerState, ctx: GameContext): void {
+function bounceOffPaddle(
+  state: PaddleDuelState,
+  paddle: PaddlePlayerState,
+  ctx: GameContext,
+): void {
   const speed = Math.min(BALL_SPEED_MAX, Math.hypot(state.ball.vx, state.ball.vy) + BALL_SPEED_INC);
   const half = state.paddleHeight / 2 + state.ballRadius;
   const rel = Math.min(1, Math.max(-1, (state.ball.y - paddle.y) / half));
-  const angle = rel * (MAX_BOUNCE_DEG * Math.PI) / 180;
+  const angle = (rel * (MAX_BOUNCE_DEG * Math.PI)) / 180;
   const dir = paddle.side === 'left' ? 1 : -1;
   state.ball.vx = Math.cos(angle) * speed * dir;
   state.ball.vy = Math.sin(angle) * speed;
   state.ball.x = paddleFace(paddle.side) + state.ballRadius * dir + dir * 0.01;
   state.rallyHits += 1;
   paddle.rallies += 1;
+  paddle.bestRally = Math.max(paddle.bestRally, state.rallyHits);
+  state.lastHit = { x: state.ball.x, y: state.ball.y, at: ctx.now() };
   state.lastEvent = 'paddle';
   ctx.markStateChanged();
 }
@@ -189,7 +209,12 @@ function bounceOffPaddle(state: PaddleDuelState, paddle: PaddlePlayerState, ctx:
  * Advances the simulation by `deltaTimeMs`. Exported for tests.
  * `now` is the authoritative clock (ctx.now()).
  */
-export function stepDuel(state: PaddleDuelState, deltaTimeMs: number, now: number, ctx: GameContext): void {
+export function stepDuel(
+  state: PaddleDuelState,
+  deltaTimeMs: number,
+  now: number,
+  ctx: GameContext,
+): void {
   if (state.phase !== 'playing') return;
   state.accumulatorMs += deltaTimeMs;
   let guard = 0;
@@ -213,6 +238,7 @@ export function stepDuel(state: PaddleDuelState, deltaTimeMs: number, now: numbe
     }
 
     const prevX = state.ball.x;
+    const prevY = state.ball.y;
     let nx = state.ball.x + state.ball.vx * dt;
     let ny = state.ball.y + state.ball.vy * dt;
 
@@ -236,7 +262,8 @@ export function stepDuel(state: PaddleDuelState, deltaTimeMs: number, now: numbe
     if (left && state.ball.vx < 0) {
       const face = paddleFace('left');
       if (prevX - state.ballRadius >= face && nx - state.ballRadius < face) {
-        const crossingY = state.ball.y; // y already advanced this sub-step
+        const fraction = Math.max(0, Math.min(1, (prevX - state.ballRadius - face) / (prevX - nx)));
+        const crossingY = prevY + (state.ball.y - prevY) * fraction;
         if (Math.abs(crossingY - left.y) <= state.paddleHeight / 2 + state.ballRadius) {
           bounceOffPaddle(state, left, ctx);
           nx = state.ball.x;
@@ -250,7 +277,9 @@ export function stepDuel(state: PaddleDuelState, deltaTimeMs: number, now: numbe
     if (right && state.ball.vx > 0 && state.phase === 'playing') {
       const face = paddleFace('right');
       if (prevX + state.ballRadius <= face && nx + state.ballRadius > face) {
-        if (Math.abs(state.ball.y - right.y) <= state.paddleHeight / 2 + state.ballRadius) {
+        const fraction = Math.max(0, Math.min(1, (face - prevX - state.ballRadius) / (nx - prevX)));
+        const crossingY = prevY + (state.ball.y - prevY) * fraction;
+        if (Math.abs(crossingY - right.y) <= state.paddleHeight / 2 + state.ballRadius) {
           bounceOffPaddle(state, right, ctx);
           nx = state.ball.x;
         }
@@ -275,7 +304,11 @@ export function finishPaddleOnTimeout(state: PaddleDuelState, ctx: GameContext):
   finishPaddleMatch(state, ctx, 'timeout');
 }
 
-function finishPaddleMatch(state: PaddleDuelState, ctx: GameContext, reason: GameFinishReason): void {
+function finishPaddleMatch(
+  state: PaddleDuelState,
+  ctx: GameContext,
+  reason: GameFinishReason,
+): void {
   if (state.phase === 'finished') return;
   state.phase = 'finished';
   state.finishReason = reason;
@@ -296,7 +329,8 @@ function endIfEveryoneLeft(state: PaddleDuelState, ctx: GameContext): void {
 /** Ranking: stayed players first, then score, then seat. */
 export function computePaddleRanking(state: PaddleDuelState, ctx: GameContext): RankingDraft[] {
   const ranked = [...ctx.players].sort((a, b) => {
-    const leftDiff = Number(state.paddles[a.id]?.left ?? true) - Number(state.paddles[b.id]?.left ?? true);
+    const leftDiff =
+      Number(state.paddles[a.id]?.left ?? true) - Number(state.paddles[b.id]?.left ?? true);
     if (leftDiff !== 0) return leftDiff;
     const scoreDiff = (state.paddles[b.id]?.score ?? 0) - (state.paddles[a.id]?.score ?? 0);
     if (scoreDiff !== 0) return scoreDiff;
@@ -320,6 +354,8 @@ export function computePaddleRanking(state: PaddleDuelState, ctx: GameContext): 
     isDraw: winners.length > 1,
     stats: {
       rallies: state.paddles[player.id]?.rallies ?? 0,
+      bestRally: state.paddles[player.id]?.bestRally ?? 0,
+      pointStreak: state.paddles[player.id]?.pointStreak ?? 0,
       side: state.paddles[player.id]?.side === 'right' ? 1 : 0,
     },
   }));
@@ -353,6 +389,8 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
             dir: 0,
             score: 0,
             rallies: 0,
+            bestRally: 0,
+            pointStreak: 0,
             disconnected: false,
             left: false,
           },
@@ -371,6 +409,8 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
       finishReason: null,
       lastEvent: null,
       nextAIRequestAt: {},
+      pointNumber: 0,
+      lastHit: null,
     };
   },
 
@@ -383,6 +423,8 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
       dir: 0,
       score: 0,
       rallies: 0,
+      bestRally: 0,
+      pointStreak: 0,
       disconnected: false,
       left: false,
     };
@@ -417,6 +459,8 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
         dir: 0,
         score: 0,
         rallies: 0,
+        bestRally: 0,
+        pointStreak: 0,
         disconnected: false,
         left: false,
       };
@@ -429,6 +473,8 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
     state.finishReason = null;
     state.lastEvent = 'start';
     state.nextAIRequestAt = {};
+    state.pointNumber = 0;
+    state.lastHit = null;
     resetPoint(state, ctx.random() < 0.5 ? 'left' : 'right', ctx.now());
     ctx.markStateChanged();
 
@@ -447,7 +493,8 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
       return { valid: false, reason: 'Invalid direction — use up, down or stop.' };
     }
     if (state.phase !== 'playing') return { valid: false, reason: 'The match is not running.' };
-    if (!state.paddles[playerId]) return { valid: false, reason: 'You are not part of this match.' };
+    if (!state.paddles[playerId])
+      return { valid: false, reason: 'You are not part of this match.' };
     return { valid: true };
   },
 
@@ -535,6 +582,8 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
             dir: 0,
             score: 0,
             rallies: 0,
+            bestRally: 0,
+            pointStreak: 0,
             disconnected: false,
             left: false,
           },
@@ -550,6 +599,8 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
       finishReason: null,
       lastEvent: null,
       nextAIRequestAt: {},
+      pointNumber: 0,
+      lastHit: null,
     };
   },
 
@@ -569,6 +620,8 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
       serveAt: state.serveAt,
       servingTo: state.servingTo,
       rallyHits: state.rallyHits,
+      pointNumber: state.pointNumber,
+      lastHit: state.lastHit ? { ...state.lastHit } : null,
       scoreLimit: state.scoreLimit,
       startedAt: state.startedAt,
       endsAt: state.endsAt,
@@ -584,6 +637,8 @@ export const paddleDuelGame: GameModule<PaddleDuelState> = {
             dir: paddle.dir,
             score: paddle.score,
             rallies: paddle.rallies,
+            bestRally: paddle.bestRally,
+            pointStreak: paddle.pointStreak,
             disconnected: paddle.disconnected,
             left: paddle.left,
           },

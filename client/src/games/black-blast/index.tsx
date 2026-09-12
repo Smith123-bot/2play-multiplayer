@@ -43,10 +43,21 @@ export interface BlastPublicState {
   serverTime: number;
   lastEvent: string | null;
   finishReason: string | null;
+  wave: number;
+  maxWave: number;
+  waveEndsAt: number | null;
+  pulseEnergyCost: number;
   nodes: ArenaNodeView[];
   pulses: PulseView[];
   effects: EffectView[];
-  me: { cooldownUntil: number; combo: number; comboUntil: number; score: number } | null;
+  me: {
+    cooldownUntil: number;
+    combo: number;
+    comboUntil: number;
+    score: number;
+    energy: number;
+    maxEnergy: number;
+  } | null;
   players: Record<
     string,
     {
@@ -57,6 +68,8 @@ export interface BlastPublicState {
       bestCombo: number;
       hits: number;
       chains: number;
+      energy: number;
+      maxEnergy: number;
       disconnected: boolean;
     }
   >;
@@ -120,16 +133,21 @@ function BlackBlastGame({
   const pulse = useCallback(() => {
     if (!playing) return;
     const now = Date.now() + offsetRef.current;
-    if (state?.me && now < state.me.cooldownUntil) return;
+    if (state?.me && (now < state.me.cooldownUntil || state.me.energy < state.pulseEnergyCost))
+      return;
     sendAction({ type: 'pulse' } satisfies GameAction);
     play('click');
     vibrate('buttonPress');
-  }, [playing, sendAction, play, vibrate, state?.me]);
+  }, [playing, sendAction, play, vibrate, state?.me, state?.pulseEnergyCost]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target && (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) || target.isContentEditable)) {
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+          target.isContentEditable)
+      ) {
         return;
       }
       if (event.key === ' ') {
@@ -159,6 +177,9 @@ function BlackBlastGame({
     } else if (event.startsWith('chain:')) {
       play('correct');
       if (mine) vibrate('victory');
+    } else if (event.startsWith('wave:')) {
+      play('gameStart');
+      vibrate('success');
     } else if (event.startsWith('miss:')) {
       if (mine) play('wrong');
     } else if (event === 'start') play('gameStart');
@@ -268,6 +289,19 @@ function BlackBlastGame({
         context.arc((effect.x + 0.5) * cell, (effect.y + 0.5) * cell, radius * 0.6, 0, Math.PI * 2);
         context.fillStyle = `rgba(30,27,75,${fade * 0.45})`;
         context.fill();
+
+        // Deterministic 2D sparks radiate from every authoritative blast.
+        const sparks = 7 + Math.min(8, effect.depth * 2);
+        for (let index = 0; index < sparks; index += 1) {
+          const angle = (index / sparks) * Math.PI * 2 + effect.depth * 0.37;
+          const travel = radius * (0.35 + t * 0.55);
+          const sx = (effect.x + 0.5) * cell + Math.cos(angle) * travel;
+          const sy = (effect.y + 0.5) * cell + Math.sin(angle) * travel;
+          context.beginPath();
+          context.arc(sx, sy, Math.max(0.7, cell * 0.07 * fade), 0, Math.PI * 2);
+          context.fillStyle = `rgba(251,191,36,${fade})`;
+          context.fill();
+        }
       }
 
       // Players
@@ -300,6 +334,9 @@ function BlackBlastGame({
 
   const now = Date.now() + offsetRef.current;
   const cooling = state?.me ? now < state.me.cooldownUntil : false;
+  const energy = state?.me?.energy ?? 0;
+  const maxEnergy = state?.me?.maxEnergy ?? 100;
+  const needsEnergy = Boolean(state?.me) && energy < (state?.pulseEnergyCost ?? 0);
   const combo = state?.me?.combo ?? 0;
 
   if (phase === 'idle') {
@@ -327,7 +364,27 @@ function BlackBlastGame({
 
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Badge tone={combo > 1 ? 'success' : 'default'}>Combo x{Math.max(1, combo)}</Badge>
-        <Badge tone={cooling ? 'warning' : 'primary'}>{cooling ? 'Recharging' : 'Pulse ready'}</Badge>
+        <Badge tone={cooling || needsEnergy ? 'warning' : 'primary'}>
+          {cooling ? 'Recharging' : needsEnergy ? 'Gathering energy' : 'Pulse ready'}
+        </Badge>
+        <Badge tone={state?.wave === state?.maxWave ? 'danger' : 'accent'}>
+          Wave {state?.wave ?? 1}/{state?.maxWave ?? 1}
+        </Badge>
+      </div>
+
+      <div className="mx-auto w-full max-w-[min(94vw,34rem)] space-y-1">
+        <div className="flex items-center justify-between text-xs text-slate-400">
+          <span>Blast energy</span>
+          <span className="tabular-nums">
+            {Math.floor(energy)}/{maxEnergy}
+          </span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-300 transition-[width] duration-200"
+            style={{ width: `${Math.max(0, Math.min(100, (energy / maxEnergy) * 100))}%` }}
+          />
+        </div>
       </div>
 
       <canvas
@@ -358,7 +415,7 @@ function BlackBlastGame({
         <button
           type="button"
           aria-label="Drop energy pulse"
-          disabled={!playing || cooling}
+          disabled={!playing || cooling || needsEnergy}
           onClick={pulse}
           className={cn(
             'grid h-24 w-24 place-items-center rounded-full border-2 transition active:scale-95 disabled:opacity-40',
@@ -385,7 +442,8 @@ function BlackBlastGame({
       </div>
 
       <p className="text-center text-xs text-slate-500">
-        Gold nodes chain into new pulses. Land pulses back to back to build your multiplier.
+        Gold nodes chain into new pulses and restore energy. Each wave refreshes the arena and
+        accelerates pickup respawns.
       </p>
     </div>
   );

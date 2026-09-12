@@ -14,6 +14,11 @@ export interface BrickArenaPublic {
   bricks: boolean[];
   destroyed: number;
   chain: number;
+  level: number;
+  levelsCleared: number;
+  paddleScale: number;
+  powerUp: 'wide' | 'slow' | 'life' | null;
+  powerUpUntil: number;
   lives: number;
   score: number;
   bricksBroken: number;
@@ -35,6 +40,7 @@ export interface BrickBreakerPublicState {
   brickRows: number;
   brickValues: number[];
   clearBonus: number;
+  maxLevels: number;
   startedAt: number | null;
   endsAt: number | null;
   finishReason: string | null;
@@ -57,6 +63,7 @@ function BrickBreakerGame({
 }: GameComponentProps<BrickBreakerPublicState>) {
   const clockOffset = useRef(0);
   const lastIntent = useRef(0);
+  const activeIntent = useRef<'left' | 'right' | 'stop' | null>(null);
   const previousEvent = useRef<string | null>(null);
   const [, setFrame] = useState(0);
 
@@ -88,7 +95,8 @@ function BrickBreakerGame({
 
   const sendMove = useCallback(
     (direction: 'left' | 'right' | 'stop') => {
-      if (!canPlay) return;
+      if (!canPlay || activeIntent.current === direction) return;
+      activeIntent.current = direction;
       sendAction({ type: 'move', payload: { direction } } satisfies GameAction);
       vibrate('buttonPress');
     },
@@ -99,23 +107,35 @@ function BrickBreakerGame({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const map: Record<string, 'left' | 'right' | 'stop'> = {
-        ArrowLeft: 'left', ArrowRight: 'right',
-        a: 'left', d: 'right', A: 'left', D: 'right',
+        ArrowLeft: 'left',
+        ArrowRight: 'right',
+        a: 'left',
+        d: 'right',
+        A: 'left',
+        D: 'right',
       };
       const direction = map[event.key];
       if (!direction) return;
       const target = event.target as HTMLElement | null;
       if (
         target &&
-        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) || target.isContentEditable)
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+          target.isContentEditable)
       ) {
         return;
       }
       event.preventDefault();
       sendMove(direction);
     };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (['ArrowLeft', 'ArrowRight', 'a', 'd', 'A', 'D'].includes(event.key)) sendMove('stop');
+    };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, [sendMove]);
 
   // Event feedback.
@@ -127,7 +147,13 @@ function BrickBreakerGame({
     const [kind, actor] = lastEvent.split(':');
     const mine = actor === myPlayerId;
     if (kind === 'brick') play('click');
-    else if (kind === 'save') play('notification');
+    else if (kind === 'power') {
+      play('correct');
+      if (mine) vibrate('success');
+    } else if (kind === 'level') {
+      play('gameStart');
+      if (mine) vibrate('victory');
+    } else if (kind === 'save') play('notification');
     else if (kind === 'launch') play('click');
     else if (kind === 'miss' && mine) {
       play('wrong');
@@ -158,10 +184,18 @@ function BrickBreakerGame({
   }
 
   const {
-    width, height, paddleWidth: pw, paddleHeight: phh, paddleY, ballRadius: br,
-    brickCols, brickRows,
+    width,
+    height,
+    paddleWidth: pw,
+    paddleHeight: phh,
+    paddleY,
+    ballRadius: br,
+    brickCols,
+    brickRows,
   } = state;
-  const elapsedS = state ? Math.max(0, (Date.now() + clockOffset.current - state.serverTime) / 1000) : 0;
+  const elapsedS = state
+    ? Math.max(0, (Date.now() + clockOffset.current - state.serverTime) / 1000)
+    : 0;
   const pct = (value: number, max: number) => `${(value / max) * 100}%`;
 
   const renderArena = (
@@ -171,19 +205,51 @@ function BrickBreakerGame({
     highlight: boolean,
   ) => {
     if (!arenaView) return null;
-    const clampX = (x: number) => Math.min(width - pw / 2, Math.max(pw / 2, x));
+    const livePw = pw * arenaView.paddleScale;
+    const clampX = (x: number) => Math.min(width - livePw / 2, Math.max(livePw / 2, x));
     const paddleX = clampX(arenaView.paddleX + arenaView.paddleDir * PADDLE_SPEED * elapsedS);
     const parked = arenaView.launchAt !== null;
-    const bx = parked ? paddleX : Math.min(width, Math.max(0, arenaView.ball.x + arenaView.ball.vx * elapsedS));
-    const by = parked ? paddleY - br - 0.5 : Math.min(height, Math.max(0, arenaView.ball.y + arenaView.ball.vy * elapsedS));
+    const bx = parked
+      ? paddleX
+      : Math.min(width, Math.max(0, arenaView.ball.x + arenaView.ball.vx * elapsedS));
+    const by = parked
+      ? paddleY - br - 0.5
+      : Math.min(height, Math.max(0, arenaView.ball.y + arenaView.ball.vy * elapsedS));
+    const trail = parked
+      ? []
+      : Array.from({ length: 5 }, (_item, index) => {
+          const age = (index + 1) * 0.02;
+          return {
+            x: bx - arenaView.ball.vx * age,
+            y: by - arenaView.ball.vy * age,
+            opacity: (5 - index) / 18,
+          };
+        });
 
     return (
       <div key={label} className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center justify-between gap-2 px-1">
-          <span className={cn('truncate text-xs font-semibold', isMine ? 'text-indigo-300' : 'text-emerald-300')}>
+          <span
+            className={cn(
+              'truncate text-xs font-semibold',
+              isMine ? 'text-indigo-300' : 'text-emerald-300',
+            )}
+          >
             {label}
           </span>
           <span className="flex items-center gap-2 text-xs text-slate-400">
+            <span className="font-semibold text-cyan-300">
+              Lv {arenaView.level}/{state.maxLevels}
+            </span>
+            {arenaView.powerUp ? (
+              <span className="text-amber-300">
+                {arenaView.powerUp === 'wide'
+                  ? '↔ Wide'
+                  : arenaView.powerUp === 'slow'
+                    ? '◌ Slow'
+                    : '♥ Life'}
+              </span>
+            ) : null}
             {arenaView.chain > 1 ? (
               <span className="font-bold text-warning">x{Math.min(4, arenaView.chain)}</span>
             ) : null}
@@ -194,14 +260,17 @@ function BrickBreakerGame({
         <div
           className={cn(
             'relative w-full touch-none overflow-hidden rounded-xl border bg-black/60 select-none',
-            highlight ? 'border-indigo-400/60 shadow-[0_0_12px_rgba(129,140,248,0.25)]' : 'border-white/10',
+            highlight
+              ? 'border-indigo-400/60 shadow-[0_0_12px_rgba(129,140,248,0.25)]'
+              : 'border-white/10',
           )}
           style={{ aspectRatio: `${width} / ${height}` }}
-          onTouchMove={
+          onPointerMove={
             isMine && canPlay
               ? (event) => {
                   const rect = event.currentTarget.getBoundingClientRect();
-                  const touchX = ((event.touches[0]!.clientX - rect.left) / rect.width) * width;
+                  if (event.buttons === 0 && event.pointerType !== 'touch') return;
+                  const touchX = ((event.clientX - rect.left) / rect.width) * width;
                   if (Date.now() - lastIntent.current < 90) return;
                   lastIntent.current = Date.now();
                   const offset = touchX - arenaView.paddleX;
@@ -213,7 +282,8 @@ function BrickBreakerGame({
                 }
               : undefined
           }
-          onTouchEnd={isMine && canPlay ? () => sendMove('stop') : undefined}
+          onPointerUp={isMine && canPlay ? () => sendMove('stop') : undefined}
+          onPointerCancel={isMine && canPlay ? () => sendMove('stop') : undefined}
         >
           {/* bricks */}
           {arenaView.bricks.map((alive, index) =>
@@ -223,10 +293,14 @@ function BrickBreakerGame({
                 className="absolute rounded-[2px]"
                 style={{
                   width: `${(100 / brickCols) * 0.94}%`,
-                  height: `${(100 / (height / 4 * brickRows)) * 0.8}%`,
+                  height: `${(100 / ((height / 4) * brickRows)) * 0.8}%`,
                   left: `${(index % brickCols) * (100 / brickCols) + (100 / brickCols) * 0.03}%`,
                   top: `${(Math.floor(index / brickCols) * 100) / brickRows + 1.2}%`,
-                  backgroundColor: ROW_COLORS[Math.floor(index / brickCols) % ROW_COLORS.length],
+                  backgroundColor:
+                    ROW_COLORS[
+                      (Math.floor(index / brickCols) + arenaView.level - 1) % ROW_COLORS.length
+                    ],
+                  boxShadow: `0 0 ${arenaView.level * 2}px currentColor`,
                   opacity: 0.9,
                 }}
               />
@@ -236,13 +310,28 @@ function BrickBreakerGame({
           <div
             className={cn('absolute rounded-full', isMine ? 'bg-indigo-400' : 'bg-emerald-400')}
             style={{
-              width: pct(pw, width),
+              width: pct(livePw, width),
               height: pct(phh, height),
-              left: `calc(${pct(paddleX - pw / 2, width)})`,
+              left: `calc(${pct(paddleX - livePw / 2, width)})`,
               top: `calc(${pct(paddleY - phh / 2, height)})`,
             }}
             aria-label={`${label} paddle`}
           />
+          {/* visual-only trail between authoritative snapshots */}
+          {trail.map((dot, index) => (
+            <div
+              key={index}
+              className="pointer-events-none absolute rounded-full bg-cyan-200"
+              style={{
+                width: pct(br * 1.4, width),
+                height: pct(br * 1.4, height),
+                left: pct(dot.x - br * 0.7, width),
+                top: pct(dot.y - br * 0.7, height),
+                opacity: dot.opacity,
+              }}
+              aria-hidden
+            />
+          ))}
           {/* ball */}
           <div
             className="absolute rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)]"
@@ -282,7 +371,11 @@ function BrickBreakerGame({
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="primary">{me?.bricksBroken ?? 0} bricks · {me?.score ?? 0} pts</Badge>
+        <Badge tone="primary">
+          Level {me?.level ?? 1}/{state.maxLevels} · {me?.bricksBroken ?? 0} bricks ·{' '}
+          {me?.score ?? 0} pts
+        </Badge>
+        {me?.powerUp ? <Badge tone="success">Power-up: {me.powerUp}</Badge> : null}
         {me && me.chain > 1 ? <Badge tone="warning">Combo x{Math.min(4, me.chain)}</Badge> : null}
         {phase === 'finished' ? (
           <Badge tone={isDraw ? 'accent' : iWon ? 'success' : 'danger'}>
@@ -323,7 +416,8 @@ function BrickBreakerGame({
         </button>
       </div>
       <p className="text-center text-xs text-slate-500">
-        A/D, arrows, drag on your arena or hold the buttons — clear your wall, chain combos, keep three lives.
+        A/D, arrows, drag or hold. Clear three faster levels; every ninth brick grants a
+        server-owned power-up.
       </p>
     </div>
   );

@@ -19,6 +19,7 @@ import {
   MAX_COMBO_MULTIPLIER,
   NODE_RESPAWN_MS,
   PULSE_COOLDOWN_MS,
+  PULSE_ENERGY_COST,
   PULSE_RADIUS,
   RICH_SCORE,
   type BlastState,
@@ -53,7 +54,12 @@ describe('Black Blast', () => {
     state().effects = [];
   };
 
-  const addNode = (id: string, x: number, y: number, kind: 'energy' | 'rich' | 'obstacle' = 'energy') => {
+  const addNode = (
+    id: string,
+    x: number,
+    y: number,
+    kind: 'energy' | 'rich' | 'obstacle' = 'energy',
+  ) => {
     state().nodes.push({ id, x, y, kind, consumed: false, respawnAt: 0 });
   };
 
@@ -112,10 +118,17 @@ describe('Black Blast', () => {
     const ctx = context();
     for (const direction of [undefined, null, 'diagonal', 7, {}]) {
       expect(
-        blackBlastGame.validateAction(playerId, { type: 'move', payload: { direction } }, state(), ctx).valid,
+        blackBlastGame.validateAction(
+          playerId,
+          { type: 'move', payload: { direction } },
+          state(),
+          ctx,
+        ).valid,
       ).toBe(false);
     }
-    expect(blackBlastGame.validateAction(playerId, { type: 'teleport' }, state(), ctx).valid).toBe(false);
+    expect(blackBlastGame.validateAction(playerId, { type: 'teleport' }, state(), ctx).valid).toBe(
+      false,
+    );
   });
 
   /* ---------------- pulses ---------------- */
@@ -146,7 +159,35 @@ describe('Black Blast', () => {
     expect(act(playerId, { type: 'pulse' }).accepted).toBe(false);
     expect(state().pulses).toHaveLength(1);
     expect(state().players[playerId]!.cooldownUntil).toBeGreaterThan(context().now());
-    expect(state().players[playerId]!.cooldownUntil - context().now()).toBeLessThanOrEqual(PULSE_COOLDOWN_MS + 50);
+    expect(state().players[playerId]!.cooldownUntil - context().now()).toBeLessThanOrEqual(
+      PULSE_COOLDOWN_MS + 50,
+    );
+  });
+
+  it('spends and regenerates server-owned pulse energy', () => {
+    const playerId = players[0]!.id;
+    const body = state().players[playerId]!;
+    body.cooldownUntil = 0;
+    body.energy = PULSE_ENERGY_COST;
+    expect(act(playerId, { type: 'pulse' }).accepted).toBe(true);
+    expect(body.energy).toBe(0);
+
+    body.cooldownUntil = 0;
+    expect(act(playerId, { type: 'pulse' }).accepted).toBe(false);
+    platform.gameManager.update(room, 1000);
+    expect(body.energy).toBeGreaterThan(0);
+    expect(body.energy).toBeLessThanOrEqual(body.maxEnergy);
+  });
+
+  it('advances waves and refreshes consumed pickups', () => {
+    const node = state().nodes.find((entry) => entry.kind === 'energy')!;
+    node.consumed = true;
+    node.respawnAt = context().now() + NODE_RESPAWN_MS;
+    state().waveEndsAt = context().now() - 1;
+    platform.gameManager.update(room, 50);
+    expect(state().wave).toBe(2);
+    expect(node.consumed).toBe(false);
+    expect(state().lastEvent).toBe('wave:2');
   });
 
   it('detonation consumes every node inside the radius and scores them', () => {
@@ -270,7 +311,16 @@ describe('Black Blast', () => {
       addNode(`n${i}`, 5, 5, 'energy');
       detonate(
         state(),
-        { id: `p${i}`, ownerId: playerId, x: 5, y: 5, detonateAt: context().now(), radius: PULSE_RADIUS, depth: 0, detonated: false },
+        {
+          id: `p${i}`,
+          ownerId: playerId,
+          x: 5,
+          y: 5,
+          detonateAt: context().now(),
+          radius: PULSE_RADIUS,
+          depth: 0,
+          detonated: false,
+        },
         context(),
       );
     }
@@ -291,7 +341,16 @@ describe('Black Blast', () => {
 
     detonate(
       state(),
-      { id: 'p1', ownerId: playerId, x: 1, y: 1, detonateAt: context().now(), radius: PULSE_RADIUS, depth: 0, detonated: false },
+      {
+        id: 'p1',
+        ownerId: playerId,
+        x: 1,
+        y: 1,
+        detonateAt: context().now(),
+        radius: PULSE_RADIUS,
+        depth: 0,
+        detonated: false,
+      },
       context(),
     );
     expect(body.combo).toBe(0);
@@ -345,12 +404,18 @@ describe('Black Blast', () => {
     const ctx = context();
     const before = state().players[playerId]!.score;
     for (const type of ['score', 'hit', 'win', 'finish', 'detonate', 'chain']) {
-      expect(blackBlastGame.validateAction(playerId, { type, payload: { score: 5000 } }, state(), ctx).valid).toBe(
-        false,
-      );
-      expect(blackBlastGame.handlePlayerAction(playerId, { type, payload: { score: 5000 } }, state(), ctx).accepted).toBe(
-        false,
-      );
+      expect(
+        blackBlastGame.validateAction(playerId, { type, payload: { score: 5000 } }, state(), ctx)
+          .valid,
+      ).toBe(false);
+      expect(
+        blackBlastGame.handlePlayerAction(
+          playerId,
+          { type, payload: { score: 5000 } },
+          state(),
+          ctx,
+        ).accepted,
+      ).toBe(false);
     }
     expect(state().players[playerId]!.score).toBe(before);
   });
@@ -453,7 +518,9 @@ describe('Black Blast', () => {
         if (!action) continue;
         expect(['move', 'pulse']).toContain(action.type);
         if (action.type === 'move') {
-          expect(blackBlastGame.validateAction(playerId, action, state(), context()).valid).toBe(true);
+          expect(blackBlastGame.validateAction(playerId, action, state(), context()).valid).toBe(
+            true,
+          );
         }
         act(playerId, action);
       }

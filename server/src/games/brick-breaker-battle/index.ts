@@ -22,6 +22,7 @@ import { actionAccepted, actionRejected } from '../GameModule';
 
 export type BrickPhase = 'idle' | 'playing' | 'finished';
 export type BrickIntent = 'left' | 'right' | 'stop';
+export type BrickPowerUp = 'wide' | 'slow' | 'life';
 
 export interface BrickBall {
   x: number;
@@ -38,6 +39,11 @@ export interface BrickArena {
   bricks: boolean[]; // row-major, brickRows x brickCols
   destroyed: number;
   chain: number; // bricks broken without a paddle touch
+  level: number;
+  levelsCleared: number;
+  paddleScale: number;
+  powerUp: BrickPowerUp | null;
+  powerUpUntil: number;
   lives: number;
   score: number;
   bricksBroken: number;
@@ -58,6 +64,7 @@ export interface BrickBreakerState {
   brickRows: number;
   brickValues: number[]; // points per row (row 0 = top)
   clearBonus: number;
+  maxLevels: number;
   arenas: Record<string, BrickArena>;
   stepMs: number;
   accumulatorMs: number;
@@ -85,8 +92,8 @@ const BRICK_OFFSET_Y = 6;
 const BRICK_VALUES = [30, 20, 15, 10];
 const CLEAR_BONUS = 100;
 const TOTAL_BRICKS = BRICK_COLS * BRICK_ROWS;
-const STEP_MS = 50;
-const MAX_SUBSTEPS = 6;
+const STEP_MS = 16;
+const MAX_SUBSTEPS = 20;
 const PADDLE_SPEED = 55; // units/s
 const BALL_SPEED_START = 38;
 const BALL_SPEED_INC = 1.2;
@@ -94,6 +101,9 @@ const BALL_SPEED_MAX = 62;
 const MAX_LAUNCH_DEG = 50;
 const LAUNCH_DELAY_MS = 1100;
 const START_LIVES = 3;
+const MAX_LEVELS = 3;
+const POWER_UP_EVERY = 9;
+const POWER_UP_MS = 10_000;
 const MATCH_MS = 3 * 60 * 1000;
 const AI_REQUEST_INTERVAL_MS = 180;
 
@@ -124,7 +134,12 @@ function foldRange(value: number, low: number, high: number): number {
 }
 
 /** Predicts the ball's x when it descends to paddle depth (walls reflect). */
-export function predictBallX(ball: BrickBall, targetY: number, width: number, radius: number): number {
+export function predictBallX(
+  ball: BrickBall,
+  targetY: number,
+  width: number,
+  radius: number,
+): number {
   if (ball.vy === 0) return ball.x;
   const t = (targetY - ball.y) / ball.vy;
   if (t <= 0) return ball.x;
@@ -144,6 +159,11 @@ function newArena(): BrickArena {
     bricks: freshBricks(),
     destroyed: 0,
     chain: 0,
+    level: 1,
+    levelsCleared: 0,
+    paddleScale: 1,
+    powerUp: null,
+    powerUpUntil: 0,
     lives: START_LIVES,
     score: 0,
     bricksBroken: 0,
@@ -168,11 +188,31 @@ export function launchBall(arena: BrickArena, ctx: GameContext): void {
   arena.ball = {
     x: arena.paddleX,
     y: PADDLE_Y - BALL_R - 0.5,
-    vx: Math.sin(angle) * BALL_SPEED_START,
-    vy: -Math.cos(angle) * BALL_SPEED_START,
+    vx: Math.sin(angle) * (BALL_SPEED_START + (arena.level - 1) * 5),
+    vy: -Math.cos(angle) * (BALL_SPEED_START + (arena.level - 1) * 5),
   };
   arena.launchAt = null;
   ctx.markStateChanged();
+}
+
+export function effectivePaddleWidth(state: BrickBreakerState, arena: BrickArena): number {
+  return state.paddleWidth * arena.paddleScale;
+}
+
+/** Awards predictable, server-owned pickups so every arena remains fair. */
+function awardPowerUp(arena: BrickArena, brickIndex: number, now: number): BrickPowerUp | null {
+  if (arena.bricksBroken % POWER_UP_EVERY !== 0) return null;
+  const choices: BrickPowerUp[] = ['wide', 'slow', 'life'];
+  const power = choices[(brickIndex + arena.level) % choices.length]!;
+  arena.powerUp = power;
+  arena.powerUpUntil = now + POWER_UP_MS;
+  if (power === 'wide') arena.paddleScale = 1.4;
+  if (power === 'slow') {
+    arena.ball.vx *= 0.78;
+    arena.ball.vy *= 0.78;
+  }
+  if (power === 'life') arena.lives = Math.min(5, arena.lives + 1);
+  return power;
 }
 
 function arenaDone(arena: BrickArena, now: number): void {
@@ -191,11 +231,17 @@ function stepArena(
   ctx: GameContext,
 ): string | null {
   if (arena.done) return null;
+  if (arena.powerUpUntil > 0 && now >= arena.powerUpUntil) {
+    arena.powerUp = null;
+    arena.powerUpUntil = 0;
+    arena.paddleScale = 1;
+  }
 
   // Paddle.
+  const livePaddleWidth = effectivePaddleWidth(state, arena);
   arena.paddleX = Math.min(
-    state.width - state.paddleWidth / 2,
-    Math.max(state.paddleWidth / 2, arena.paddleX + arena.paddleDir * PADDLE_SPEED * dt),
+    state.width - livePaddleWidth / 2,
+    Math.max(livePaddleWidth / 2, arena.paddleX + arena.paddleDir * PADDLE_SPEED * dt),
   );
 
   // Parked ball rides the paddle until launch.
@@ -251,10 +297,12 @@ function stepArena(
       const overlapY = Math.min(ny + r - rect.y, rect.y + rect.h - (ny - r));
       if (overlapX < overlapY) {
         arena.ball.vx = -arena.ball.vx;
-        arena.ball.x = arena.ball.x + (nx + r - rect.x < rect.x + rect.w - (nx - r) ? -overlapX : overlapX);
+        arena.ball.x =
+          arena.ball.x + (nx + r - rect.x < rect.x + rect.w - (nx - r) ? -overlapX : overlapX);
       } else {
         arena.ball.vy = -arena.ball.vy;
-        arena.ball.y = arena.ball.y + (ny + r - rect.y < rect.y + rect.h - (ny - r) ? -overlapY : overlapY);
+        arena.ball.y =
+          arena.ball.y + (ny + r - rect.y < rect.y + rect.h - (ny - r) ? -overlapY : overlapY);
       }
       // Nudge the speed upward.
       const speed = Math.hypot(arena.ball.vx, arena.ball.vy);
@@ -263,24 +311,34 @@ function stepArena(
         arena.ball.vx *= scaled;
         arena.ball.vy *= scaled;
       }
+      const power = awardPowerUp(arena, index, now);
       if (arena.destroyed >= TOTAL_BRICKS) {
-        arena.score += state.clearBonus;
+        arena.score += state.clearBonus * arena.level;
+        arena.levelsCleared += 1;
+        if (arena.level < state.maxLevels) {
+          arena.level += 1;
+          arena.destroyed = 0;
+          arena.bricks = freshBricks();
+          arena.chain = 0;
+          parkBall(arena, now);
+          return `level:${playerId}:${arena.level}`;
+        }
         arenaDone(arena, now);
         return `cleared:${playerId}`;
       }
-      return `brick:${playerId}`;
+      return power ? `power:${playerId}:${power}` : `brick:${playerId}`;
     }
   }
 
   // Paddle save.
-  const half = state.paddleWidth / 2 + state.ballRadius;
+  const half = livePaddleWidth / 2 + state.ballRadius;
   if (
     arena.ball.vy > 0 &&
     ny + state.ballRadius >= PADDLE_Y - state.paddleHeight / 2 &&
     Math.abs(nx - arena.paddleX) <= half
   ) {
     const rel = Math.min(1, Math.max(-1, (nx - arena.paddleX) / half));
-    const angle = rel * (MAX_LAUNCH_DEG * Math.PI) / 180;
+    const angle = (rel * (MAX_LAUNCH_DEG * Math.PI)) / 180;
     const speed = Math.min(BALL_SPEED_MAX, Math.hypot(arena.ball.vx, arena.ball.vy) + 0.8);
     arena.ball.vx = Math.sin(angle) * speed;
     arena.ball.vy = -Math.cos(angle) * speed;
@@ -308,7 +366,12 @@ function stepArena(
 /**
  * Advances every arena by `deltaTimeMs`. Exported for tests.
  */
-export function stepBreaker(state: BrickBreakerState, deltaTimeMs: number, now: number, ctx: GameContext): void {
+export function stepBreaker(
+  state: BrickBreakerState,
+  deltaTimeMs: number,
+  now: number,
+  ctx: GameContext,
+): void {
   if (state.phase !== 'playing') return;
   state.accumulatorMs += deltaTimeMs;
   let guard = 0;
@@ -389,7 +452,8 @@ export function computeBreakerRanking(state: BrickBreakerState, ctx: GameContext
       stats: {
         bricks: arena?.bricksBroken ?? 0,
         lives: arena?.lives ?? 0,
-        cleared: arena && arena.destroyed >= TOTAL_BRICKS ? 1 : 0,
+        levels: arena?.levelsCleared ?? 0,
+        cleared: arena?.levelsCleared === state.maxLevels ? 1 : 0,
       },
     };
   });
@@ -418,6 +482,7 @@ export const brickBreakerGame: GameModule<BrickBreakerState> = {
       brickRows: BRICK_ROWS,
       brickValues: [...BRICK_VALUES],
       clearBonus: CLEAR_BONUS,
+      maxLevels: MAX_LEVELS,
       arenas: Object.fromEntries(players.map((player) => [player.id, newArena()])),
       stepMs: STEP_MS,
       accumulatorMs: 0,
@@ -587,6 +652,7 @@ export const brickBreakerGame: GameModule<BrickBreakerState> = {
       brickRows: state.brickRows,
       brickValues: [...state.brickValues],
       clearBonus: state.clearBonus,
+      maxLevels: state.maxLevels,
       startedAt: state.startedAt,
       endsAt: state.endsAt,
       finishReason: state.finishReason,
@@ -603,6 +669,11 @@ export const brickBreakerGame: GameModule<BrickBreakerState> = {
             bricks: [...arena.bricks],
             destroyed: arena.destroyed,
             chain: arena.chain,
+            level: arena.level,
+            levelsCleared: arena.levelsCleared,
+            paddleScale: arena.paddleScale,
+            powerUp: arena.powerUp,
+            powerUpUntil: arena.powerUpUntil,
             lives: arena.lives,
             score: arena.score,
             bricksBroken: arena.bricksBroken,

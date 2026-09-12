@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createTestPlatform, waitFor, type TestPlatform } from '../../test/harness';
+import {
+  createGameFixture,
+  createTestPlatform,
+  waitFor,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
@@ -39,7 +44,15 @@ describe('Brick Breaker Battle', () => {
   const publicState = () =>
     platform.gameManager.getPublicState(room, players[0]!.id) as {
       phase: string;
-      arenas: Record<string, { bricks: boolean[]; lives: number; score: number; ball: { x: number; y: number; vx: number; vy: number } }>;
+      arenas: Record<
+        string,
+        {
+          bricks: boolean[];
+          lives: number;
+          score: number;
+          ball: { x: number; y: number; vx: number; vy: number };
+        }
+      >;
     };
 
   /** Aims one player's ball straight up at a bottom-row brick (clear approach). */
@@ -109,14 +122,22 @@ describe('Brick Breaker Battle', () => {
       ).valid,
     ).toBe(false);
     expect(
-      brickBreakerGame.validateAction('ghost', { type: 'move', payload: { direction: 'left' } }, state(), context())
-        .valid,
+      brickBreakerGame.validateAction(
+        'ghost',
+        { type: 'move', payload: { direction: 'left' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
 
     state().phase = 'idle';
     expect(
-      brickBreakerGame.validateAction(playerId, { type: 'move', payload: { direction: 'left' } }, state(), context())
-        .valid,
+      brickBreakerGame.validateAction(
+        playerId,
+        { type: 'move', payload: { direction: 'left' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
   });
 
@@ -190,6 +211,19 @@ describe('Brick Breaker Battle', () => {
     expect(a.score).toBe(20 + 40);
   });
 
+  it('awards a deterministic server-owned power-up every ninth brick', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const playerId = players[0]!.id;
+    const a = arena(playerId);
+    a.bricksBroken = 8;
+    aimAtBrick(playerId, 22); // (22 + level 1) % 3 => extra life
+    stepBreaker(state(), 50, context().now(), context());
+    expect(a.powerUp).toBe('life');
+    expect(a.lives).toBe(4);
+    expect(a.powerUpUntil).toBeGreaterThan(context().now());
+    expect(state().lastEvent).toBe(`power:${playerId}:life`);
+  });
+
   it('a paddle save reflects the ball and resets the chain', async () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const playerId = players[0]!.id;
@@ -198,7 +232,8 @@ describe('Brick Breaker Battle', () => {
     a.chain = 3;
     a.paddleX = 50;
     a.ball = { x: 50, y: 62, vx: 5, vy: 40 };
-    stepBreaker(state(), 50, context().now(), context());
+    // Fine-grained 16ms substeps need enough elapsed time to reach the paddle.
+    stepBreaker(state(), 100, context().now(), context());
     expect(a.ball.vy).toBeLessThan(0);
     expect(a.chain).toBe(0);
     expect(state().lastEvent).toBe(`save:${playerId}`);
@@ -242,8 +277,24 @@ describe('Brick Breaker Battle', () => {
     const rect = brickRect(27);
     a.ball = { x: rect.x + rect.w / 2, y: rect.y + rect.h + 2, vx: 0, vy: -40 };
     stepBreaker(state(), 50, context().now(), context());
-    expect(a.score).toBe(100 + 10); // clear bonus + last brick (chain 1)
+    expect(a.score).toBe(100 + 10); // level-one bonus + last brick (chain 1)
+    expect(a.done).toBe(false);
+    expect(a.level).toBe(2);
+    expect(a.levelsCleared).toBe(1);
+    expect(a.bricks.every(Boolean)).toBe(true);
+
+    // Complete the final level; intermediate levels use the same authoritative transition.
+    a.level = state().maxLevels;
+    a.levelsCleared = state().maxLevels - 1;
+    a.bricks.fill(false);
+    a.bricks[27] = true;
+    a.destroyed = 27;
+    a.bricksBroken = state().maxLevels * 28 - 1;
+    a.launchAt = null;
+    a.ball = { x: rect.x + rect.w / 2, y: rect.y + rect.h + 2, vx: 0, vy: -40 };
+    stepBreaker(state(), 50, context().now(), context());
     expect(a.done).toBe(true);
+    expect(a.levelsCleared).toBe(state().maxLevels);
 
     // Rival still running → match continues.
     expect(state().phase).toBe('playing');
@@ -258,8 +309,9 @@ describe('Brick Breaker Battle', () => {
     expect(state().finishReason).toBe('completed');
 
     const draft = brickBreakerGame.getResult(state(), context());
-    expect(draft.winners).toEqual([aId]); // 110 > 0
-    expect(draft.rankings[0]!.stats.bricks).toBe(28);
+    expect(draft.winners).toEqual([aId]);
+    expect(draft.rankings[0]!.stats.bricks).toBe(84);
+    expect(draft.rankings[0]!.stats.levels).toBe(3);
     expect(draft.rankings[0]!.stats.cleared).toBe(1);
   });
 

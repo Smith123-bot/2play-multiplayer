@@ -12,14 +12,17 @@ import {
   COMBO_WINDOW_MS,
   detonate,
   ENERGY_SCORE,
+  energyRespawnMs,
   finishBlast,
   FUSE_MS,
   inArena,
   isBlocked,
   MAX_COMBO_MULTIPLIER,
+  MAX_ESCALATION,
   NODE_RESPAWN_MS,
   PULSE_COOLDOWN_MS,
   PULSE_RADIUS,
+  pulseRadiusFor,
   RICH_SCORE,
   type BlastState,
 } from './index';
@@ -336,6 +339,79 @@ describe('Black Blast', () => {
     body.comboUntil = context().now() - 1; // already expired
     blackBlastGame.update(state(), 250, context());
     expect(body.combo).toBe(0);
+  });
+
+  it('escalation waves add obstacles over time, slow respawns and cap out', () => {
+    const obstaclesBefore = state().nodes.filter((node) => node.kind === 'obstacle').length;
+    expect(state().escalation).toBe(0);
+
+    // First wave at the one minute mark.
+    state().startedAt = context().now() - 61_000;
+    blackBlastGame.update(state(), 250, context());
+    expect(state().escalation).toBe(1);
+    expect(state().nodes.filter((node) => node.kind === 'obstacle').length).toBe(obstaclesBefore + 2);
+    expect(state().lastEvent).toBe('wave:1');
+
+    // Wave obstacles never respawn once destroyed, but energy respawns slower.
+    expect(energyRespawnMs(1)).toBe(NODE_RESPAWN_MS + 2_000);
+    expect(energyRespawnMs(MAX_ESCALATION)).toBe(NODE_RESPAWN_MS + 2 * 2_000);
+
+    // The wave level is public so clients can render it.
+    const view = platform.gameManager.getPublicState(room, players[0]!.id) as { escalation: number };
+    expect(view.escalation).toBe(1);
+
+    // Second wave at two minutes, then capped.
+    state().startedAt = context().now() - 121_000;
+    blackBlastGame.update(state(), 250, context());
+    expect(state().escalation).toBe(2);
+    state().startedAt = context().now() - 181_000;
+    blackBlastGame.update(state(), 250, context());
+    expect(state().escalation).toBe(MAX_ESCALATION); // no third wave
+  });
+
+  it('blast effects report what they banked: hit count and gained points', () => {
+    const playerId = players[0]!.id;
+    clearArena();
+    addNode('n1', 5, 5, 'energy');
+    addNode('n2', 5, 6, 'energy');
+    const now = context().now();
+    state().pulses.push({
+      id: 'p1',
+      ownerId: playerId,
+      x: 5,
+      y: 5,
+      detonateAt: now - 10, // already due
+      radius: PULSE_RADIUS,
+      depth: 0,
+      detonated: false,
+    });
+
+    blackBlastGame.update(state(), 250, context());
+    const effect = state().effects.at(-1)!;
+    expect(effect.hits).toBe(2);
+    expect(effect.gained).toBe(2 * ENERGY_SCORE); // fresh combo → x1 multiplier
+    expect(state().players[playerId]!.score).toBe(effect.gained);
+
+    // The public state forwards the same feedback for client popups.
+    const view = platform.gameManager.getPublicState(room, playerId) as {
+      effects: Array<{ gained: number; hits: number }>;
+    };
+    expect(view.effects.at(-1)!.hits).toBe(2);
+    expect(view.effects.at(-1)!.gained).toBe(effect.gained);
+  });
+
+  it('the pulse radius grows with a live combo and is capped', () => {
+    expect(pulseRadiusFor(0)).toBe(PULSE_RADIUS);
+    expect(pulseRadiusFor(4)).toBeCloseTo(PULSE_RADIUS * (1 + 4 * 0.03), 5);
+    expect(pulseRadiusFor(99)).toBeCloseTo(PULSE_RADIUS * (1 + 8 * 0.03), 5); // capped at 8 steps
+
+    // Placing a pulse while hot uses the grown radius.
+    const playerId = players[0]!.id;
+    const body = state().players[playerId]!;
+    body.combo = 4;
+    body.comboUntil = context().now() + COMBO_WINDOW_MS;
+    act(playerId, { type: 'pulse' });
+    expect(state().pulses[0]!.radius).toBeCloseTo(pulseRadiusFor(4), 5);
   });
 
   /* ---------------- anti-cheat ---------------- */

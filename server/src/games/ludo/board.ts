@@ -57,9 +57,12 @@ export function trackIndexFor(seatIndex: number, steps: number): number {
 
 /**
  * Total distance a token must travel to go from its starting square all the
- * way into the final home cell: 52 shared cells + 5 lane cells + 1.
+ * way into the final home cell: 52 shared cells + 5 lane cells. Progress 57
+ * is the centre "home" itself — the board layout has exactly five lane cells,
+ * so the finish must sit directly after them (a sixth lane cell would render
+ * nowhere).
  */
-export const FINISH_DISTANCE = TRACK_LENGTH + HOME_STRETCH_LENGTH + 1;
+export const FINISH_DISTANCE = TRACK_LENGTH + HOME_STRETCH_LENGTH;
 
 /* ------------------------------------------------------------------ */
 /* Pixel/grid layout for the client                                    */

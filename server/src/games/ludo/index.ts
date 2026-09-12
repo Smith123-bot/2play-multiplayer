@@ -115,9 +115,19 @@ export interface LudoState {
   tokensToWin: number;
   finishedOrder: string[];
   lastEvent: string | null;
-  lastMove: { playerId: string; tokenId: string; from: number; to: number; captured: string | null } | null;
+  lastMove: {
+    playerId: string;
+    tokenId: string;
+    from: number;
+    to: number;
+    captured: string | null;
+    /** Monotonic sequence so clients can detect (and animate) each new move. */
+    moveNumber: number;
+  } | null;
   finishReason: GameFinishReason | null;
   rollsThisMatch: number;
+  /** Increments on every executed token move (display-only). */
+  moveNumber: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -439,6 +449,7 @@ export const ludoGame: GameModule<LudoState> = {
       lastMove: null,
       finishReason: null,
       rollsThisMatch: 0,
+      moveNumber: 0,
     };
     players.forEach((player, index) => {
       state.players[player.id] = makeSlot(typeof player.seatIndex === 'number' ? player.seatIndex : index);
@@ -495,6 +506,7 @@ export const ludoGame: GameModule<LudoState> = {
     state.finishReason = null;
     state.rollsThisMatch = 0;
     state.lastMove = null;
+    state.moveNumber = 0;
     state.phase = 'awaiting-roll';
     state.lastEvent = 'start';
     const first = state.turnOrder[0];
@@ -626,7 +638,8 @@ export const ludoGame: GameModule<LudoState> = {
       reachedHome = true;
     }
 
-    state.lastMove = { playerId, tokenId, from: move.from, to: move.to, captured };
+    state.lastMove = { playerId, tokenId, from: move.from, to: move.to, captured, moveNumber: state.moveNumber + 1 };
+    state.moveNumber += 1;
     state.lastEvent = captured
       ? `capture:${playerId}`
       : reachedHome
@@ -758,6 +771,7 @@ export const ludoGame: GameModule<LudoState> = {
       lastMove: null,
       finishReason: null,
       rollsThisMatch: 0,
+      moveNumber: 0,
     };
   },
 
@@ -790,6 +804,7 @@ export const ludoGame: GameModule<LudoState> = {
       finishedOrder: [...state.finishedOrder],
       lastEvent: state.lastEvent,
       lastMove: state.lastMove ? { ...state.lastMove } : null,
+      moveNumber: state.moveNumber,
       finishReason: state.finishReason,
       serverTime: ctx.now(),
       boardSize: BOARD_SIZE,

@@ -49,6 +49,13 @@ export class MultiplayerManager {
         action: { type: action.type },
         accepted: true,
       });
+
+      // Give the acting player their authoritative snapshot immediately instead
+      // of making them wait out the broadcast throttle for the consequence of
+      // their own move. Opponents still receive the coalesced room broadcast.
+      if (result.stateChanged) {
+        this.platform.socketManager?.deliverRoomStateToPlayer(room, playerId);
+      }
     }
 
     if (!result.accepted) {

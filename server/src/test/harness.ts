@@ -153,6 +153,18 @@ export function createTestPlatform(
     broadcastRoomState: () => {
       emissions.push({ event: 'broadcast', payload: null });
     },
+    /**
+     * Faithful stand-in for the immediate single-viewer snapshot: it builds the
+     * same per-viewer public projection the real one does, so tests can assert
+     * that the low-latency path leaks no hidden information either.
+     */
+    deliverRoomStateToPlayer: (targetRoom: Room, playerId: string) => {
+      const gameState = platform.gameManager.getPublicState(targetRoom, playerId);
+      emissions.push({
+        event: `${playerId}:room:updated`,
+        payload: { room: targetRoom.toState(playerId, gameState) },
+      });
+    },
     clearRoom: () => undefined,
     connectionCount: 0,
   } as unknown as SocketManager;

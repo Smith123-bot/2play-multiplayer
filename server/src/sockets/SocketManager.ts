@@ -155,6 +155,34 @@ export class SocketManager {
     }
   }
 
+  /**
+   * Immediate authoritative snapshot for ONE viewer, bypassing the throttle.
+   *
+   * `broadcastRoomState` coalesces bursts, which is right for the room as a
+   * whole — but it makes a player wait up to a full throttle window (on top of
+   * the game's own tick) to see the consequence of their own hit, capture or
+   * elimination. The acting player is the one who needs instant feedback, so
+   * they get their snapshot straight away while everyone else still rides the
+   * throttled broadcast. Outbound traffic stays bounded: one extra targeted
+   * frame per accepted action, never a full-room burst.
+   *
+   * This does not weaken server authority — the state is computed by the server
+   * from the canonical room, exactly like the broadcast path; only the delivery
+   * timing differs.
+   *
+   * Deliberately does NOT touch `lastBroadcast`: the room's group snapshot is
+   * still due on its own schedule, and both frames reach this socket in order.
+   */
+  deliverRoomStateToPlayer(room: Room, playerId: string): void {
+    if (!this.io) return;
+    const player = room.getPlayer(playerId);
+    if (!player || player.isAI || !player.socketId) return;
+    const gameState = this.platform.gameManager.getPublicState(room, playerId);
+    this.io
+      .to(player.socketId)
+      .emit(SERVER_EVENTS.ROOM_UPDATED, { room: room.toState(playerId, gameState) });
+  }
+
   /** Removes all sockets from a socket.io room (used when a room is closed). */
   clearRoom(roomId: string): void {
     this.lastBroadcast.delete(roomId);

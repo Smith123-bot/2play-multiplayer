@@ -9,8 +9,8 @@ const logger = createLogger('ErrorHandler');
 /** 404 for unknown routes (API returns JSON, the SPA is handled separately). */
 export function notFoundHandler(req: Request, _res: Response, next: NextFunction): void {
   if (req.path.startsWith('/api')) {
-    const error = toApiError(new Error(`Route ${req.method} ${req.path} not found.`));
-    const payload = makeErrorPayload('E001', `Route ${req.method} ${req.path} not found.`);
+    const error = toApiError(new Error('API route not found.'));
+    const payload = makeErrorPayload('E001', 'API route not found.');
     logger.debug('route not found', { path: req.path });
     void error;
     const res = _res;

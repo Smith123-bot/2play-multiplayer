@@ -83,7 +83,9 @@ export class RoomManager {
       throw AppError.rateLimited('The server is at full capacity. Try again later.');
     }
     if (input.host.playerId && this.findRoomOfPlayer(input.host.playerId)) {
-      throw AppError.invalidAction('You are already in a room. Leave it before creating a new one.');
+      throw AppError.invalidAction(
+        'You are already in a room. Leave it before creating a new one.',
+      );
     }
 
     const id = this.generateRoomCode();
@@ -188,6 +190,12 @@ export class RoomManager {
     // Same session re-joining (duplicate connect / refresh) is idempotent.
     const existing = room.getPlayerBySession(input.player.sessionToken);
     if (existing) {
+      if (!existing.isConnected) {
+        if (existing.reconnectDeadline === null || Date.now() > existing.reconnectDeadline) {
+          throw AppError.connectionFailed('The reconnection window has expired.');
+        }
+        this.platform.timerManager.cancelByKey(room.id, 'reconnect', `player:${existing.id}`);
+      }
       if (input.player.socketId) existing.markConnected(input.player.socketId);
       existing.nickname = input.player.nickname;
       existing.avatar = input.player.avatar;
@@ -234,16 +242,15 @@ export class RoomManager {
   }
 
   findRoomOfPlayer(playerId: string): Room | undefined {
-    for (const room of this.platform.roomStore.all()) {
-      if (room.players.has(playerId)) return room;
-    }
-    return undefined;
+    const session = this.platform.connectionManager.getSessionByPlayer(playerId);
+    if (session) return session.roomId ? this.platform.roomStore.get(session.roomId) : undefined;
+    // Defensive fallback for test fixtures and non-session identities.
+    return this.platform.roomStore.all().find((room) => room.players.has(playerId));
   }
 
   findRoomOfSocket(socketId: string): Room | undefined {
-    for (const room of this.platform.roomStore.all()) {
-      if (room.getPlayerBySocket(socketId)) return room;
-    }
+    const roomId = this.platform.connectionManager.getSessionBySocket(socketId)?.roomId;
+    if (roomId) return this.platform.roomStore.get(roomId);
     return undefined;
   }
 
@@ -251,12 +258,20 @@ export class RoomManager {
   /* Leaving                                                           */
   /* ---------------------------------------------------------------- */
 
-  leaveRoom(room: Room, playerId: string, reason: 'leave' | 'kick' | 'timeout' | 'disconnect' = 'leave'): void {
+  leaveRoom(
+    room: Room,
+    playerId: string,
+    reason: 'leave' | 'kick' | 'timeout' | 'disconnect' = 'leave',
+  ): void {
     const player = room.getPlayer(playerId);
     if (!player) return;
 
     if (room.gameState !== null && room.gameState !== undefined) {
-      this.platform.gameManager.playerLeft(room, playerId, reason === 'disconnect' ? 'disconnect' : reason);
+      this.platform.gameManager.playerLeft(
+        room,
+        playerId,
+        reason === 'disconnect' ? 'disconnect' : reason,
+      );
     }
 
     room.removePlayer(playerId);
@@ -296,7 +311,17 @@ export class RoomManager {
       this.removeAI(room, hostPlayerId, targetPlayerId);
       return;
     }
+    const targetSocketId = target.socketId;
     this.leaveRoom(room, targetPlayerId, 'kick');
+    // A removed member must not remain subscribed to room-wide chat/lifecycle
+    // events. Disconnect after removing the seat so disconnect handling cannot
+    // create a fresh reconnection grace period.
+    if (targetSocketId) {
+      this.platform.socketManager?.disconnectSocket?.(
+        targetSocketId,
+        'You were removed from the room.',
+      );
+    }
   }
 
   /** Abandons/returns to lobby when a departure invalidates the match. */
@@ -311,7 +336,11 @@ export class RoomManager {
       return;
     }
 
-    if (room.status === 'REMATCH_WAITING' || room.status === 'RESULT' || room.status === 'GAME_FINISHED') {
+    if (
+      room.status === 'REMATCH_WAITING' ||
+      room.status === 'RESULT' ||
+      room.status === 'GAME_FINISHED'
+    ) {
       // Rematch may continue with the remaining players if the minimum is met.
       if (humans < minPlayers) {
         this.platform.lifecycleManager.returnToLobby(room, 'Not enough players for a rematch.');
@@ -322,7 +351,10 @@ export class RoomManager {
       return;
     }
 
-    if ((room.status === 'PLAYING' || room.status === 'COUNTDOWN' || room.status === 'PAUSED') && humans < minPlayers) {
+    if (
+      (room.status === 'PLAYING' || room.status === 'COUNTDOWN' || room.status === 'PAUSED') &&
+      humans < minPlayers
+    ) {
       this.platform.lifecycleManager.abandonMatch(room, 'abandoned');
     }
   }
@@ -334,7 +366,8 @@ export class RoomManager {
   addAI(room: Room, hostPlayerId: string, difficulty: 'easy' | 'medium' | 'hard'): ServerPlayer {
     const metadata = this.platform.registry.get(room.gameId).metadata;
     if (!metadata.hasAI) throw AppError.invalidAction(`${metadata.name} has no AI opponent.`);
-    if (room.hostPlayerId !== hostPlayerId) throw AppError.unauthorized('Only the host can add AI players.');
+    if (room.hostPlayerId !== hostPlayerId)
+      throw AppError.unauthorized('Only the host can add AI players.');
     if (!['WAITING', 'LOBBY', 'READY'].includes(room.status)) {
       throw AppError.invalidAction('AI players can only be added in the lobby.');
     }
@@ -361,7 +394,8 @@ export class RoomManager {
   removeAI(room: Room, hostPlayerId: string, playerId: string): void {
     const player = room.getPlayer(playerId);
     if (!player?.isAI) throw AppError.invalidInput('That player is not an AI.');
-    if (room.hostPlayerId !== hostPlayerId) throw AppError.unauthorized('Only the host can remove AI players.');
+    if (room.hostPlayerId !== hostPlayerId)
+      throw AppError.unauthorized('Only the host can remove AI players.');
     if (room.status === 'PLAYING' || room.status === 'COUNTDOWN') {
       throw AppError.invalidAction('AI players cannot be removed during a match.');
     }
@@ -374,16 +408,18 @@ export class RoomManager {
   /* Listing / cleanup                                                 */
   /* ---------------------------------------------------------------- */
 
-  listRooms(filter: { gameId?: string; includePrivate?: boolean } = {}): RoomSummary[] {
+  listRooms(filter: { gameId?: string } = {}): RoomSummary[] {
     return this.platform.roomStore
       .all()
       .filter((room) => room.status !== 'CLOSED')
       .filter((room) => JOINABLE_STATUSES.includes(room.status))
-      .filter((room) => (filter.includePrivate ? true : !room.isPrivate))
+      .filter((room) => !room.isPrivate && !room.isQuickPlay)
       .filter((room) => (filter.gameId ? room.gameId === filter.gameId : true))
       .filter((room) => !room.isFull)
       .sort((a, b) => b.createdAt - a.createdAt)
-      .map((room) => room.toSummary(this.platform.registry.find(room.gameId)?.metadata.name ?? room.gameId));
+      .map((room) =>
+        room.toSummary(this.platform.registry.find(room.gameId)?.metadata.name ?? room.gameId),
+      );
   }
 
   closeRoom(room: Room, reason: 'empty' | 'lifetime' | 'server' | 'host'): void {
@@ -403,7 +439,11 @@ export class RoomManager {
 
     this.platform.roomStore.delete(room.id);
     this.platform.eventBus.emit('room:closed', { room, reason });
-    this.logger.info('room closed', { roomId: room.id, reason, lifetimeMs: Date.now() - room.createdAt });
+    this.logger.info('room closed', {
+      roomId: room.id,
+      reason,
+      lifetimeMs: Date.now() - room.createdAt,
+    });
   }
 
   /**

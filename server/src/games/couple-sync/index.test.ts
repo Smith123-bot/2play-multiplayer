@@ -14,6 +14,7 @@ import {
   ROUND_SCORE,
   roundTypeFor,
   type CoupleSyncState,
+  TOGETHER_TOLERANCE_MS,
   type SyncRoundType,
 } from './index';
 import type { Room } from '../../rooms/Room';
@@ -147,7 +148,14 @@ describe('Couple Sync', () => {
     expect(JSON.stringify(partnerView)).not.toContain(round.code!);
 
     // The holder cannot submit; the partner can.
-    expect(coupleSyncGame.validateAction(holderId, { type: 'act', payload: { choice: round.code } }, state(), context()).valid).toBe(false);
+    expect(
+      coupleSyncGame.validateAction(
+        holderId,
+        { type: 'act', payload: { choice: round.code } },
+        state(),
+        context(),
+      ).valid,
+    ).toBe(false);
     expect(act(partnerId, round.code!).accepted).toBe(true);
     expect(round.succeeded).toBe(true);
   });
@@ -183,9 +191,14 @@ describe('Couple Sync', () => {
   it('match: rejects a symbol that is not on offer', () => {
     startRound('match');
     const [aId] = players.map((player) => player.id);
-    expect(coupleSyncGame.validateAction(aId, { type: 'act', payload: { choice: '💀' } }, state(), context()).valid).toBe(
-      false,
-    );
+    expect(
+      coupleSyncGame.validateAction(
+        aId,
+        { type: 'act', payload: { choice: '💀' } },
+        state(),
+        context(),
+      ).valid,
+    ).toBe(false);
     expect(act(aId, '💀').accepted).toBe(false);
   });
 
@@ -243,7 +256,9 @@ describe('Couple Sync', () => {
     const [aId] = players.map((player) => player.id);
     const ctx = context();
     for (const type of ['score', 'win', 'complete', 'finish', 'reveal']) {
-      expect(coupleSyncGame.validateAction(aId, { type, payload: { score: 999 } }, state(), ctx).valid).toBe(false);
+      expect(
+        coupleSyncGame.validateAction(aId, { type, payload: { score: 999 } }, state(), ctx).valid,
+      ).toBe(false);
       expect(coupleSyncGame.handlePlayerAction(aId, { type }, state(), ctx).accepted).toBe(false);
     }
     expect(act(aId).accepted).toBe(true);
@@ -396,5 +411,26 @@ describe('Couple Sync', () => {
     expect(follow).not.toBeNull();
     platform.gameManager.handleAction(room, bId, follow!);
     expect(round.succeeded).toBe(true);
+  });
+
+  it('publishes progressive difficulty and live coordination metrics without leaking the future signal', () => {
+    state().round = 4;
+    const round = startRound('signal');
+    const before = platform.gameManager.getPublicState(room, players[0]!.id) as any;
+    expect(before.difficultyTier).toBe(2);
+    expect(before.current.signalFired).toBe(false);
+    expect(before.current.signalAt).toBeNull();
+    round.signalAt = context().now() - 1;
+    const live = platform.gameManager.getPublicState(room, players[0]!.id) as any;
+    expect(live.current.signalFired).toBe(true);
+    expect(live.current.signalAt).toBe(round.signalAt);
+
+    const together = startRound('together');
+    const [a, b] = players.map((player) => player.id);
+    state().players[a]!.actedAt = 1000;
+    state().players[b]!.actedAt = 1250;
+    const coordinated = platform.gameManager.getPublicState(room, a) as any;
+    expect(coordinated.current.syncSpreadMs).toBe(250);
+    expect(together.toleranceMs).toBeLessThanOrEqual(TOGETHER_TOLERANCE_MS);
   });
 });

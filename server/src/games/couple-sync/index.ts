@@ -84,6 +84,8 @@ export interface CoupleSyncState {
   lastEvent: string | null;
   finishReason: GameFinishReason | null;
   history: Array<{ index: number; type: SyncRoundType; success: boolean }>;
+  nextAIRequestAt: Record<string, number>;
+  eventCounter: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -125,7 +127,11 @@ function makePlayer(): CoupleSyncPlayer {
   };
 }
 
-export function finishCoupleSync(state: CoupleSyncState, ctx: GameContext, reason: GameFinishReason): void {
+export function finishCoupleSync(
+  state: CoupleSyncState,
+  ctx: GameContext,
+  reason: GameFinishReason,
+): void {
   if (state.phase === 'finished') return;
   state.phase = 'finished';
   state.finishReason = reason;
@@ -226,6 +232,25 @@ export function beginRound(state: CoupleSyncState, ctx: GameContext): void {
     'turn',
     `brief-${round.index}`,
   );
+
+  if (round.signalAt !== null) {
+    ctx.schedule(
+      Math.max(0, round.signalAt - ctx.now()),
+      () => {
+        if (
+          (state.phase !== 'active' && state.phase !== 'brief') ||
+          state.current !== round ||
+          round.succeeded !== null
+        )
+          return;
+        state.eventCounter += 1;
+        state.lastEvent = `signal:${round.index}:${state.eventCounter}`;
+        ctx.markStateChanged();
+      },
+      'turn',
+      `signal-${round.index}`,
+    );
+  }
 
   ctx.schedule(
     BRIEF_MS + ROUND_MS,
@@ -332,7 +357,9 @@ export function evaluate(
       if (acted.length < round.requiredOrder.length) return null;
       // Order by the monotonic sequence, not the clock: two taps can share
       // the same millisecond.
-      const actual = [...acted].sort((left, right) => (left[1].actSeq ?? 0) - (right[1].actSeq ?? 0));
+      const actual = [...acted].sort(
+        (left, right) => (left[1].actSeq ?? 0) - (right[1].actSeq ?? 0),
+      );
       const correct = actual.every(([id], index) => round.requiredOrder[index] === id);
       return correct
         ? { success: true, detail: 'Correct order.' }
@@ -384,6 +411,8 @@ export const coupleSyncGame: GameModule<CoupleSyncState> = {
       lastEvent: null,
       finishReason: null,
       history: [],
+      nextAIRequestAt: {},
+      eventCounter: 0,
     };
     for (const player of players) state.players[player.id] = makePlayer();
     return state;
@@ -424,6 +453,8 @@ export const coupleSyncGame: GameModule<CoupleSyncState> = {
     state.streak = 0;
     state.bestStreak = 0;
     state.history = [];
+    state.nextAIRequestAt = {};
+    state.eventCounter = 0;
     state.finishReason = null;
     beginRound(state, ctx);
   },
@@ -456,7 +487,8 @@ export const coupleSyncGame: GameModule<CoupleSyncState> = {
     }
     if (round.type === 'relay') {
       // The code holder never submits — only their partner does.
-      if (playerId === round.codeHolderId) return { valid: false, reason: 'Read the code out — your partner types it.' };
+      if (playerId === round.codeHolderId)
+        return { valid: false, reason: 'Read the code out — your partner types it.' };
       const answer = action.payload?.choice;
       if (typeof answer !== 'string' || answer.trim().length === 0) {
         return { valid: false, reason: 'Enter the code your partner reads out.' };
@@ -496,7 +528,8 @@ export const coupleSyncGame: GameModule<CoupleSyncState> = {
     player.actedAt = ctx.now();
     state.actCounter += 1;
     player.actSeq = state.actCounter;
-    state.lastEvent = `act:${playerId}`;
+    state.eventCounter += 1;
+    state.lastEvent = `act:${playerId}:${state.eventCounter}`;
 
     // Acting before the go-signal fails the round immediately.
     if (round.type === 'signal' && round.signalAt !== null && player.actedAt < round.signalAt) {
@@ -528,8 +561,12 @@ export const coupleSyncGame: GameModule<CoupleSyncState> = {
       if (!view.isAI) continue;
       const player = state.players[view.id];
       if (!player || player.left || player.disconnected || player.actedAt !== null) continue;
+      const now = ctx.now();
+      if (now < (state.nextAIRequestAt[view.id] ?? 0)) continue;
       const difficulty = view.aiDifficulty ?? 'medium';
-      ctx.requestAI(view.id, difficulty === 'hard' ? 120 : difficulty === 'medium' ? 260 : 480);
+      const delay = difficulty === 'hard' ? 120 : difficulty === 'medium' ? 260 : 480;
+      ctx.requestAI(view.id, delay);
+      state.nextAIRequestAt[view.id] = now + delay + 80;
     }
   },
 
@@ -572,9 +609,11 @@ export const coupleSyncGame: GameModule<CoupleSyncState> = {
         isDraw: !cleared,
         stats: {
           roundsWon: state.roundsWon,
-          accuracy: state.totalRounds > 0 ? Math.round((state.roundsWon / state.totalRounds) * 100) : 0,
+          accuracy:
+            state.totalRounds > 0 ? Math.round((state.roundsWon / state.totalRounds) * 100) : 0,
           mistakes: entry?.mistakes ?? 0,
           bestStreak: state.bestStreak,
+          difficultyTier: Math.min(3, Math.floor(state.round / 3) + 1),
         },
       };
     });
@@ -601,6 +640,8 @@ export const coupleSyncGame: GameModule<CoupleSyncState> = {
       lastEvent: null,
       finishReason: null,
       history: [],
+      nextAIRequestAt: {},
+      eventCounter: 0,
     };
   },
 
@@ -630,6 +671,7 @@ export const coupleSyncGame: GameModule<CoupleSyncState> = {
       roundsWon: state.roundsWon,
       streak: state.streak,
       bestStreak: state.bestStreak,
+      difficultyTier: Math.min(3, Math.floor(state.round / 3) + 1),
       lastEvent: state.lastEvent,
       finishReason: state.finishReason,
       history: state.history.map((entry) => ({ ...entry })),
@@ -649,12 +691,20 @@ export const coupleSyncGame: GameModule<CoupleSyncState> = {
             signalFired: round.signalAt !== null ? now >= round.signalAt : false,
             signalAt: round.signalAt !== null && now >= round.signalAt ? round.signalAt : null,
             toleranceMs: round.toleranceMs,
+            syncSpreadMs: (() => {
+              const times = activePlayers(state)
+                .map(([, player]) => player.actedAt)
+                .filter((value): value is number => value !== null);
+              return times.length >= 2 ? Math.max(...times) - Math.min(...times) : null;
+            })(),
             endsAt: round.endsAt,
             succeeded: round.succeeded,
             detail: round.detail,
           }
         : null,
-      me: me ? { acted: me.actedAt !== null, submitted: me.submitted, mistakes: me.mistakes } : null,
+      me: me
+        ? { acted: me.actedAt !== null, submitted: me.submitted, mistakes: me.mistakes }
+        : null,
       players: Object.fromEntries(
         Object.entries(state.players).map(([id, player]) => [
           id,

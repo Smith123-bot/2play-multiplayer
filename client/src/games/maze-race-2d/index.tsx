@@ -13,6 +13,9 @@ export interface MazeRunnerPublic {
   finished: boolean;
   finishMs: number | null;
   disconnected: boolean;
+  checkpointIndex: number;
+  penaltyMs: number;
+  latestInputSeq: number;
 }
 
 export interface MazeRacePublicState {
@@ -21,6 +24,10 @@ export interface MazeRacePublicState {
   rows: number;
   walls: boolean[];
   goal: { x: number; y: number };
+  checkpoints: Array<{ x: number; y: number }>;
+  hazards: Array<{ x: number; y: number; penaltyMs: number }>;
+  courseLevel: number;
+  lastEvent: string | null;
   finishOrder: string[];
   startedAt: number | null;
   endsAt: number | null;
@@ -64,6 +71,8 @@ function MazeRaceGame({
 }: GameComponentProps<MazeRacePublicState>) {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
+  const inputSequence = useRef(0);
+  const previousEvent = useRef<string | null>(null);
 
   const phase = state?.phase ?? 'idle';
   const me = myPlayerId ? state?.runners?.[myPlayerId] : undefined;
@@ -72,11 +81,15 @@ function MazeRaceGame({
   const send = useCallback(
     (direction: 'up' | 'down' | 'left' | 'right') => {
       if (!playing) return;
-      sendAction({ type: 'move', payload: { direction } } satisfies GameAction);
+      inputSequence.current = Math.max(inputSequence.current, me?.latestInputSeq ?? -1) + 1;
+      sendAction({
+        type: 'move',
+        payload: { direction, sequence: inputSequence.current },
+      } satisfies GameAction);
       play('click');
       vibrate('buttonPress');
     },
-    [playing, sendAction, play, vibrate],
+    [me?.latestInputSeq, playing, sendAction, play, vibrate],
   );
 
   // Keyboard controls (never while typing in chat/inputs).
@@ -87,6 +100,14 @@ function MazeRaceGame({
         ArrowDown: 'down',
         ArrowLeft: 'left',
         ArrowRight: 'right',
+        w: 'up',
+        W: 'up',
+        s: 'down',
+        S: 'down',
+        a: 'left',
+        A: 'left',
+        d: 'right',
+        D: 'right',
       };
       const direction = map[event.key];
       if (!direction) return;
@@ -121,6 +142,21 @@ function MazeRaceGame({
     previousFinishers.current = finishers;
   }, [state?.finishOrder, myPlayerId, play, vibrate]);
 
+  useEffect(() => {
+    const event = state?.lastEvent ?? null;
+    if (!event || event === previousEvent.current) return;
+    previousEvent.current = event;
+    if (event.startsWith(`checkpoint:${myPlayerId}:`)) {
+      play('score');
+      vibrate('success');
+    } else if (event.startsWith(`hazard:${myPlayerId}:`)) {
+      play('wrong');
+      vibrate('error');
+    } else if (event.startsWith(`goal-locked:${myPlayerId}:`)) {
+      play('wrong');
+    }
+  }, [state?.lastEvent, myPlayerId, play, vibrate]);
+
   if (phase === 'idle' || !state?.walls?.some((wall) => !wall)) {
     return (
       <div className="space-y-4">
@@ -154,6 +190,13 @@ function MazeRaceGame({
           </Badge>
         ) : playing ? (
           <Badge tone="primary">Steps {me?.steps ?? 0}</Badge>
+        ) : null}
+        <Badge tone="accent">
+          Checkpoint {me?.checkpointIndex ?? 0}/{state.checkpoints?.length ?? 0}
+        </Badge>
+        <Badge tone="primary">Course {state.courseLevel ?? 1}/3</Badge>
+        {(me?.penaltyMs ?? 0) > 0 ? (
+          <Badge tone="warning">Penalty +{formatMs(me?.penaltyMs ?? 0)}</Badge>
         ) : null}
         {phase === 'finished' ? <Badge tone="accent">Race over</Badge> : null}
       </div>
@@ -190,6 +233,9 @@ function MazeRaceGame({
               const x = index % cols;
               const y = Math.floor(index / cols);
               const isGoal = x === goal.x && y === goal.y;
+              const checkpointIndex =
+                state.checkpoints?.findIndex((cell) => cell.x === x && cell.y === y) ?? -1;
+              const hazard = state.hazards?.find((cell) => cell.x === x && cell.y === y);
               const occupants = players.filter((player) => {
                 const runner = state.runners?.[player.id];
                 return runner && runner.x === x && runner.y === y;
@@ -202,7 +248,25 @@ function MazeRaceGame({
                     wall ? 'bg-slate-700/90' : 'bg-slate-200/10',
                   )}
                 >
-                  {isGoal ? <Flag className="h-3.5 w-3.5 text-warning sm:h-4 sm:w-4" aria-label="Goal" /> : null}
+                  {isGoal ? (
+                    <Flag className="h-3.5 w-3.5 text-warning sm:h-4 sm:w-4" aria-label="Goal" />
+                  ) : null}
+                  {checkpointIndex >= 0 ? (
+                    <span
+                      className="grid h-3.5 w-3.5 place-items-center rounded-full bg-cyan-400 text-[8px] font-bold text-slate-950 sm:h-4 sm:w-4"
+                      aria-label={`Checkpoint ${checkpointIndex + 1}`}
+                    >
+                      {checkpointIndex + 1}
+                    </span>
+                  ) : null}
+                  {hazard ? (
+                    <span
+                      className="text-[9px] text-rose-400"
+                      title={`Hazard: +${formatMs(hazard.penaltyMs)}`}
+                    >
+                      ▲
+                    </span>
+                  ) : null}
                   {occupants.length > 0 ? (
                     <div className="absolute inset-0 grid place-items-center">
                       <div className="relative flex items-center">
@@ -233,7 +297,8 @@ function MazeRaceGame({
             })}
           </div>
           <p className="text-center text-xs text-slate-500">
-            First to the flag wins · walls are validated by the server
+            Visit checkpoints in order, avoid time hazards, then reach the flag · movement is server
+            validated
           </p>
         </div>
 
@@ -267,7 +332,10 @@ function MazeRaceGame({
                   const player = players.find((entry) => entry.id === playerId);
                   const runner = state.runners?.[playerId];
                   return (
-                    <li key={playerId} className="flex items-center justify-between text-xs text-slate-300">
+                    <li
+                      key={playerId}
+                      className="flex items-center justify-between text-xs text-slate-300"
+                    >
                       <span className="truncate">
                         {index + 1}. {player?.nickname ?? 'Player'}
                         {playerId === myPlayerId ? ' (you)' : ''}

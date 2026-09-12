@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { APP_NAME, APP_VERSION } from '@2play/shared';
 import type { Platform } from '../core/Platform';
-import { env } from '../config/env';
+import { env, isProduction } from '../config/env';
 
 /** GET /api/health — liveness, environment and database status. No secrets. */
 export function createHealthRouter(platform: Platform): Router {
@@ -20,15 +20,21 @@ export function createHealthRouter(platform: Platform): Router {
       database: {
         connected: database.ok,
         mode: database.mode,
-        ...(database.detail ? { detail: database.detail } : {}),
+        // Raw provider/database errors may contain internal infrastructure
+        // details. They remain server-side in production.
+        ...(!isProduction && database.detail ? { detail: database.detail } : {}),
       },
-      platform: {
-        games: platform.registry.size,
-        rooms: platform.roomStore.size,
-        sockets: platform.socketManager.connectionCount,
-        sessions: platform.connectionManager.activeSessions,
-        timers: platform.timerManager.activeCount,
-      },
+      ...(!isProduction
+        ? {
+            platform: {
+              games: platform.registry.size,
+              rooms: platform.roomStore.size,
+              sockets: platform.socketManager.connectionCount,
+              sessions: platform.connectionManager.activeSessions,
+              timers: platform.timerManager.activeCount,
+            },
+          }
+        : {}),
     });
   });
 

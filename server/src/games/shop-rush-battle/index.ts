@@ -20,7 +20,7 @@ import { actionAccepted, actionRejected } from '../GameModule';
 
 export type ShopPhase = 'idle' | 'playing' | 'finished';
 export type ShopDirection = 'up' | 'down' | 'left' | 'right';
-export type ShopItem = 'milk' | 'bread' | 'eggs' | 'apples' | 'cereal' | 'candy';
+export type ShopItem = 'milk' | 'bread' | 'eggs' | 'apples' | 'cereal' | 'juice' | 'rice' | 'candy';
 
 export interface ShopShelf {
   x: number;
@@ -35,6 +35,14 @@ export interface Shopper {
   list: ShopItem[];
   score: number;
   checkouts: number;
+  combo: number;
+  bestCombo: number;
+  correctItems: number;
+  wrongItems: number;
+  missedOrders: number;
+  orderNumber: number;
+  orderDeadline: number;
+  latestInputSeq: number;
   disconnected: boolean;
   left: boolean;
 }
@@ -52,17 +60,19 @@ export interface ShopState {
   finishReason: GameFinishReason | null;
   lastEvent: string | null;
   nextAIRequestAt: Record<string, number>;
+  eventSeq: number;
 }
 
 export const SHOP_COLS = 11;
 export const SHOP_ROWS = 9;
 export const SHOP_MATCH_MS = 120_000;
-export const INVENTORY_CAP = 3;
+export const INVENTORY_CAP = 4;
 export const LIST_SIZE = 3;
+export const ORDER_MS = 28_000;
 export const SCORE_LIST_ITEM = 40;
 export const SCORE_CANDY = 25;
 export const SCORE_COMPLETE = 50;
-const CATALOGUE: ShopItem[] = ['milk', 'bread', 'eggs', 'apples', 'cereal'];
+const CATALOGUE: ShopItem[] = ['milk', 'bread', 'eggs', 'apples', 'cereal', 'juice', 'rice'];
 const DELTA: Record<ShopDirection, { dx: number; dy: number }> = {
   up: { dx: 0, dy: -1 },
   down: { dx: 0, dy: 1 },
@@ -98,16 +108,16 @@ export function makeShelves(): ShopShelf[] {
     { x: 8, y: 2, item: 'apples' },
     { x: 2, y: 5, item: 'cereal' },
     { x: 4, y: 5, item: 'candy' },
-    { x: 6, y: 5, item: 'milk' },
-    { x: 8, y: 5, item: 'bread' },
+    { x: 6, y: 5, item: 'juice' },
+    { x: 8, y: 5, item: 'rice' },
   ];
 }
 
-export function dealList(seed: number, salt: number): ShopItem[] {
+export function dealList(seed: number, salt: number, size = LIST_SIZE): ShopItem[] {
   const rng = mulberry32((seed ^ (salt * 97_351)) >>> 0);
   const pool = CATALOGUE.slice();
   const list: ShopItem[] = [];
-  while (list.length < LIST_SIZE && pool.length > 0) {
+  while (list.length < size && pool.length > 0) {
     const i = Math.floor(rng() * pool.length);
     list.push(pool.splice(i, 1)[0]!);
   }
@@ -119,9 +129,17 @@ function spawnShopper(seat: number, seed: number): Shopper {
     x: 1 + (seat % 4) * 2,
     y: SHOP_ROWS - 2,
     inventory: [],
-    list: dealList(seed, seat + 1),
+    list: dealList(seed, seat + 1, 2),
     score: 0,
     checkouts: 0,
+    combo: 0,
+    bestCombo: 0,
+    correctItems: 0,
+    wrongItems: 0,
+    missedOrders: 0,
+    orderNumber: 1,
+    orderDeadline: 0,
+    latestInputSeq: -1,
     disconnected: false,
     left: false,
   };
@@ -138,7 +156,9 @@ function blocked(state: ShopState, x: number, y: number, ignoreId?: string): boo
 }
 
 function adjacentShelf(state: ShopState, shopper: Shopper): ShopShelf | undefined {
-  return state.shelves.find((shelf) => Math.abs(shelf.x - shopper.x) + Math.abs(shelf.y - shopper.y) === 1);
+  return state.shelves.find(
+    (shelf) => Math.abs(shelf.x - shopper.x) + Math.abs(shelf.y - shopper.y) === 1,
+  );
 }
 
 export function checkoutCart(shopper: Shopper): { gained: number; remaining: ShopItem[] } {
@@ -160,7 +180,7 @@ export function checkoutCart(shopper: Shopper): { gained: number; remaining: Sho
     }
     remaining.push(item);
   }
-  if (listed === LIST_SIZE) gained += SCORE_COMPLETE;
+  if (needed.length === 0 && listed === shopper.list.length) gained += SCORE_COMPLETE;
   return { gained, remaining };
 }
 
@@ -199,6 +219,7 @@ export const shopRushGame: GameModule<ShopState> = {
       finishReason: null,
       lastEvent: null,
       nextAIRequestAt: {},
+      eventSeq: 0,
     };
   },
 
@@ -240,8 +261,16 @@ export const shopRushGame: GameModule<ShopState> = {
     state.endsAt = state.startedAt + state.durationMs;
     state.finishReason = null;
     state.lastEvent = 'start';
+    state.eventSeq = 0;
+    for (const shopper of Object.values(state.shoppers))
+      shopper.orderDeadline = state.startedAt + ORDER_MS;
     ctx.markStateChanged();
-    ctx.schedule(state.durationMs, () => finishShop(state, ctx, 'timeout'), 'gameDuration', 'match-timeout');
+    ctx.schedule(
+      state.durationMs,
+      () => finishShop(state, ctx, 'timeout'),
+      'gameDuration',
+      'match-timeout',
+    );
   },
 
   validateAction(playerId, action, state): ValidationResult {
@@ -249,18 +278,30 @@ export const shopRushGame: GameModule<ShopState> = {
     const shopper = state.shoppers[playerId];
     if (!shopper || shopper.left) return { valid: false, reason: 'You are not shopping.' };
     if (action.type === 'move') {
-      if (!isShopDirection(action.payload?.direction)) return { valid: false, reason: 'Use up, down, left or right.' };
+      if (!isShopDirection(action.payload?.direction))
+        return { valid: false, reason: 'Use up, down, left or right.' };
+      const sequence = action.payload?.sequence;
+      if (
+        sequence !== undefined &&
+        (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+      )
+        return { valid: false, reason: 'Invalid input sequence.' };
+      if (typeof sequence === 'number' && sequence <= shopper.latestInputSeq)
+        return { valid: false, reason: 'Stale input.' };
       const d = DELTA[action.payload.direction as ShopDirection];
-      if (blocked(state, shopper.x + d.dx, shopper.y + d.dy, playerId)) return { valid: false, reason: 'Blocked.' };
+      if (blocked(state, shopper.x + d.dx, shopper.y + d.dy, playerId))
+        return { valid: false, reason: 'Blocked.' };
       return { valid: true };
     }
     if (action.type === 'pickup') {
-      if (shopper.inventory.length >= INVENTORY_CAP) return { valid: false, reason: 'Basket is full.' };
+      if (shopper.inventory.length >= INVENTORY_CAP)
+        return { valid: false, reason: 'Basket is full.' };
       if (!adjacentShelf(state, shopper)) return { valid: false, reason: 'Stand next to a shelf.' };
       return { valid: true };
     }
     if (action.type === 'checkout') {
-      if (shopper.x !== state.till.x || shopper.y !== state.till.y) return { valid: false, reason: 'Stand on the till.' };
+      if (shopper.x !== state.till.x || shopper.y !== state.till.y)
+        return { valid: false, reason: 'Stand on the till.' };
       if (shopper.inventory.length === 0) return { valid: false, reason: 'Basket is empty.' };
       return { valid: true };
     }
@@ -269,10 +310,20 @@ export const shopRushGame: GameModule<ShopState> = {
 
   handlePlayerAction(playerId, action, state, ctx): ActionResult {
     const shopper = state.shoppers[playerId];
-    if (!shopper || state.phase !== 'playing' || shopper.left) return actionRejected('You cannot shop.');
+    if (!shopper || state.phase !== 'playing' || shopper.left)
+      return actionRejected('You cannot shop.');
     if (action.type === 'move') {
       const direction = action.payload?.direction;
       if (!isShopDirection(direction)) return actionRejected('Invalid direction.');
+      const sequence = action.payload?.sequence;
+      if (
+        sequence !== undefined &&
+        (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+      )
+        return actionRejected('Invalid input sequence.');
+      if (typeof sequence === 'number' && sequence <= shopper.latestInputSeq)
+        return actionRejected('Stale input.');
+      if (typeof sequence === 'number') shopper.latestInputSeq = sequence;
       const d = DELTA[direction];
       const nx = shopper.x + d.dx;
       const ny = shopper.y + d.dy;
@@ -288,19 +339,43 @@ export const shopRushGame: GameModule<ShopState> = {
       const shelf = adjacentShelf(state, shopper);
       if (!shelf) return actionRejected('No shelf.');
       shopper.inventory.push(shelf.item);
-      state.lastEvent = `pickup:${playerId}:${shelf.item}`;
+      state.eventSeq += 1;
+      state.lastEvent = `pickup:${playerId}:${shelf.item}:${state.eventSeq}`;
       ctx.markStateChanged();
       return actionAccepted();
     }
     if (action.type === 'checkout') {
-      if (shopper.x !== state.till.x || shopper.y !== state.till.y) return actionRejected('Not at the till.');
+      if (shopper.x !== state.till.x || shopper.y !== state.till.y)
+        return actionRejected('Not at the till.');
       if (shopper.inventory.length === 0) return actionRejected('Empty basket.');
       const result = checkoutCart(shopper);
-      shopper.score += result.gained;
-      shopper.inventory = result.remaining;
+      const correct = shopper.inventory.filter((item) => shopper.list.includes(item)).length;
+      const wrong = shopper.inventory.filter(
+        (item) => item !== 'candy' && !shopper.list.includes(item),
+      ).length;
+      const complete = shopper.list.every((item) => shopper.inventory.includes(item));
+      const onTime = ctx.now() <= shopper.orderDeadline;
+      shopper.combo = complete && onTime ? shopper.combo + 1 : 0;
+      shopper.bestCombo = Math.max(shopper.bestCombo, shopper.combo);
+      const timeBonus =
+        complete && onTime ? Math.round(Math.max(0, shopper.orderDeadline - ctx.now()) / 1000) : 0;
+      const gained = Math.max(
+        0,
+        Math.round(
+          (result.gained - wrong * 15 + timeBonus) * (1 + Math.min(3, shopper.combo) * 0.15),
+        ),
+      );
+      shopper.score += gained;
+      shopper.correctItems += correct;
+      shopper.wrongItems += wrong;
+      shopper.inventory = [];
       shopper.checkouts += 1;
-      shopper.list = dealList(ctx.seed, shopper.checkouts * 17 + 3);
-      state.lastEvent = `checkout:${playerId}:${result.gained}`;
+      shopper.orderNumber += 1;
+      const size = Math.min(4, 2 + Math.floor(shopper.checkouts / 2));
+      shopper.list = dealList(ctx.seed, shopper.checkouts * 17 + 3, size);
+      shopper.orderDeadline = ctx.now() + Math.max(16_000, ORDER_MS - shopper.checkouts * 1_000);
+      state.eventSeq += 1;
+      state.lastEvent = `checkout:${playerId}:${gained}:${complete ? 'complete' : 'partial'}:${state.eventSeq}`;
       ctx.markStateChanged();
       return actionAccepted();
     }
@@ -309,6 +384,21 @@ export const shopRushGame: GameModule<ShopState> = {
 
   update(state, _deltaTimeMs, ctx): void {
     if (state.phase !== 'playing') return;
+    const now = ctx.now();
+    for (const [id, shopper] of Object.entries(state.shoppers)) {
+      if (!shopper.left && shopper.orderDeadline > 0 && now >= shopper.orderDeadline) {
+        shopper.combo = 0;
+        shopper.missedOrders += 1;
+        shopper.orderNumber += 1;
+        shopper.inventory = [];
+        const size = Math.min(4, 2 + Math.floor(shopper.checkouts / 2));
+        shopper.list = dealList(ctx.seed, shopper.orderNumber * 29, size);
+        shopper.orderDeadline = now + Math.max(16_000, ORDER_MS - shopper.checkouts * 1_000);
+        state.eventSeq += 1;
+        state.lastEvent = `missed:${id}:${state.eventSeq}`;
+        ctx.markStateChanged();
+      }
+    }
     for (const player of ctx.players) {
       if (!player.isAI) continue;
       const shopper = state.shoppers[player.id];
@@ -351,9 +441,13 @@ export const shopRushGame: GameModule<ShopState> = {
   },
 
   getResult(state, ctx): GameResultDraft {
-    const ranked = [...ctx.players].sort((a, b) => (state.shoppers[b.id]?.score ?? 0) - (state.shoppers[a.id]?.score ?? 0));
-    const best = ranked[0] ? state.shoppers[ranked[0].id]?.score ?? 0 : 0;
-    const winners = ranked.filter((player) => (state.shoppers[player.id]?.score ?? 0) === best).map((player) => player.id);
+    const ranked = [...ctx.players].sort(
+      (a, b) => (state.shoppers[b.id]?.score ?? 0) - (state.shoppers[a.id]?.score ?? 0),
+    );
+    const best = ranked[0] ? (state.shoppers[ranked[0].id]?.score ?? 0) : 0;
+    const winners = ranked
+      .filter((player) => (state.shoppers[player.id]?.score ?? 0) === best)
+      .map((player) => player.id);
     const rankings: RankingDraft[] = ranked.map((player, index) => {
       const shopper = state.shoppers[player.id];
       return {
@@ -362,10 +456,25 @@ export const shopRushGame: GameModule<ShopState> = {
         score: shopper?.score ?? 0,
         isWinner: winners.includes(player.id),
         isDraw: winners.length > 1,
-        stats: { checkouts: shopper?.checkouts ?? 0, basket: shopper?.inventory.length ?? 0 },
+        stats: {
+          checkouts: shopper?.checkouts ?? 0,
+          basket: shopper?.inventory.length ?? 0,
+          accuracy: shopper
+            ? Math.round(
+                (shopper.correctItems / Math.max(1, shopper.correctItems + shopper.wrongItems)) *
+                  100,
+              )
+            : 0,
+          bestCombo: shopper?.bestCombo ?? 0,
+        },
       };
     });
-    return { winners, isDraw: winners.length > 1, rankings, reason: state.finishReason ?? 'completed' };
+    return {
+      winners,
+      isDraw: winners.length > 1,
+      rankings,
+      reason: state.finishReason ?? 'completed',
+    };
   },
 
   reset(state): ShopState {
@@ -383,6 +492,7 @@ export const shopRushGame: GameModule<ShopState> = {
       finishReason: null,
       lastEvent: null,
       nextAIRequestAt: {},
+      eventSeq: 0,
     };
   },
 
@@ -403,6 +513,7 @@ export const shopRushGame: GameModule<ShopState> = {
       durationMs: state.durationMs,
       finishReason: state.finishReason,
       lastEvent: state.lastEvent,
+      eventSeq: state.eventSeq,
       serverTime: ctx.now(),
       shoppers: Object.fromEntries(
         Object.entries(state.shoppers).map(([id, shopper]) => [
@@ -410,10 +521,21 @@ export const shopRushGame: GameModule<ShopState> = {
           {
             x: shopper.x,
             y: shopper.y,
-            inventory: id === viewerId ? shopper.inventory.slice() : shopper.inventory.map(() => 'hidden' as const),
+            inventory:
+              id === viewerId
+                ? shopper.inventory.slice()
+                : shopper.inventory.map(() => 'hidden' as const),
             list: id === viewerId ? shopper.list.slice() : [],
             score: shopper.score,
             checkouts: shopper.checkouts,
+            combo: shopper.combo,
+            bestCombo: shopper.bestCombo,
+            correctItems: shopper.correctItems,
+            wrongItems: shopper.wrongItems,
+            missedOrders: shopper.missedOrders,
+            orderNumber: shopper.orderNumber,
+            orderDeadline: shopper.orderDeadline,
+            latestInputSeq: shopper.latestInputSeq,
             disconnected: shopper.disconnected,
             basketSize: shopper.inventory.length,
           },
@@ -433,12 +555,21 @@ export const shopRushGame: GameModule<ShopState> = {
     const shelf =
       shopper.inventory.length >= INVENTORY_CAP
         ? null
-        : state.shelves.find((entry) => entry.item === (need ?? (difficulty === 'easy' ? 'candy' : shopper.list[0])));
-    const target = shopper.inventory.length >= INVENTORY_CAP || !need ? state.till : shelf ?? state.till;
-    if (shelf && Math.abs(shelf.x - shopper.x) + Math.abs(shelf.y - shopper.y) === 1 && shopper.inventory.length < INVENTORY_CAP) {
+        : state.shelves.find(
+            (entry) => entry.item === (need ?? (difficulty === 'easy' ? 'candy' : shopper.list[0])),
+          );
+    const target =
+      shopper.inventory.length >= INVENTORY_CAP || !need ? state.till : (shelf ?? state.till);
+    if (
+      shelf &&
+      Math.abs(shelf.x - shopper.x) + Math.abs(shelf.y - shopper.y) === 1 &&
+      shopper.inventory.length < INVENTORY_CAP
+    ) {
       return { type: 'pickup' };
     }
-    const options = ALL_DIRS.filter((dir) => !blocked(state, shopper.x + DELTA[dir].dx, shopper.y + DELTA[dir].dy, playerId));
+    const options = ALL_DIRS.filter(
+      (dir) => !blocked(state, shopper.x + DELTA[dir].dx, shopper.y + DELTA[dir].dy, playerId),
+    );
     if (options.length === 0) return null;
     const scored = options.map((dir) => {
       const n = { x: shopper.x + DELTA[dir].dx, y: shopper.y + DELTA[dir].dy };

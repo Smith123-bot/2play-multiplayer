@@ -10,8 +10,11 @@ export interface PaddlePublic {
   side: 'left' | 'right';
   y: number;
   dir: number;
+  latestInputSeq: number;
   score: number;
   rallies: number;
+  bestRally: number;
+  pointStreak: number;
   disconnected: boolean;
   left: boolean;
 }
@@ -27,6 +30,15 @@ export interface PaddleDuelPublicState {
   serveAt: number | null;
   servingTo: 'left' | 'right' | null;
   rallyHits: number;
+  pointNumber: number;
+  lastHit: { x: number; y: number; at: number } | null;
+  lastImpact: {
+    id: number;
+    kind: 'paddle' | 'wall' | 'point';
+    x: number;
+    y: number;
+    at: number;
+  } | null;
   scoreLimit: number;
   startedAt: number | null;
   endsAt: number | null;
@@ -48,6 +60,8 @@ function PaddleDuelGame({
 }: GameComponentProps<PaddleDuelPublicState>) {
   const clockOffset = useRef(0); // serverTime - Date.now()
   const lastIntent = useRef(0);
+  const activeIntent = useRef<'up' | 'down' | 'stop' | null>(null);
+  const inputSequence = useRef(0);
   const previousEvent = useRef<string | null>(null);
   const previousScore = useRef(0);
   const [, setFrame] = useState(0);
@@ -62,7 +76,8 @@ function PaddleDuelGame({
   // snapshot using the server clock. Visual only — the server stays the truth.
   useEffect(() => {
     if (state) clockOffset.current = state.serverTime - Date.now();
-  }, [state]);
+    if (me) inputSequence.current = Math.max(inputSequence.current, me.latestInputSeq);
+  }, [state, me]);
 
   const playing = phase === 'playing';
   useEffect(() => {
@@ -82,41 +97,66 @@ function PaddleDuelGame({
 
   const sendMove = useCallback(
     (direction: 'up' | 'down' | 'stop') => {
-      if (!canPlay) return;
-      sendAction({ type: 'move', payload: { direction } } satisfies GameAction);
+      if (!canPlay || activeIntent.current === direction) return;
+      activeIntent.current = direction;
+      inputSequence.current += 1;
+      sendAction({
+        type: 'move',
+        payload: { direction, sequence: inputSequence.current },
+      } satisfies GameAction);
       vibrate('buttonPress');
     },
     [canPlay, sendAction, vibrate],
   );
 
+  useEffect(() => {
+    // A point reset or remount must never leave a deduplicated held intent stuck.
+    activeIntent.current = null;
+  }, [state?.pointNumber, phase]);
+
   // Keyboard: W/S + arrows (never while typing in chat/inputs).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const map: Record<string, 'up' | 'down' | 'stop'> = {
-        ArrowUp: 'up', ArrowDown: 'down',
-        w: 'up', s: 'down', W: 'up', S: 'down',
+        ArrowUp: 'up',
+        ArrowDown: 'down',
+        w: 'up',
+        s: 'down',
+        W: 'up',
+        S: 'down',
       };
       const direction = map[event.key];
       if (!direction) return;
       const target = event.target as HTMLElement | null;
       if (
         target &&
-        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) || target.isContentEditable)
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+          target.isContentEditable)
       ) {
         return;
       }
       event.preventDefault();
       sendMove(direction);
     };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (['ArrowUp', 'ArrowDown', 'w', 's', 'W', 'S'].includes(event.key)) sendMove('stop');
+    };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, [sendMove]);
 
   // Event feedback.
   const lastEvent = state?.lastEvent ?? null;
+  const eventIdentity = lastEvent
+    ? `${lastEvent}:${state?.lastImpact?.id ?? state?.pointNumber ?? 0}`
+    : null;
   useEffect(() => {
-    if (lastEvent === previousEvent.current) return;
-    previousEvent.current = lastEvent;
+    if (eventIdentity === previousEvent.current) return;
+    previousEvent.current = eventIdentity;
     if (!lastEvent) return;
     if (lastEvent === 'paddle') play('click');
     else if (lastEvent === 'wall') play('notification');
@@ -137,7 +177,10 @@ function PaddleDuelGame({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastEvent]);
-  const totalScore = Object.values(state?.paddles ?? {}).reduce((sum, paddle) => sum + (paddle?.score ?? 0), 0);
+  const totalScore = Object.values(state?.paddles ?? {}).reduce(
+    (sum, paddle) => sum + (paddle?.score ?? 0),
+    0,
+  );
   useEffect(() => {
     if (totalScore > previousScore.current) play('score');
     previousScore.current = totalScore;
@@ -154,19 +197,50 @@ function PaddleDuelGame({
     );
   }
 
-  const { width, height, paddleWidth: pw, paddleHeight: ph, ballRadius: br, ball, scoreLimit } = state;
+  const {
+    width,
+    height,
+    paddleWidth: pw,
+    paddleHeight: ph,
+    ballRadius: br,
+    ball,
+    scoreLimit,
+  } = state;
   const pct = (value: number, max: number) => `${(value / max) * 100}%`;
 
   // Extrapolated positions (clamped to the arena).
-  const elapsedS = state ? Math.max(0, (Date.now() + clockOffset.current - state.serverTime) / 1000) : 0;
+  const elapsedS = state
+    ? Math.max(0, (Date.now() + clockOffset.current - state.serverTime) / 1000)
+    : 0;
   const clampY = (y: number) => Math.min(height - ph / 2, Math.max(ph / 2, y));
+  const reflectY = (value: number) => {
+    const low = br;
+    const span = height - br - low;
+    let folded = (((value - low) % (2 * span)) + 2 * span) % (2 * span);
+    if (folded > span) folded = 2 * span - folded;
+    return folded + low;
+  };
   const myY = me ? clampY(me.y + me.dir * PADDLE_SPEED * elapsedS) : height / 2;
   const rivalY = rivalPaddle
     ? clampY(rivalPaddle.y + rivalPaddle.dir * PADDLE_SPEED * elapsedS)
     : height / 2;
   const frozen = state.serveAt !== null;
   const bx = frozen ? width / 2 : Math.min(width + 4, Math.max(-4, ball.x + ball.vx * elapsedS));
-  const by = frozen ? height / 2 : Math.min(height, Math.max(0, ball.y + ball.vy * elapsedS));
+  const by = frozen ? height / 2 : reflectY(ball.y + ball.vy * elapsedS);
+  const trail = frozen
+    ? []
+    : Array.from({ length: 6 }, (_entry, index) => {
+        const age = (index + 1) * 0.018;
+        return { x: bx - ball.vx * age, y: by - ball.vy * age, opacity: (6 - index) / 18 };
+      });
+  const prediction = frozen
+    ? []
+    : Array.from({ length: 9 }, (_entry, index) => {
+        const future = (index + 1) * 0.075;
+        return { x: bx + ball.vx * future, y: reflectY(by + ball.vy * future) };
+      }).filter((point) => point.x >= 0 && point.x <= width);
+  const impactVisible =
+    state.lastImpact && Date.now() + clockOffset.current - state.lastImpact.at < 460;
 
   const serveCountdown =
     frozen && state.serveAt !== null
@@ -214,14 +288,21 @@ function PaddleDuelGame({
         </div>
         <div className="text-xs uppercase tracking-wider text-slate-500">first to {scoreLimit}</div>
         <div className="text-left">
-          <div className="text-xs uppercase tracking-wider text-emerald-300">{rival?.nickname ?? 'Rival'}</div>
-          <div className="text-4xl font-bold tabular-nums text-emerald-300">{rivalPaddle?.score ?? 0}</div>
+          <div className="text-xs uppercase tracking-wider text-emerald-300">
+            {rival?.nickname ?? 'Rival'}
+          </div>
+          <div className="text-4xl font-bold tabular-nums text-emerald-300">
+            {rivalPaddle?.score ?? 0}
+          </div>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="primary">{me?.side === 'left' ? '◀ Left side' : 'Right side ▶'}</Badge>
-        <Badge tone="default">Rally {state.rallyHits}</Badge>
+        <Badge tone={state.rallyHits >= 6 ? 'warning' : 'default'}>Rally {state.rallyHits}</Badge>
+        {me && me.pointStreak > 1 ? (
+          <Badge tone="success">{me.pointStreak} point streak</Badge>
+        ) : null}
         {phase === 'finished' ? (
           <Badge tone={isDraw ? 'accent' : iWon ? 'success' : 'danger'}>
             {isDraw ? 'Draw' : iWon ? 'You win!' : 'Rival wins'}
@@ -236,11 +317,22 @@ function PaddleDuelGame({
           aria-label="Paddle duel arena"
           className="relative w-full touch-none overflow-hidden rounded-2xl border border-white/10 bg-black/60 select-none"
           style={{ aspectRatio: `${width} / ${height}` }}
-          onTouchMove={(event) => onTouch(event.touches[0]!.clientY, event.currentTarget)}
-          onTouchEnd={() => canPlay && sendMove('stop')}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            onTouch(event.clientY, event.currentTarget);
+          }}
+          onPointerMove={(event) => {
+            if (event.buttons > 0 || event.pointerType === 'touch')
+              onTouch(event.clientY, event.currentTarget);
+          }}
+          onPointerUp={() => canPlay && sendMove('stop')}
+          onPointerCancel={() => canPlay && sendMove('stop')}
         >
           {/* centre line */}
-          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/10" aria-hidden />
+          <div
+            className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/10"
+            aria-hidden
+          />
           {/* my paddle */}
           {me ? (
             <div
@@ -271,6 +363,63 @@ function PaddleDuelGame({
               aria-label="Rival paddle"
             />
           ) : null}
+          {/* A short reflected trajectory preview communicates the authoritative velocity
+              without claiming future paddle collisions. */}
+          {prediction.map((dot, index) => (
+            <div
+              key={`prediction-${index}`}
+              className="pointer-events-none absolute rounded-full bg-cyan-300"
+              style={{
+                width: pct(br * 0.55, width),
+                height: pct(br * 0.55, height),
+                left: pct(dot.x - br * 0.275, width),
+                top: pct(dot.y - br * 0.275, height),
+                opacity: 0.32 - index * 0.025,
+              }}
+              aria-hidden
+            />
+          ))}
+          {/* Ball trail uses visual extrapolation only; physics remains server-owned. */}
+          {trail.map((dot, index) => (
+            <div
+              key={index}
+              className="pointer-events-none absolute rounded-full bg-cyan-200"
+              style={{
+                width: pct(br * 1.45, width),
+                height: pct(br * 1.45, height),
+                left: pct(dot.x - br * 0.72, width),
+                top: pct(dot.y - br * 0.72, height),
+                opacity: dot.opacity,
+              }}
+              aria-hidden
+            />
+          ))}
+          {impactVisible && state.lastImpact ? (
+            <div
+              key={state.lastImpact.id}
+              className={cn(
+                'pointer-events-none absolute animate-ping rounded-full border-2',
+                state.lastImpact.kind === 'point'
+                  ? 'border-rose-400'
+                  : state.lastImpact.kind === 'wall'
+                    ? 'border-cyan-300'
+                    : 'border-amber-300',
+              )}
+              style={{
+                width: pct(br * (state.lastImpact.kind === 'point' ? 9 : 5), width),
+                height: pct(br * (state.lastImpact.kind === 'point' ? 9 : 5), height),
+                left: pct(
+                  state.lastImpact.x - br * (state.lastImpact.kind === 'point' ? 4.5 : 2.5),
+                  width,
+                ),
+                top: pct(
+                  state.lastImpact.y - br * (state.lastImpact.kind === 'point' ? 4.5 : 2.5),
+                  height,
+                ),
+              }}
+              aria-hidden
+            />
+          ) : null}
           {/* ball */}
           <div
             className="absolute rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.9)]"
@@ -294,6 +443,9 @@ function PaddleDuelGame({
             <div className="absolute inset-0 grid place-items-center bg-black/60">
               <span className="text-xl font-bold text-white">
                 {isDraw ? 'Draw' : iWon ? 'You win! 🏓' : 'Rival wins'}
+                <small className="mt-1 block text-xs font-normal text-slate-300">
+                  Best rally {me?.bestRally ?? 0} · {me?.rallies ?? 0} returns
+                </small>
               </span>
             </div>
           ) : null}
@@ -326,7 +478,8 @@ function PaddleDuelGame({
         </button>
       </div>
       <p className="text-center text-xs text-slate-500">
-        W/S, arrows, drag on the arena or hold the buttons — the server simulates every bounce.
+        W/S, arrows, drag or hold. Move through contact to add controlled spin; dots preview
+        wall-reflected flight. Every input and bounce is server validated.
       </p>
     </div>
   );

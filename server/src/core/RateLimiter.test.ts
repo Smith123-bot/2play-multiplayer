@@ -23,6 +23,17 @@ describe('RateLimiter', () => {
     vi.useRealTimers();
   });
 
+  it('handles a hot bucket without quadratic filtering work', () => {
+    const limiter = new RateLimiter();
+    const started = performance.now();
+    for (let index = 0; index < 10_000; index += 1) {
+      expect(limiter.consume('hot', 10_001, 60_000).allowed).toBe(true);
+    }
+    // This is a generous regression ceiling, not a throughput claim. The old
+    // per-hit Array.filter implementation takes roughly a second locally.
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
   it('isolates keys and supports reset/prune', () => {
     const limiter = new RateLimiter();
     limiter.consume('a', 1, 1000);

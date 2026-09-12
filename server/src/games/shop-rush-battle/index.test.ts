@@ -38,7 +38,14 @@ describe('Shop Rush Battle', () => {
       phase: string;
       shoppers: Record<
         string,
-        { x: number; y: number; list: ShopItem[]; inventory: unknown[]; score: number; basketSize: number }
+        {
+          x: number;
+          y: number;
+          list: ShopItem[];
+          inventory: unknown[];
+          score: number;
+          basketSize: number;
+        }
       >;
     };
 
@@ -46,7 +53,7 @@ describe('Shop Rush Battle', () => {
     expect(state().phase).toBe('playing');
     expect(Object.keys(state().shoppers)).toHaveLength(2);
     for (const shopper of Object.values(state().shoppers)) {
-      expect(shopper.list).toHaveLength(3);
+      expect(shopper.list).toHaveLength(2);
       expect(shopper.inventory).toEqual([]);
       expect(shopper.score).toBe(0);
     }
@@ -66,15 +73,29 @@ describe('Shop Rush Battle', () => {
   it('accepts a legal move and rejects blocked or unknown actions', () => {
     const playerId = players[0]!.id;
     const shopper = state().shoppers[playerId]!;
-    const moved = platform.gameManager.handleAction(room, playerId, { type: 'move', payload: { direction: 'up' } });
+    const moved = platform.gameManager.handleAction(room, playerId, {
+      type: 'move',
+      payload: { direction: 'up' },
+    });
     expect(moved.accepted).toBe(true);
     expect(shopper.y).toBeLessThan(state().rows - 2 + 1);
-    expect(shopRushGame.validateAction(playerId, { type: 'steal' }, state(), context()).valid).toBe(false);
+    expect(shopRushGame.validateAction(playerId, { type: 'steal' }, state(), context()).valid).toBe(
+      false,
+    );
     expect(
-      shopRushGame.validateAction(playerId, { type: 'move', payload: { direction: 'north' } }, state(), context()).valid,
+      shopRushGame.validateAction(
+        playerId,
+        { type: 'move', payload: { direction: 'north' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
-    expect(shopRushGame.validateAction(playerId, { type: 'pickup' }, state(), context()).valid).toBe(false);
-    expect(shopRushGame.validateAction(playerId, { type: 'checkout' }, state(), context()).valid).toBe(false);
+    expect(
+      shopRushGame.validateAction(playerId, { type: 'pickup' }, state(), context()).valid,
+    ).toBe(false);
+    expect(
+      shopRushGame.validateAction(playerId, { type: 'checkout' }, state(), context()).valid,
+    ).toBe(false);
   });
 
   it('picks up only when adjacent to a shelf and respects the inventory cap', () => {
@@ -87,9 +108,11 @@ describe('Shop Rush Battle', () => {
     expect(picked.accepted).toBe(true);
     expect(shopper.inventory).toEqual([shelf.item]);
 
-    shopper.inventory = ['milk', 'bread', 'eggs'];
+    shopper.inventory = ['milk', 'bread', 'eggs', 'rice'];
     expect(shopper.inventory).toHaveLength(INVENTORY_CAP);
-    expect(shopRushGame.validateAction(playerId, { type: 'pickup' }, state(), context()).valid).toBe(false);
+    expect(
+      shopRushGame.validateAction(playerId, { type: 'pickup' }, state(), context()).valid,
+    ).toBe(false);
   });
 
   it('checkouts only on the till; the server scores the cart', () => {
@@ -97,14 +120,16 @@ describe('Shop Rush Battle', () => {
     const shopper = state().shoppers[playerId]!;
     shopper.list = ['milk', 'bread', 'eggs'];
     shopper.inventory = ['milk', 'bread', 'eggs'];
-    expect(shopRushGame.validateAction(playerId, { type: 'checkout' }, state(), context()).valid).toBe(false);
+    expect(
+      shopRushGame.validateAction(playerId, { type: 'checkout' }, state(), context()).valid,
+    ).toBe(false);
     shopper.x = state().till.x;
     shopper.y = state().till.y;
     const paid = platform.gameManager.handleAction(room, playerId, { type: 'checkout' });
     expect(paid.accepted).toBe(true);
-    expect(shopper.score).toBe(SCORE_LIST_ITEM * 3 + SCORE_COMPLETE);
+    expect(shopper.score).toBeGreaterThan(SCORE_LIST_ITEM * 3 + SCORE_COMPLETE);
     expect(shopper.inventory).toEqual([]);
-    expect(shopper.list).toHaveLength(3);
+    expect(shopper.list).toHaveLength(2);
     expect(shopper.checkouts).toBe(1);
   });
 
@@ -116,6 +141,14 @@ describe('Shop Rush Battle', () => {
       list: ['milk', 'bread', 'eggs'] as ShopItem[],
       score: 0,
       checkouts: 0,
+      combo: 0,
+      bestCombo: 0,
+      correctItems: 0,
+      wrongItems: 0,
+      missedOrders: 0,
+      orderNumber: 1,
+      orderDeadline: 0,
+      latestInputSeq: -1,
       disconnected: false,
       left: false,
     };
@@ -163,5 +196,54 @@ describe('Shop Rush Battle', () => {
     const move = shopRushGame.getAIMove?.(players[0]!.id, 'hard', state(), context());
     expect(move).toBeTruthy();
     expect(['move', 'pickup', 'checkout']).toContain(move!.type);
+  });
+
+  it('progresses order size, accuracy and combo from authoritative checkout contents', () => {
+    const id = players[0]!.id;
+    const shopper = state().shoppers[id]!;
+    shopper.list = ['milk', 'bread'];
+    shopper.inventory = ['milk', 'bread'];
+    shopper.x = state().till.x;
+    shopper.y = state().till.y;
+    const before = shopper.score;
+    expect(platform.gameManager.handleAction(room, id, { type: 'checkout' }).accepted).toBe(true);
+    expect(shopper.score).toBeGreaterThan(before);
+    expect(shopper.combo).toBe(1);
+    expect(shopper.correctItems).toBe(2);
+    shopper.list = ['milk', 'bread'];
+    shopper.inventory = ['milk', 'cereal'];
+    platform.gameManager.handleAction(room, id, { type: 'checkout' });
+    expect(shopper.combo).toBe(0);
+    expect(shopper.wrongItems).toBe(1);
+  });
+
+  it('rejects stale movement sequences', () => {
+    const id = players[0]!.id;
+    expect(
+      platform.gameManager.handleAction(room, id, {
+        type: 'move',
+        payload: { direction: 'up', sequence: 3 },
+      }).accepted,
+    ).toBe(true);
+    expect(
+      platform.gameManager.handleAction(room, id, {
+        type: 'move',
+        payload: { direction: 'down', sequence: 2 },
+      }).accepted,
+    ).toBe(false);
+  });
+
+  it('expires an unattended customer order and resets its combo', () => {
+    const id = players[0]!.id;
+    const shopper = state().shoppers[id]!;
+    shopper.combo = 3;
+    shopper.inventory = ['milk'];
+    shopper.orderDeadline = context().now() - 1;
+    const previousOrder = shopper.orderNumber;
+    shopRushGame.update(state(), 1, context());
+    expect(shopper.missedOrders).toBe(1);
+    expect(shopper.orderNumber).toBe(previousOrder + 1);
+    expect(shopper.combo).toBe(0);
+    expect(shopper.inventory).toEqual([]);
   });
 });

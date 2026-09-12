@@ -41,6 +41,10 @@ export interface HuntHunter {
   coins: number;
   multiplierUntil: number;
   lastStepAt: number;
+  streak: number;
+  bestStreak: number;
+  lastCollectAt: number;
+  latestInputSeq: number;
   disconnected: boolean;
   left: boolean;
 }
@@ -60,6 +64,9 @@ export interface CoinHuntersState {
   bonus: { x: number; y: number; w: number; h: number };
   slow: number[];
   blocker: HuntBlocker;
+  walls: number[];
+  layout: 'classic' | 'lanes' | 'corners';
+  round: number;
   stepMs: number;
   stepIndex: number;
   accumulatorMs: number;
@@ -78,7 +85,8 @@ export const HUNT_ROWS = 12;
 export const COIN_VALUES: Record<CoinKind, number> = { normal: 10, gold: 25, rare: 50, multi: 0 };
 const STEP_MS = 250;
 const MATCH_MS = 150_000;
-const MAX_COINS = 8;
+const MAX_COINS = 10;
+const STREAK_WINDOW_MS = 3_500;
 const COIN_LIFE_MS = 8_000;
 const MULTI_MS = 4_000;
 const DELTA: Record<HuntDirection, { dx: number; dy: number }> = {
@@ -104,7 +112,11 @@ function inBounds(cols: number, rows: number, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < cols && y < rows;
 }
 
-function spawnPoint(seat: number, cols: number, rows: number): { x: number; y: number; direction: HuntDirection } {
+function spawnPoint(
+  seat: number,
+  cols: number,
+  rows: number,
+): { x: number; y: number; direction: HuntDirection } {
   if (seat === 0) return { x: 1, y: 1, direction: 'right' };
   if (seat === 1) return { x: cols - 2, y: 1, direction: 'left' };
   if (seat === 2) return { x: 1, y: rows - 2, direction: 'right' };
@@ -116,7 +128,12 @@ export function cellIndex(cols: number, x: number, y: number): number {
 }
 
 export function inBonus(state: CoinHuntersState, x: number, y: number): boolean {
-  return x >= state.bonus.x && x < state.bonus.x + state.bonus.w && y >= state.bonus.y && y < state.bonus.y + state.bonus.h;
+  return (
+    x >= state.bonus.x &&
+    x < state.bonus.x + state.bonus.w &&
+    y >= state.bonus.y &&
+    y < state.bonus.y + state.bonus.h
+  );
 }
 
 export function isSlow(state: CoinHuntersState, x: number, y: number): boolean {
@@ -133,6 +150,8 @@ function pickKind(rng: () => number): CoinKind {
 
 function blockedCells(state: CoinHuntersState): Set<string> {
   const set = new Set<string>([`${state.blocker.x},${state.blocker.y}`]);
+  for (const index of state.walls)
+    set.add(`${index % state.cols},${Math.floor(index / state.cols)}`);
   for (const coin of state.coins) set.add(`${coin.x},${coin.y}`);
   for (const hunter of Object.values(state.hunters)) {
     if (!hunter.left) set.add(`${hunter.x},${hunter.y}`);
@@ -140,7 +159,11 @@ function blockedCells(state: CoinHuntersState): Set<string> {
   return set;
 }
 
-export function spawnCoin(state: CoinHuntersState, ctx: GameContext, now = ctx.now()): HuntCoin | null {
+export function spawnCoin(
+  state: CoinHuntersState,
+  ctx: GameContext,
+  now = ctx.now(),
+): HuntCoin | null {
   if (state.coins.length >= MAX_COINS) return null;
   const used = blockedCells(state);
   const free: Array<{ x: number; y: number }> = [];
@@ -150,7 +173,20 @@ export function spawnCoin(state: CoinHuntersState, ctx: GameContext, now = ctx.n
     }
   }
   if (free.length === 0) return null;
-  const cell = free[Math.floor(ctx.random() * free.length)]!;
+  // Choose among the safest quartile by distance from all hunters. This prevents
+  // lucky point-blank spawns while preserving seeded variation.
+  const ranked = free.map((cell) => ({
+    cell,
+    distance: Math.min(
+      ...Object.values(state.hunters)
+        .filter((h) => !h.left)
+        .map((h) => Math.abs(h.x - cell.x) + Math.abs(h.y - cell.y)),
+      state.cols + state.rows,
+    ),
+  }));
+  ranked.sort((a, b) => b.distance - a.distance);
+  const fairPool = ranked.slice(0, Math.max(1, Math.ceil(ranked.length / 4)));
+  const cell = fairPool[Math.floor(ctx.random() * fairPool.length)]!.cell;
   const kind = pickKind(ctx.random);
   state.coinSeq += 1;
   const coin: HuntCoin = {
@@ -165,7 +201,12 @@ export function spawnCoin(state: CoinHuntersState, ctx: GameContext, now = ctx.n
   return coin;
 }
 
-export function awardCollection(state: CoinHuntersState, playerId: string, coin: HuntCoin, now: number): number {
+export function awardCollection(
+  state: CoinHuntersState,
+  playerId: string,
+  coin: HuntCoin,
+  now: number,
+): number {
   if (state.collected[coin.id]) return 0;
   const hunter = state.hunters[playerId];
   if (!hunter) return 0;
@@ -177,7 +218,11 @@ export function awardCollection(state: CoinHuntersState, playerId: string, coin:
     state.lastEvent = `multi:${playerId}`;
     return 0;
   }
+  hunter.streak = now - hunter.lastCollectAt <= STREAK_WINDOW_MS ? hunter.streak + 1 : 1;
+  hunter.bestStreak = Math.max(hunter.bestStreak, hunter.streak);
+  hunter.lastCollectAt = now;
   let points = coin.value;
+  points += Math.min(20, (hunter.streak - 1) * 5);
   if (now < hunter.multiplierUntil) points *= 2;
   if (inBonus(state, hunter.x, hunter.y)) points *= 2;
   hunter.score += points;
@@ -186,7 +231,12 @@ export function awardCollection(state: CoinHuntersState, playerId: string, coin:
   return points;
 }
 
-export function tryCollect(state: CoinHuntersState, playerId: string, coinId: string, now: number): number {
+export function tryCollect(
+  state: CoinHuntersState,
+  playerId: string,
+  coinId: string,
+  now: number,
+): number {
   const hunter = state.hunters[playerId];
   if (!hunter || hunter.left) return 0;
   const coin = state.coins.find((entry) => entry.id === coinId);
@@ -204,7 +254,11 @@ function moveBlocker(state: CoinHuntersState): void {
   const d = DELTA[state.blocker.direction];
   let nx = state.blocker.x + d.dx;
   let ny = state.blocker.y + d.dy;
-  if (!inBounds(state.cols, state.rows, nx, ny) || isSlow(state, nx, ny)) {
+  if (
+    !inBounds(state.cols, state.rows, nx, ny) ||
+    isSlow(state, nx, ny) ||
+    state.walls.includes(cellIndex(state.cols, nx, ny))
+  ) {
     state.blocker.direction = REVERSE[state.blocker.direction];
     nx = state.blocker.x + DELTA[state.blocker.direction].dx;
     ny = state.blocker.y + DELTA[state.blocker.direction].dy;
@@ -234,7 +288,11 @@ export function stepHunters(state: CoinHuntersState, ctx: GameContext): { collec
     const d = DELTA[hunter.direction];
     const nx = hunter.x + d.dx;
     const ny = hunter.y + d.dy;
-    if (!inBounds(state.cols, state.rows, nx, ny)) continue;
+    if (
+      !inBounds(state.cols, state.rows, nx, ny) ||
+      state.walls.includes(cellIndex(state.cols, nx, ny))
+    )
+      continue;
     if (nx === state.blocker.x && ny === state.blocker.y) {
       state.lastEvent = `block:${id}`;
       continue;
@@ -250,11 +308,15 @@ export function stepHunters(state: CoinHuntersState, ctx: GameContext): { collec
   }
 
   state.stepIndex += 1;
-  if (state.coins.length < 5) spawnCoin(state, ctx, now);
+  if (state.coins.length < 4 + state.round) spawnCoin(state, ctx, now);
   return outcome;
 }
 
-export function finishHunt(state: CoinHuntersState, ctx: GameContext, reason: GameFinishReason): void {
+export function finishHunt(
+  state: CoinHuntersState,
+  ctx: GameContext,
+  reason: GameFinishReason,
+): void {
   if (state.phase === 'finished') return;
   state.phase = 'finished';
   state.finishReason = reason;
@@ -274,12 +336,20 @@ function makeHunter(seat: number, cols: number, rows: number): HuntHunter {
     coins: 0,
     multiplierUntil: 0,
     lastStepAt: 0,
+    streak: 0,
+    bestStreak: 0,
+    lastCollectAt: 0,
+    latestInputSeq: -1,
     disconnected: false,
     left: false,
   };
 }
 
-function layoutExtras(cols: number, rows: number, rng: () => number): { bonus: CoinHuntersState['bonus']; slow: number[] } {
+function layoutExtras(
+  cols: number,
+  rows: number,
+  rng: () => number,
+): { bonus: CoinHuntersState['bonus']; slow: number[] } {
   const bonus = { x: Math.floor(cols / 2) - 1, y: Math.floor(rows / 2) - 1, w: 3, h: 2 };
   const slow: number[] = [];
   for (let i = 0; i < 6; i += 1) {
@@ -289,6 +359,30 @@ function layoutExtras(cols: number, rows: number, rng: () => number): { bonus: C
     slow.push(cellIndex(cols, x, y));
   }
   return { bonus, slow };
+}
+
+export function huntWalls(
+  layout: CoinHuntersState['layout'],
+  cols: number,
+  rows: number,
+): number[] {
+  const result = new Set<number>();
+  const add = (x: number, y: number) => result.add(cellIndex(cols, x, y));
+  if (layout === 'lanes') {
+    for (let y = 2; y < rows - 2; y += 1)
+      if (y !== Math.floor(rows / 2)) {
+        add(6, y);
+        add(cols - 7, y);
+      }
+  } else if (layout === 'corners') {
+    for (const x of [5, cols - 6])
+      for (const y of [3, rows - 4]) {
+        add(x, y);
+        add(x + 1, y);
+        add(x, y + 1);
+      }
+  }
+  return [...result];
 }
 
 export const coinHuntersGame: GameModule<CoinHuntersState> = {
@@ -313,6 +407,9 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
       bonus: extras.bonus,
       slow: extras.slow,
       blocker: { x: Math.floor(HUNT_COLS / 2), y: 1, direction: 'down' },
+      walls: [],
+      layout: 'classic',
+      round: 1,
       stepMs: STEP_MS,
       stepIndex: 0,
       accumulatorMs: 0,
@@ -329,7 +426,11 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
 
   playerJoined(player, state): void {
     if (!state.hunters[player.id]) {
-      state.hunters[player.id] = makeHunter(Object.keys(state.hunters).length, state.cols, state.rows);
+      state.hunters[player.id] = makeHunter(
+        Object.keys(state.hunters).length,
+        state.cols,
+        state.rows,
+      );
     }
   },
 
@@ -345,7 +446,8 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
       return;
     }
     hunter.left = true;
-    if (Object.values(state.hunters).every((entry) => entry.left)) finishHunt(state, ctx, 'abandoned');
+    if (Object.values(state.hunters).every((entry) => entry.left))
+      finishHunt(state, ctx, 'abandoned');
   },
 
   start(state, ctx): void {
@@ -358,6 +460,10 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
     state.hunters = hunters;
     state.bonus = extras.bonus;
     state.slow = extras.slow;
+    state.layout = ctx.seed % 3 === 0 ? 'corners' : ctx.seed % 2 === 0 ? 'lanes' : 'classic';
+    state.walls = huntWalls(state.layout, HUNT_COLS, HUNT_ROWS);
+    state.round = 1;
+    state.stepMs = STEP_MS;
     state.blocker = { x: Math.floor(HUNT_COLS / 2), y: 1, direction: 'down' };
     state.coins = [];
     state.collected = {};
@@ -371,7 +477,12 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
     state.lastEvent = 'start';
     while (state.coins.length < 5) spawnCoin(state, ctx);
     ctx.markStateChanged();
-    ctx.schedule(state.durationMs, () => finishHunt(state, ctx, 'timeout'), 'gameDuration', 'match-timeout');
+    ctx.schedule(
+      state.durationMs,
+      () => finishHunt(state, ctx, 'timeout'),
+      'gameDuration',
+      'match-timeout',
+    );
   },
 
   validateAction(playerId, action, state, ctx): ValidationResult {
@@ -380,15 +491,27 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
     if (!hunter || hunter.left) return { valid: false, reason: 'You are not in this match.' };
     if (action.type === 'move') {
       const direction = action.payload?.direction;
-      if (!isHuntDirection(direction)) return { valid: false, reason: 'Use up, down, left or right.' };
+      if (!isHuntDirection(direction))
+        return { valid: false, reason: 'Use up, down, left or right.' };
       const effective = hunter.pending ?? hunter.direction;
-      if (REVERSE[effective] === direction) return { valid: false, reason: 'You cannot reverse instantly.' };
+      if (REVERSE[effective] === direction)
+        return { valid: false, reason: 'You cannot reverse instantly.' };
+      const sequence = action.payload?.sequence;
+      if (
+        sequence !== undefined &&
+        (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+      )
+        return { valid: false, reason: 'Invalid input sequence.' };
+      if (typeof sequence === 'number' && sequence <= hunter.latestInputSeq)
+        return { valid: false, reason: 'Stale input.' };
       return { valid: true };
     }
     if (action.type === 'collect') {
       const coinId = action.payload?.coinId;
-      if (typeof coinId !== 'string' || coinId.length === 0) return { valid: false, reason: 'Missing coin.' };
-      if (state.collected[coinId]) return { valid: false, reason: 'That coin is already collected.' };
+      if (typeof coinId !== 'string' || coinId.length === 0)
+        return { valid: false, reason: 'Missing coin.' };
+      if (state.collected[coinId])
+        return { valid: false, reason: 'That coin is already collected.' };
       const coin = state.coins.find((entry) => entry.id === coinId);
       if (!coin) return { valid: false, reason: 'That coin is gone.' };
       if (coin.expiresAt <= ctx.now()) return { valid: false, reason: 'That coin expired.' };
@@ -405,6 +528,15 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
     if (action.type === 'move') {
       const direction = action.payload?.direction;
       if (!isHuntDirection(direction)) return actionRejected('Invalid direction.');
+      const sequence = action.payload?.sequence;
+      if (
+        sequence !== undefined &&
+        (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+      )
+        return actionRejected('Invalid input sequence.');
+      if (typeof sequence === 'number' && sequence <= hunter.latestInputSeq)
+        return actionRejected('Stale input.');
+      if (typeof sequence === 'number') hunter.latestInputSeq = sequence;
       const effective = hunter.pending ?? hunter.direction;
       if (REVERSE[effective] === direction) return actionRejected('You cannot reverse instantly.');
       if (effective === direction) return actionAccepted(false);
@@ -426,6 +558,14 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
 
   update(state, deltaTimeMs, ctx): void {
     if (state.phase !== 'playing') return;
+    const elapsed = ctx.now() - (state.startedAt ?? ctx.now());
+    const nextRound = Math.min(3, Math.floor(elapsed / (state.durationMs / 3)) + 1);
+    if (nextRound > state.round) {
+      state.round = nextRound;
+      state.stepMs = nextRound === 2 ? 220 : 190;
+      state.lastEvent = `round:${nextRound}`;
+      ctx.markStateChanged();
+    }
     for (const player of ctx.players) {
       if (!player.isAI) continue;
       const hunter = state.hunters[player.id];
@@ -442,8 +582,9 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
     while (state.accumulatorMs >= state.stepMs && state.phase === 'playing' && guard < 4) {
       state.accumulatorMs -= state.stepMs;
       guard += 1;
-      const outcome = stepHunters(state, ctx);
-      if (outcome.collected.length > 0) ctx.markStateChanged();
+      stepHunters(state, ctx);
+      // Movement, blockers, expirations and spawns are all public gameplay state.
+      ctx.markStateChanged();
     }
   },
 
@@ -457,7 +598,9 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
 
   checkWinCondition(state): string[] | null {
     if (state.phase !== 'finished') return null;
-    const entries = Object.entries(state.hunters).map(([id, hunter]) => [id, hunter.score] as const);
+    const entries = Object.entries(state.hunters).map(
+      ([id, hunter]) => [id, hunter.score] as const,
+    );
     if (entries.length === 0) return [];
     const best = Math.max(...entries.map(([, n]) => n));
     return entries.filter(([, n]) => n === best).map(([id]) => id);
@@ -476,9 +619,13 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
   },
 
   getResult(state, ctx): GameResultDraft {
-    const ranked = [...ctx.players].sort((a, b) => (state.hunters[b.id]?.score ?? 0) - (state.hunters[a.id]?.score ?? 0));
+    const ranked = [...ctx.players].sort(
+      (a, b) => (state.hunters[b.id]?.score ?? 0) - (state.hunters[a.id]?.score ?? 0),
+    );
     const top = state.hunters[ranked[0]?.id ?? '']?.score ?? 0;
-    const winners = ranked.filter((player) => (state.hunters[player.id]?.score ?? 0) === top).map((player) => player.id);
+    const winners = ranked
+      .filter((player) => (state.hunters[player.id]?.score ?? 0) === top)
+      .map((player) => player.id);
     const rankings: RankingDraft[] = ranked.map((player, index) => ({
       playerId: player.id,
       rank: index + 1,
@@ -487,9 +634,15 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
       isDraw: winners.length > 1,
       stats: {
         coins: state.hunters[player.id]?.coins ?? 0,
+        bestStreak: state.hunters[player.id]?.bestStreak ?? 0,
       },
     }));
-    return { winners, isDraw: winners.length > 1, rankings, reason: state.finishReason ?? 'completed' };
+    return {
+      winners,
+      isDraw: winners.length > 1,
+      rankings,
+      reason: state.finishReason ?? 'completed',
+    };
   },
 
   reset(state): CoinHuntersState {
@@ -503,6 +656,10 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
       phase: 'idle',
       hunters,
       coins: [],
+      walls: [],
+      layout: 'classic',
+      round: 1,
+      stepMs: STEP_MS,
       collected: {},
       coinSeq: 0,
       stepIndex: 0,
@@ -538,6 +695,9 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
       bonus: { ...state.bonus },
       slow: [...state.slow],
       blocker: { ...state.blocker },
+      walls: [...state.walls],
+      layout: state.layout,
+      round: state.round,
       coins: state.coins.map((coin) => ({
         id: coin.id,
         x: coin.x,
@@ -556,6 +716,9 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
             score: hunter.score,
             coins: hunter.coins,
             multiplier: now < hunter.multiplierUntil,
+            streak: hunter.streak,
+            bestStreak: hunter.bestStreak,
+            latestInputSeq: hunter.latestInputSeq,
             disconnected: hunter.disconnected,
           },
         ]),
@@ -571,11 +734,14 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
     const safe = options.filter((dir) => {
       const n = { x: hunter.x + DELTA[dir].dx, y: hunter.y + DELTA[dir].dy };
       if (!inBounds(state.cols, state.rows, n.x, n.y)) return false;
+      if (state.walls.includes(cellIndex(state.cols, n.x, n.y))) return false;
       if (n.x === state.blocker.x && n.y === state.blocker.y) return false;
       return true;
     });
     const pool = safe.length > 0 ? safe : options;
-    const nearby = state.coins.find((coin) => Math.abs(coin.x - hunter.x) + Math.abs(coin.y - hunter.y) <= 1);
+    const nearby = state.coins.find(
+      (coin) => Math.abs(coin.x - hunter.x) + Math.abs(coin.y - hunter.y) <= 1,
+    );
     if (nearby && difficulty !== 'easy') {
       return { type: 'collect', payload: { coinId: nearby.id } };
     }
@@ -586,7 +752,11 @@ export const coinHuntersGame: GameModule<CoinHuntersState> = {
       const valueBias = difficulty === 'hard' ? coin.value - best.value : 0;
       return d - valueBias / 20 < bd ? coin : best;
     }, null);
-    if (!target) return { type: 'move', payload: { direction: pool[Math.floor(ctx.random() * pool.length)]! } };
+    if (!target)
+      return {
+        type: 'move',
+        payload: { direction: pool[Math.floor(ctx.random() * pool.length)]! },
+      };
     const scored = pool.map((dir) => {
       const n = { x: hunter.x + DELTA[dir].dx, y: hunter.y + DELTA[dir].dy };
       return { dir, dist: Math.abs(n.x - target.x) + Math.abs(n.y - target.y) };

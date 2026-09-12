@@ -7,6 +7,7 @@ import { Badge } from '../../components/ui/Badge';
 import { cn } from '../../utils/cn';
 
 type Direction = 'up' | 'down' | 'left' | 'right';
+type BlastMode = 'standard' | 'overcharge';
 
 interface ArenaNodeView {
   id: string;
@@ -23,6 +24,7 @@ interface PulseView {
   detonateAt: number;
   radius: number;
   depth: number;
+  mode: BlastMode;
 }
 
 interface EffectView {
@@ -33,6 +35,7 @@ interface EffectView {
   ownerId: string;
   depth: number;
   at: number;
+  mode: BlastMode;
 }
 
 export interface BlastPublicState {
@@ -43,10 +46,26 @@ export interface BlastPublicState {
   serverTime: number;
   lastEvent: string | null;
   finishReason: string | null;
+  wave: number;
+  maxWave: number;
+  waveEndsAt: number | null;
+  pulseEnergyCost: number;
+  overchargeEnergyCost: number;
+  waveTarget: number;
+  waveTheme: 'calm' | 'surge' | 'maze' | 'cascade' | 'pressure' | 'finale';
   nodes: ArenaNodeView[];
   pulses: PulseView[];
   effects: EffectView[];
-  me: { cooldownUntil: number; combo: number; comboUntil: number; score: number } | null;
+  me: {
+    cooldownUntil: number;
+    combo: number;
+    comboUntil: number;
+    score: number;
+    energy: number;
+    maxEnergy: number;
+    waveHits: number;
+    wavesCleared: number;
+  } | null;
   players: Record<
     string,
     {
@@ -57,6 +76,10 @@ export interface BlastPublicState {
       bestCombo: number;
       hits: number;
       chains: number;
+      energy: number;
+      maxEnergy: number;
+      waveHits: number;
+      wavesCleared: number;
       disconnected: boolean;
     }
   >;
@@ -117,24 +140,45 @@ function BlackBlastGame({
     [playing, sendAction],
   );
 
-  const pulse = useCallback(() => {
-    if (!playing) return;
-    const now = Date.now() + offsetRef.current;
-    if (state?.me && now < state.me.cooldownUntil) return;
-    sendAction({ type: 'pulse' } satisfies GameAction);
-    play('click');
-    vibrate('buttonPress');
-  }, [playing, sendAction, play, vibrate, state?.me]);
+  const pulse = useCallback(
+    (mode: BlastMode = 'standard') => {
+      if (!playing) return;
+      const now = Date.now() + offsetRef.current;
+      const cost = mode === 'overcharge' ? state?.overchargeEnergyCost : state?.pulseEnergyCost;
+      if (state?.me && (now < state.me.cooldownUntil || state.me.energy < (cost ?? 0))) return;
+      sendAction({ type: 'pulse', payload: { mode } } satisfies GameAction);
+      play(mode === 'overcharge' ? 'correct' : 'click');
+      vibrate(mode === 'overcharge' ? 'success' : 'buttonPress');
+    },
+    [
+      playing,
+      sendAction,
+      play,
+      vibrate,
+      state?.me,
+      state?.overchargeEnergyCost,
+      state?.pulseEnergyCost,
+    ],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target && (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) || target.isContentEditable)) {
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+          target.isContentEditable)
+      ) {
         return;
       }
       if (event.key === ' ') {
         event.preventDefault();
-        pulse();
+        pulse('standard');
+        return;
+      }
+      if (event.key === 'e' || event.key === 'E') {
+        event.preventDefault();
+        pulse('overcharge');
         return;
       }
       const direction = KEY_MAP[event.key];
@@ -149,21 +193,29 @@ function BlackBlastGame({
   // Audio/haptics from server events only.
   useEffect(() => {
     const event = state?.lastEvent ?? null;
-    if (event === previousEvent.current) return;
-    previousEvent.current = event;
+    const latestEffect = state?.effects.at(-1)?.id ?? '';
+    const eventIdentity = event ? `${event}:${latestEffect}` : null;
+    if (eventIdentity === previousEvent.current) return;
+    previousEvent.current = eventIdentity;
     if (!event) return;
     const mine = myPlayerId ? event.includes(myPlayerId) : false;
-    if (event.startsWith('blast:')) {
+    if (event.startsWith('wave-clear:')) {
+      play('victory');
+      if (mine) vibrate('victory');
+    } else if (event.startsWith('blast:')) {
       play(mine ? 'score' : 'notification');
       if (mine) vibrate('success');
     } else if (event.startsWith('chain:')) {
       play('correct');
       if (mine) vibrate('victory');
+    } else if (event.startsWith('wave:')) {
+      play('gameStart');
+      vibrate('success');
     } else if (event.startsWith('miss:')) {
       if (mine) play('wrong');
     } else if (event === 'start') play('gameStart');
     else if (event === 'timeout' || event === 'finished') play('gameOver');
-  }, [state?.lastEvent, myPlayerId, play, vibrate]);
+  }, [state?.lastEvent, state?.effects, myPlayerId, play, vibrate]);
 
   /**
    * Canvas render loop. Reads from refs so it never re-subscribes, and is
@@ -247,7 +299,10 @@ function BlackBlastGame({
         context.arc(cx, cy, cell * (0.25 + progress * 0.35), 0, Math.PI * 2);
         context.fillStyle = `rgba(15,15,26,${0.5 + progress * 0.45})`;
         context.fill();
-        context.strokeStyle = `rgba(167,139,250,${0.45 + progress * 0.55})`;
+        context.strokeStyle =
+          entry.mode === 'overcharge'
+            ? `rgba(251,191,36,${0.55 + progress * 0.45})`
+            : `rgba(167,139,250,${0.45 + progress * 0.55})`;
         context.lineWidth = 2;
         context.stroke();
       }
@@ -261,13 +316,32 @@ function BlackBlastGame({
         context.beginPath();
         context.arc((effect.x + 0.5) * cell, (effect.y + 0.5) * cell, radius, 0, Math.PI * 2);
         const fade = 1 - t;
-        context.strokeStyle = `rgba(196,181,253,${fade * 0.9})`;
+        context.strokeStyle =
+          effect.mode === 'overcharge'
+            ? `rgba(251,191,36,${fade})`
+            : `rgba(196,181,253,${fade * 0.9})`;
         context.lineWidth = 3 * fade + 0.5;
         context.stroke();
         context.beginPath();
         context.arc((effect.x + 0.5) * cell, (effect.y + 0.5) * cell, radius * 0.6, 0, Math.PI * 2);
-        context.fillStyle = `rgba(30,27,75,${fade * 0.45})`;
+        context.fillStyle =
+          effect.mode === 'overcharge'
+            ? `rgba(120,53,15,${fade * 0.5})`
+            : `rgba(30,27,75,${fade * 0.45})`;
         context.fill();
+
+        // Deterministic 2D sparks radiate from every authoritative blast.
+        const sparks = 7 + Math.min(8, effect.depth * 2);
+        for (let index = 0; index < sparks; index += 1) {
+          const angle = (index / sparks) * Math.PI * 2 + effect.depth * 0.37;
+          const travel = radius * (0.35 + t * 0.55);
+          const sx = (effect.x + 0.5) * cell + Math.cos(angle) * travel;
+          const sy = (effect.y + 0.5) * cell + Math.sin(angle) * travel;
+          context.beginPath();
+          context.arc(sx, sy, Math.max(0.7, cell * 0.07 * fade), 0, Math.PI * 2);
+          context.fillStyle = `rgba(251,191,36,${fade})`;
+          context.fill();
+        }
       }
 
       // Players
@@ -300,6 +374,10 @@ function BlackBlastGame({
 
   const now = Date.now() + offsetRef.current;
   const cooling = state?.me ? now < state.me.cooldownUntil : false;
+  const energy = state?.me?.energy ?? 0;
+  const maxEnergy = state?.me?.maxEnergy ?? 100;
+  const needsEnergy = Boolean(state?.me) && energy < (state?.pulseEnergyCost ?? 0);
+  const canOvercharge = energy >= (state?.overchargeEnergyCost ?? Number.POSITIVE_INFINITY);
   const combo = state?.me?.combo ?? 0;
 
   if (phase === 'idle') {
@@ -327,7 +405,33 @@ function BlackBlastGame({
 
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Badge tone={combo > 1 ? 'success' : 'default'}>Combo x{Math.max(1, combo)}</Badge>
-        <Badge tone={cooling ? 'warning' : 'primary'}>{cooling ? 'Recharging' : 'Pulse ready'}</Badge>
+        <Badge tone={cooling || needsEnergy ? 'warning' : 'primary'}>
+          {cooling ? 'Recharging' : needsEnergy ? 'Gathering energy' : 'Pulse ready'}
+        </Badge>
+        <Badge tone={state?.wave === state?.maxWave ? 'danger' : 'accent'}>
+          Wave {state?.wave ?? 1}/{state?.maxWave ?? 1} · {state?.waveTheme ?? 'calm'}
+        </Badge>
+        <Badge
+          tone={(state?.me?.waveHits ?? 0) >= (state?.waveTarget ?? 1) ? 'success' : 'default'}
+        >
+          Target {Math.min(state?.me?.waveHits ?? 0, state?.waveTarget ?? 0)}/
+          {state?.waveTarget ?? 0}
+        </Badge>
+      </div>
+
+      <div className="mx-auto w-full max-w-[min(94vw,34rem)] space-y-1">
+        <div className="flex items-center justify-between text-xs text-slate-400">
+          <span>Blast energy</span>
+          <span className="tabular-nums">
+            {Math.floor(energy)}/{maxEnergy}
+          </span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-300 transition-[width] duration-200"
+            style={{ width: `${Math.max(0, Math.min(100, (energy / maxEnergy) * 100))}%` }}
+          />
+        </div>
       </div>
 
       <canvas
@@ -355,20 +459,31 @@ function BlackBlastGame({
           ))}
         </div>
 
-        <button
-          type="button"
-          aria-label="Drop energy pulse"
-          disabled={!playing || cooling}
-          onClick={pulse}
-          className={cn(
-            'grid h-24 w-24 place-items-center rounded-full border-2 transition active:scale-95 disabled:opacity-40',
-            cooling
-              ? 'border-white/10 bg-white/5 text-slate-500'
-              : 'border-violet-400/60 bg-violet-500/25 text-violet-100 shadow-[0_0_24px_rgba(139,92,246,0.45)]',
-          )}
-        >
-          <Zap className="h-9 w-9" aria-hidden />
-        </button>
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            aria-label="Drop standard energy pulse"
+            disabled={!playing || cooling || needsEnergy}
+            onClick={() => pulse('standard')}
+            className={cn(
+              'grid h-20 w-20 place-items-center rounded-full border-2 transition active:scale-95 disabled:opacity-40',
+              cooling
+                ? 'border-white/10 bg-white/5 text-slate-500'
+                : 'border-violet-400/60 bg-violet-500/25 text-violet-100 shadow-[0_0_24px_rgba(139,92,246,0.45)]',
+            )}
+          >
+            <Zap className="h-8 w-8" aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-label="Drop overcharged pulse"
+            disabled={!playing || cooling || !canOvercharge}
+            onClick={() => pulse('overcharge')}
+            className="rounded-xl border border-amber-400/50 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-100 transition active:scale-95 disabled:opacity-35"
+          >
+            Overcharge {state?.overchargeEnergyCost ?? 52}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap justify-center gap-3 text-xs text-slate-400">
@@ -377,7 +492,7 @@ function BlackBlastGame({
           if (!slot) return null;
           return (
             <span key={player.id}>
-              {player.nickname}: {slot.score} · {slot.chains} chains
+              {player.nickname}: {slot.score} · {slot.chains} chains · {slot.wavesCleared} clears
               {slot.disconnected ? ' (offline)' : ''}
             </span>
           );
@@ -385,7 +500,9 @@ function BlackBlastGame({
       </div>
 
       <p className="text-center text-xs text-slate-500">
-        Gold nodes chain into new pulses. Land pulses back to back to build your multiplier.
+        Gold nodes chain and restore energy. Standard pulses are efficient; overcharge (E) spends
+        more for a wider blast, extra chains, and a score multiplier. Clear each wave target for a
+        bonus.
       </p>
     </div>
   );

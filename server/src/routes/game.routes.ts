@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { gameIdSchema } from '@2play/shared';
+import { gameIdSchema, roomCodeSchema } from '@2play/shared';
 import type { Platform } from '../core/Platform';
 import { AppError } from '../utils/errors';
 import { parseOrThrow } from '../utils/validate';
@@ -24,17 +24,23 @@ export function createGameRouter(platform: Platform): Router {
   });
 
   router.get('/rooms', (req: Request, res: Response) => {
-    const gameId = req.query.gameId ? parseOrThrow(gameIdSchema, req.query.gameId, 'game id') : undefined;
+    const gameId = req.query.gameId
+      ? parseOrThrow(gameIdSchema, req.query.gameId, 'game id')
+      : undefined;
     const rooms = platform.roomManager.listRooms({
       ...(gameId ? { gameId } : {}),
-      includePrivate: false,
     });
     res.json({ rooms });
   });
 
   router.get('/rooms/:roomId', (req: Request, res: Response) => {
-    const room = platform.roomStore.get(String(req.params.roomId).toUpperCase());
-    if (!room) throw AppError.roomNotFound('This room does not exist.');
+    const roomId = parseOrThrow(roomCodeSchema, req.params.roomId, 'room code');
+    const room = platform.roomStore.get(roomId);
+    // Private and Quick Play rooms are deliberately indistinguishable from an
+    // unknown code on this unauthenticated discovery endpoint.
+    if (!room || room.isPrivate || room.isQuickPlay) {
+      throw AppError.roomNotFound('Room not found or no longer available.');
+    }
     res.json({
       room: room.toSummary(platform.registry.find(room.gameId)?.metadata.name ?? room.gameId),
     });

@@ -35,6 +35,10 @@ export interface MazeRunner {
   disconnected: boolean;
   /** True once the player actually left the match (not just dropped). */
   left: boolean;
+  checkpointIndex: number;
+  penaltyMs: number;
+  hazardHits: string[];
+  latestInputSeq: number;
 }
 
 export interface MazeRaceState {
@@ -54,6 +58,10 @@ export interface MazeRaceState {
   seed: number;
   finishReason: GameFinishReason | null;
   lastEvent: string | null;
+  checkpoints: Array<{ x: number; y: number }>;
+  hazards: Array<{ x: number; y: number; penaltyMs: number }>;
+  courseLevel: number;
+  eventCounter: number;
 }
 
 const GRIDS: Record<string, { cols: number; rows: number; durationMs: number }> = {
@@ -62,6 +70,10 @@ const GRIDS: Record<string, { cols: number; rows: number; durationMs: number }> 
   '19x19': { cols: 19, rows: 19, durationMs: 180 * 1000 },
 };
 const DEFAULT_GRID = '15x15';
+
+function stateLevel(cols: number): number {
+  return cols <= 11 ? 1 : cols <= 15 ? 2 : 3;
+}
 
 const DELTAS: Record<MazeDirection, { dx: number; dy: number }> = {
   up: { dx: 0, dy: -1 },
@@ -204,7 +216,8 @@ export function distancesToGoal(
       { x: cell.x + 1, y: cell.y },
     ];
     for (const candidate of next) {
-      if (candidate.x < 0 || candidate.y < 0 || candidate.x >= cols || candidate.y >= rows) continue;
+      if (candidate.x < 0 || candidate.y < 0 || candidate.x >= cols || candidate.y >= rows)
+        continue;
       const index = at(candidate.x, candidate.y);
       if (walls[index]) continue;
       if (distance[index] !== -1) continue;
@@ -302,6 +315,54 @@ export function pickStartCells(
 }
 
 /** Timer callback: the race clock expired. Exported for tests. */
+export function buildCourseFeatures(
+  cols: number,
+  rows: number,
+  walls: boolean[],
+  goal: { x: number; y: number },
+  starts: Array<{ x: number; y: number }>,
+  rng: () => number,
+): {
+  checkpoints: Array<{ x: number; y: number }>;
+  hazards: Array<{ x: number; y: number; penaltyMs: number }>;
+} {
+  const distances = distancesToGoal(cols, rows, walls, goal);
+  const maxStartDistance = Math.max(
+    ...starts.map((cell) => distances[cell.y * cols + cell.x] ?? 0),
+    3,
+  );
+  const occupied = new Set(starts.map((cell) => `${cell.x},${cell.y}`));
+  occupied.add(`${goal.x},${goal.y}`);
+  const checkpoints: Array<{ x: number; y: number }> = [];
+  for (const ratio of [0.66, 0.33]) {
+    const target = Math.round(maxStartDistance * ratio);
+    const candidates: Array<{ x: number; y: number }> = [];
+    for (let y = 1; y < rows - 1; y += 1)
+      for (let x = 1; x < cols - 1; x += 1) {
+        const d = distances[y * cols + x] ?? -1;
+        if (!walls[y * cols + x] && !occupied.has(`${x},${y}`) && Math.abs(d - target) <= 1)
+          candidates.push({ x, y });
+      }
+    if (candidates.length) {
+      const cell = candidates[Math.floor(rng() * candidates.length)]!;
+      checkpoints.push(cell);
+      occupied.add(`${cell.x},${cell.y}`);
+    }
+  }
+  const floors: Array<{ x: number; y: number }> = [];
+  for (let y = 1; y < rows - 1; y += 1)
+    for (let x = 1; x < cols - 1; x += 1) {
+      if (!walls[y * cols + x] && !occupied.has(`${x},${y}`)) floors.push({ x, y });
+    }
+  const hazards: Array<{ x: number; y: number; penaltyMs: number }> = [];
+  const hazardCount = Math.min(Math.max(2, Math.floor(cols / 5)), floors.length);
+  while (hazards.length < hazardCount && floors.length) {
+    const [cell] = floors.splice(Math.floor(rng() * floors.length), 1);
+    if (cell) hazards.push({ ...cell, penaltyMs: 1_500 });
+  }
+  return { checkpoints, hazards };
+}
+
 export function finishMazeOnTimeout(state: MazeRaceState, ctx: GameContext): void {
   if (state.phase !== 'playing') return;
   state.phase = 'finished';
@@ -326,7 +387,8 @@ export function finisherScore(state: MazeRaceState, playerId: string): number {
 
 /** Next step towards the goal along the shortest path (greedy on BFS dist). */
 function optimalDirection(state: MazeRaceState, runner: MazeRunner): MazeDirection | null {
-  const distances = distancesToGoal(state.cols, state.rows, state.walls, state.goal);
+  const target = state.checkpoints[runner.checkpointIndex] ?? state.goal;
+  const distances = distancesToGoal(state.cols, state.rows, state.walls, target);
   const here = distances[runner.y * state.cols + runner.x] ?? -1;
   let best: MazeDirection | null = null;
   let bestDistance = here;
@@ -389,6 +451,10 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
             finishMs: null,
             disconnected: false,
             left: false,
+            checkpointIndex: 0,
+            penaltyMs: 0,
+            hazardHits: [],
+            latestInputSeq: -1,
           },
         ]),
       ),
@@ -399,6 +465,10 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
       seed: 0,
       finishReason: null,
       lastEvent: null,
+      checkpoints: [],
+      hazards: [],
+      courseLevel: stateLevel(cols),
+      eventCounter: 0,
     };
   },
 
@@ -415,6 +485,10 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
         finishMs: null,
         disconnected: false,
         left: false,
+        checkpointIndex: 0,
+        penaltyMs: 0,
+        hazardHits: [],
+        latestInputSeq: -1,
       };
     }
   },
@@ -457,7 +531,19 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
 
     const distances = distancesToGoal(state.cols, state.rows, walls, goal);
     const seats = ctx.players;
-    const starts = pickStartCells(state.cols, state.rows, walls, goal, distances, seats.length, rng);
+    const starts = pickStartCells(
+      state.cols,
+      state.rows,
+      walls,
+      goal,
+      distances,
+      seats.length,
+      rng,
+    );
+    const features = buildCourseFeatures(state.cols, state.rows, walls, goal, starts, rng);
+    state.checkpoints = features.checkpoints;
+    state.hazards = features.hazards;
+    state.eventCounter = 0;
 
     state.runners = {};
     seats.forEach((player, index) => {
@@ -472,6 +558,10 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
         finishMs: null,
         disconnected: false,
         left: false,
+        checkpointIndex: 0,
+        penaltyMs: 0,
+        hazardHits: [],
+        latestInputSeq: -1,
       };
     });
 
@@ -502,6 +592,14 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
     if (!runner) return { valid: false, reason: 'You are not part of this race.' };
     if (runner.left) return { valid: false, reason: 'You left this race.' };
     if (runner.finished) return { valid: false, reason: 'You already reached the goal.' };
+    const sequence = action.payload?.sequence;
+    if (
+      sequence !== undefined &&
+      (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+    )
+      return { valid: false, reason: 'Invalid input sequence.' };
+    if (typeof sequence === 'number' && sequence <= runner.latestInputSeq)
+      return { valid: false, reason: 'Stale input.' };
     const { dx, dy } = DELTAS[direction];
     if (!canMoveTo(state, runner.x + dx, runner.y + dy)) {
       return { valid: false, reason: 'A wall blocks that way.' };
@@ -516,22 +614,52 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
     const runner = state.runners[playerId];
     if (!runner) return actionRejected('You are not part of this race.');
     if (runner.finished) return actionRejected('You already reached the goal.');
+    const sequence = action.payload?.sequence;
+    if (
+      sequence !== undefined &&
+      (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+    )
+      return actionRejected('Invalid input sequence.');
+    if (typeof sequence === 'number' && sequence <= runner.latestInputSeq)
+      return actionRejected('Stale input.');
 
     const { dx, dy } = DELTAS[direction];
     if (!canMoveTo(state, runner.x + dx, runner.y + dy)) {
       return actionRejected('A wall blocks that way.');
     }
 
+    if (typeof sequence === 'number') runner.latestInputSeq = sequence;
     runner.x += dx;
     runner.y += dy;
     runner.steps += 1;
-    state.lastEvent = `move:${playerId}`;
-
-    if (runner.x === state.goal.x && runner.y === state.goal.y) {
+    state.eventCounter += 1;
+    state.lastEvent = `move:${playerId}:${state.eventCounter}`;
+    const checkpoint = state.checkpoints[runner.checkpointIndex];
+    if (checkpoint && runner.x === checkpoint.x && runner.y === checkpoint.y) {
+      runner.checkpointIndex += 1;
+      state.eventCounter += 1;
+      state.lastEvent = `checkpoint:${playerId}:${runner.checkpointIndex}:${state.eventCounter}`;
+    }
+    const hazard = state.hazards.find((cell) => cell.x === runner.x && cell.y === runner.y);
+    const hazardKey = `${runner.x},${runner.y}`;
+    if (hazard && !runner.hazardHits.includes(hazardKey)) {
+      runner.hazardHits.push(hazardKey);
+      runner.penaltyMs += hazard.penaltyMs;
+      state.eventCounter += 1;
+      state.lastEvent = `hazard:${playerId}:${hazard.penaltyMs}:${state.eventCounter}`;
+    }
+    if (
+      runner.x === state.goal.x &&
+      runner.y === state.goal.y &&
+      runner.checkpointIndex >= state.checkpoints.length
+    ) {
       runner.finished = true;
-      runner.finishMs = ctx.now() - (state.startedAt ?? ctx.now());
+      runner.finishMs = ctx.now() - (state.startedAt ?? ctx.now()) + runner.penaltyMs;
       state.finishOrder.push(playerId);
-      state.lastEvent = `finish:${playerId}`;
+      state.eventCounter += 1;
+      state.lastEvent = `finish:${playerId}:${state.eventCounter}`;
+    } else if (runner.x === state.goal.x && runner.y === state.goal.y) {
+      state.lastEvent = `goal-locked:${playerId}:${state.eventCounter}`;
     }
     ctx.markStateChanged();
 
@@ -585,12 +713,18 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
   },
 
   getResult(state, ctx): GameResultDraft {
-    const distances = distancesToGoal(state.cols, state.rows, state.walls, state.goal);
     const remaining = (playerId: string): number => {
       const runner = state.runners[playerId];
       if (!runner) return Number.MAX_SAFE_INTEGER;
       if (runner.finished) return 0;
-      return distances[runner.y * state.cols + runner.x] ?? Number.MAX_SAFE_INTEGER;
+      const target = state.checkpoints[runner.checkpointIndex] ?? state.goal;
+      const distances = distancesToGoal(state.cols, state.rows, state.walls, target);
+      const distance = distances[runner.y * state.cols + runner.x] ?? Number.MAX_SAFE_INTEGER;
+      // Each unvisited checkpoint is a whole course segment, so a runner who
+      // skipped checkpoints cannot rank above one who progressed legitimately.
+      return (
+        distance + (state.checkpoints.length - runner.checkpointIndex) * state.cols * state.rows
+      );
     };
 
     // Finishers first (by arrival), then closeness to the goal, then steps.
@@ -624,7 +758,10 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
         stats: {
           steps: runner?.steps ?? 0,
           finishMs: runner?.finishMs ?? -1,
-          distanceLeft: remaining(player.id) === Number.MAX_SAFE_INTEGER ? -1 : remaining(player.id),
+          checkpoints: runner?.checkpointIndex ?? 0,
+          penaltyMs: runner?.penaltyMs ?? 0,
+          distanceLeft:
+            remaining(player.id) === Number.MAX_SAFE_INTEGER ? -1 : remaining(player.id),
         },
       };
     });
@@ -651,6 +788,10 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
             finishMs: null,
             disconnected: false,
             left: false,
+            checkpointIndex: 0,
+            penaltyMs: 0,
+            hazardHits: [],
+            latestInputSeq: -1,
           },
         ]),
       ),
@@ -659,6 +800,10 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
       endsAt: null,
       finishReason: null,
       lastEvent: null,
+      checkpoints: [],
+      hazards: [],
+      eventCounter: 0,
+      courseLevel: state.courseLevel,
     };
   },
 
@@ -678,6 +823,9 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
       rows: state.rows,
       walls: [...state.walls],
       goal: { ...state.goal },
+      checkpoints: state.checkpoints.map((cell) => ({ ...cell })),
+      hazards: state.hazards.map((cell) => ({ ...cell })),
+      courseLevel: state.courseLevel,
       finishOrder: [...state.finishOrder],
       startedAt: state.startedAt,
       endsAt: state.endsAt,
@@ -698,6 +846,9 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
                   finished: runner.finished,
                   finishMs: runner.finishMs,
                   disconnected: runner.disconnected,
+                  checkpointIndex: runner.checkpointIndex,
+                  penaltyMs: runner.penaltyMs,
+                  latestInputSeq: runner.latestInputSeq,
                 }
               : null,
           ];
@@ -717,7 +868,10 @@ export const mazeRaceGame: GameModule<MazeRaceState> = {
     }
     const legal = legalDirections(state, runner);
     if (legal.length === 0) return null;
-    return { type: 'move', payload: { direction: legal[Math.floor(ctx.random() * legal.length)]! } };
+    return {
+      type: 'move',
+      payload: { direction: legal[Math.floor(ctx.random() * legal.length)]! },
+    };
   },
 
   maxDurationMs: 10 * 60 * 1000,

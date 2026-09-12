@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type ComponentType, type PointerEvent } from 'react';
-import { Eraser, Send, Trash2 } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type PointerEvent,
+} from 'react';
+import { Eraser, Send, Trash2, Undo2 } from 'lucide-react';
 import { DRAW_GUESS_METADATA, type GameAction } from '@2play/shared';
 import type { ClientGameModule, GameComponentProps } from '../registry/types';
 import { GameHUD } from '../../components/game/GameHUD';
@@ -26,6 +33,8 @@ export interface DrawGuessPublicState {
   totalRounds: number;
   drawerId: string | null;
   category: string | null;
+  difficulty: 'easy' | 'medium' | 'hard';
+  hint: string | null;
   word: string | null;
   endsAt: number | null;
   strokes: DrawStroke[];
@@ -35,6 +44,7 @@ export interface DrawGuessPublicState {
   history: Array<{ number: number; word: string; drawerId: string; solvers: string[] }>;
   palette: string[];
   lastEvent: string | null;
+  eventSeq: number;
   serverTime: number;
 }
 
@@ -144,6 +154,18 @@ function DrawGuessGame({
     event.preventDefault();
     const point = toNorm(event);
     if (!point) return;
+    const previous = localPoints.current.at(-1);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (previous && canvas && ctx) {
+      ctx.strokeStyle = tool === 'eraser' ? '#f8fafc' : color;
+      ctx.lineWidth = Math.max(2, (size / 28) * 18);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(previous.x * canvas.width, previous.y * canvas.height);
+      ctx.lineTo(point.x * canvas.width, point.y * canvas.height);
+      ctx.stroke();
+    }
     localPoints.current.push(point);
     if (localPoints.current.length >= 16) flushStroke();
   };
@@ -172,7 +194,11 @@ function DrawGuessGame({
     if (state?.lastEvent === previousEvent.current) return;
     previousEvent.current = state?.lastEvent ?? null;
     if (state?.lastEvent === 'reveal') play('notification');
-  }, [state?.lastEvent, play]);
+    else if (state?.lastEvent?.startsWith(`wrong:${myPlayerId}:`)) {
+      play('wrong');
+      vibrate('error');
+    }
+  }, [state?.lastEvent, myPlayerId, play, vibrate]);
 
   const submitGuess = () => {
     const text = guess.trim();
@@ -201,18 +227,27 @@ function DrawGuessGame({
         </Badge>
         {drawer ? <Badge tone="accent">Drawer: {drawer.nickname}</Badge> : null}
         {state?.category ? <Badge tone="default">{state.category}</Badge> : null}
+        {state?.difficulty ? (
+          <Badge tone={state.difficulty === 'hard' ? 'warning' : 'default'}>
+            {state.difficulty}
+          </Badge>
+        ) : null}
         {iSolved ? <Badge tone="success">You got it!</Badge> : null}
       </div>
 
       <div className="card space-y-2 p-3 text-center">
-        {phase === 'idle' ? <p className="animate-pulse text-sm text-slate-400">Picking a word…</p> : null}
+        {phase === 'idle' ? (
+          <p className="animate-pulse text-sm text-slate-400">Picking a word…</p>
+        ) : null}
         {phase === 'prepare' && iAmDrawer ? (
           <p className="text-lg font-bold text-white">
             Draw: <span className="text-primary-300">{state?.word}</span>
           </p>
         ) : null}
         {phase === 'prepare' && !iAmDrawer ? (
-          <p className="text-sm text-slate-300">{drawer?.nickname ?? 'Someone'} is getting the secret word…</p>
+          <p className="text-sm text-slate-300">
+            {drawer?.nickname ?? 'Someone'} is getting the secret word…
+          </p>
         ) : null}
         {phase === 'drawing' && iAmDrawer ? (
           <p className="text-sm text-slate-300">
@@ -220,7 +255,14 @@ function DrawGuessGame({
           </p>
         ) : null}
         {phase === 'drawing' && !iAmDrawer ? (
-          <p className="text-sm text-slate-300">Guess the drawing — first correct scores the most.</p>
+          <div>
+            <p className="text-sm text-slate-300">
+              Guess quickly — placement and time remaining both score.
+            </p>
+            {state?.hint ? (
+              <p className="mt-1 font-mono text-lg tracking-[0.25em] text-cyan-200">{state.hint}</p>
+            ) : null}
+          </div>
         ) : null}
         {phase === 'reveal' ? (
           <p className="text-lg font-bold text-success">It was {state?.word}</p>
@@ -273,7 +315,13 @@ function DrawGuessGame({
             <Eraser className="h-5 w-5" />
           </button>
           <label className="flex items-center gap-2 text-xs text-slate-400">
-            Size
+            Size{' '}
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/10">
+              <i
+                className="rounded-full bg-white"
+                style={{ width: Math.max(4, size / 2), height: Math.max(4, size / 2) }}
+              />
+            </span>
             <input
               type="range"
               min={4}
@@ -283,6 +331,15 @@ function DrawGuessGame({
               className="w-24"
             />
           </label>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Undo2 className="h-4 w-4" />}
+            disabled={(state?.strokes.length ?? 0) === 0}
+            onClick={() => sendAction({ type: 'undo' })}
+          >
+            Undo
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -315,7 +372,11 @@ function DrawGuessGame({
             onChange={(event) => setGuess(event.target.value)}
             className="input flex-1"
           />
-          <Button type="submit" disabled={!canGuess || guess.trim().length < 2} icon={<Send className="h-4 w-4" />}>
+          <Button
+            type="submit"
+            disabled={!canGuess || guess.trim().length < 2}
+            icon={<Send className="h-4 w-4" />}
+          >
             Guess
           </Button>
         </form>
@@ -326,7 +387,8 @@ function DrawGuessGame({
           {state.guesses.slice(-8).map((entry, index) => (
             <li key={`${entry.playerId}-${index}`}>
               <Badge tone={entry.correct ? 'success' : 'default'}>
-                {players.find((player) => player.id === entry.playerId)?.nickname ?? 'Player'}: {entry.text}
+                {players.find((player) => player.id === entry.playerId)?.nickname ?? 'Player'}:{' '}
+                {entry.text}
               </Badge>
             </li>
           ))}

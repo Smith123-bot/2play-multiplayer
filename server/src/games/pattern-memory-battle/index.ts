@@ -31,6 +31,8 @@ export interface PatternPlayerState {
   mistakes: number;
   score: number;
   streak: number;
+  bestStreak: number;
+  latestInputSeq: number;
   completedRounds: number;
   disconnected: boolean;
   left: boolean;
@@ -60,9 +62,11 @@ export interface PatternMemoryState {
   startedAt: number | null;
   finishReason: GameFinishReason | null;
   lastEvent: string | null;
+  tileCount: number;
+  eventCounter: number;
 }
 
-const TILE_COUNT = 9; // 3x3 grid
+const MAX_TILE_COUNT = 9;
 const DEFAULT_ROUNDS = 8;
 const MIN_ROUNDS = 3;
 const MAX_ROUNDS = 15;
@@ -90,6 +94,10 @@ export function roundsFor(requested?: number): number {
   return DEFAULT_ROUNDS;
 }
 
+export function tileCountFor(round: number): number {
+  return round <= 2 ? 4 : round <= 5 ? 6 : 9;
+}
+
 export function patternLengthFor(round: number): number {
   return Math.min(MAX_LENGTH, BASE_LENGTH + Math.floor((round - 1) / 2));
 }
@@ -106,11 +114,19 @@ export function inputMsFor(length: number): number {
  * Builds a random pattern: tiles 0..8, no immediate repeats. Uses bounded
  * selection — always terminates. Exported for tests.
  */
-export function buildPattern(length: number, random: () => number): number[] {
+export function buildPattern(
+  length: number,
+  random: () => number,
+  tileCount = MAX_TILE_COUNT,
+): number[] {
+  const safeTileCount = Math.max(2, Math.min(MAX_TILE_COUNT, Math.floor(tileCount)));
   const pattern: number[] = [];
   while (pattern.length < length) {
-    const tile = Math.floor(random() * TILE_COUNT);
-    if (pattern.length > 0 && pattern[pattern.length - 1] === tile) continue;
+    const previous = pattern[pattern.length - 1];
+    let tile = Math.floor(random() * (previous === undefined ? safeTileCount : safeTileCount - 1));
+    // Select from all tiles except the previous one without retrying, so even
+    // a pathological random source cannot stall the authoritative round.
+    if (previous !== undefined && tile >= previous) tile += 1;
     pattern.push(tile);
   }
   return pattern;
@@ -124,6 +140,8 @@ function newPlayer(): PatternPlayerState {
     mistakes: 0,
     score: 0,
     streak: 0,
+    bestStreak: 0,
+    latestInputSeq: -1,
     completedRounds: 0,
     disconnected: false,
     left: false,
@@ -135,7 +153,8 @@ export function beginPatternRound(state: PatternMemoryState, ctx: GameContext): 
   if (state.phase === 'input' || state.phase === 'show') return;
   state.round += 1;
   state.patternLength = patternLengthFor(state.round);
-  state.pattern = buildPattern(state.patternLength, ctx.random);
+  state.tileCount = tileCountFor(state.round);
+  state.pattern = buildPattern(state.patternLength, ctx.random, state.tileCount);
   state.shown = 0;
   state.showStepMs = showStepFor(state.round);
   state.inputMs = inputMsFor(state.patternLength);
@@ -158,7 +177,12 @@ export function advanceShow(state: PatternMemoryState, ctx: GameContext): void {
   state.shown += 1;
   ctx.markStateChanged();
   if (state.shown >= state.patternLength) {
-    ctx.schedule(Math.max(150, state.showStepMs / 2), () => beginInput(state, ctx), 'turn', 'pattern-input');
+    ctx.schedule(
+      Math.max(150, state.showStepMs / 2),
+      () => beginInput(state, ctx),
+      'turn',
+      'pattern-input',
+    );
     return;
   }
   ctx.schedule(state.showStepMs, () => advanceShow(state, ctx), 'turn', 'pattern-show');
@@ -174,12 +198,7 @@ export function beginInput(state: PatternMemoryState, ctx: GameContext): void {
   state.lastEvent = 'input-start';
   ctx.markStateChanged();
 
-  ctx.schedule(
-    state.inputMs,
-    () => expireInput(state, ctx),
-    'turn',
-    'pattern-input-timeout',
-  );
+  ctx.schedule(state.inputMs, () => expireInput(state, ctx), 'turn', 'pattern-input-timeout');
 
   // AI seats start replaying through the same pipeline as humans.
   for (const player of ctx.players) {
@@ -238,7 +257,9 @@ export function beginNextRound(state: PatternMemoryState, ctx: GameContext): voi
 }
 
 function endIfEveryoneDeparted(state: PatternMemoryState, ctx: GameContext): void {
-  const active = Object.entries(state.players).filter(([playerId, player]) => !state.departed[playerId] && !player.left);
+  const active = Object.entries(state.players).filter(
+    ([playerId, player]) => !state.departed[playerId] && !player.left,
+  );
   if (active.length === 0 && state.phase !== 'finished') {
     state.phase = 'finished';
     state.finishReason = 'completed';
@@ -280,7 +301,7 @@ export function computePatternRanking(state: PatternMemoryState, ctx: GameContex
       stats: {
         completed: view?.completedRounds ?? 0,
         mistakes: view?.mistakes ?? 0,
-        bestStreak: view?.streak ?? 0,
+        bestStreak: view?.bestStreak ?? 0,
       },
     };
   });
@@ -315,6 +336,8 @@ export const patternMemoryGame: GameModule<PatternMemoryState> = {
       startedAt: null,
       finishReason: null,
       lastEvent: null,
+      tileCount: tileCountFor(1),
+      eventCounter: 0,
     };
   },
 
@@ -353,6 +376,7 @@ export const patternMemoryGame: GameModule<PatternMemoryState> = {
     state.round = 0;
     state.history = [];
     state.departed = {};
+    state.eventCounter = 0;
     state.players = Object.fromEntries(ctx.players.map((player) => [player.id, newPlayer()]));
     state.startedAt = ctx.now();
     state.finishReason = null;
@@ -362,31 +386,59 @@ export const patternMemoryGame: GameModule<PatternMemoryState> = {
   validateAction(playerId, action, state): ValidationResult {
     if (action.type !== 'tap') return { valid: false, reason: 'Unknown action.' };
     const tile = action.payload?.tile;
-    if (typeof tile !== 'number' || !Number.isInteger(tile) || tile < 0 || tile >= TILE_COUNT) {
+    if (
+      typeof tile !== 'number' ||
+      !Number.isInteger(tile) ||
+      tile < 0 ||
+      tile >= state.tileCount
+    ) {
       return { valid: false, reason: 'Invalid tile.' };
     }
     if (state.phase !== 'input') return { valid: false, reason: 'Not the input phase.' };
     const player = state.players[playerId];
     if (!player) return { valid: false, reason: 'You are not part of this match.' };
     if (player.locked) return { valid: false, reason: 'Your attempt is over.' };
+    const sequence = action.payload?.sequence;
+    if (
+      sequence !== undefined &&
+      (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+    )
+      return { valid: false, reason: 'Invalid input sequence.' };
+    if (typeof sequence === 'number' && sequence <= player.latestInputSeq)
+      return { valid: false, reason: 'Stale input.' };
     return { valid: true };
   },
 
   handlePlayerAction(playerId, action, state, ctx): ActionResult {
     if (action.type !== 'tap') return actionRejected('Unknown action.');
     const tile = action.payload?.tile;
-    if (typeof tile !== 'number' || !Number.isInteger(tile) || tile < 0 || tile >= TILE_COUNT) {
+    if (
+      typeof tile !== 'number' ||
+      !Number.isInteger(tile) ||
+      tile < 0 ||
+      tile >= state.tileCount
+    ) {
       return actionRejected('Invalid tile.');
     }
     const player = state.players[playerId];
     if (!player) return actionRejected('You are not part of this match.');
     if (state.phase !== 'input') return actionRejected('Not the input phase.');
     if (player.locked) return actionRejected('Your attempt is over.');
+    const sequence = action.payload?.sequence;
+    if (
+      sequence !== undefined &&
+      (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0)
+    )
+      return actionRejected('Invalid input sequence.');
+    if (typeof sequence === 'number' && sequence <= player.latestInputSeq)
+      return actionRejected('Stale input.');
+    if (typeof sequence === 'number') player.latestInputSeq = sequence;
 
     const expected = state.pattern[player.progress]!;
     if (tile === expected) {
       player.progress += 1;
-      state.lastEvent = `tap:${playerId}`;
+      state.eventCounter += 1;
+      state.lastEvent = `tap:${playerId}:${state.eventCounter}`;
       if (player.progress >= state.patternLength) {
         // Full replay: 10/tile + speed bonus + streak bonus.
         const remaining = Math.max(
@@ -397,10 +449,12 @@ export const patternMemoryGame: GameModule<PatternMemoryState> = {
         const streakBonus = Math.min(STREAK_BONUS_MAX, player.streak * 2);
         player.score += state.patternLength * POINTS_PER_TILE + speedBonus + streakBonus;
         player.streak += 1;
+        player.bestStreak = Math.max(player.bestStreak, player.streak);
         player.completedRounds += 1;
         player.locked = true;
         player.succeeded = true;
-        state.lastEvent = `perfect:${playerId}`;
+        state.eventCounter += 1;
+        state.lastEvent = `perfect:${playerId}:${state.eventCounter}`;
         ctx.markStateChanged();
       } else {
         ctx.markStateChanged();
@@ -410,7 +464,8 @@ export const patternMemoryGame: GameModule<PatternMemoryState> = {
       player.streak = 0;
       player.locked = true;
       player.succeeded = false;
-      state.lastEvent = `mistake:${playerId}`;
+      state.eventCounter += 1;
+      state.lastEvent = `mistake:${playerId}:${state.eventCounter}`;
       ctx.markStateChanged();
     }
 
@@ -426,7 +481,8 @@ export const patternMemoryGame: GameModule<PatternMemoryState> = {
     const seat = ctx.players.find((candidate) => candidate.id === playerId);
     if (seat?.isAI && !player.locked) {
       const difficulty = seat.aiDifficulty ?? 'medium';
-      const delay = AI_TAP_DELAY[difficulty]! + Math.floor(ctx.random() * AI_TAP_JITTER[difficulty]!);
+      const delay =
+        AI_TAP_DELAY[difficulty]! + Math.floor(ctx.random() * AI_TAP_JITTER[difficulty]!);
       ctx.requestAI(playerId, delay);
     }
     return actionAccepted(false);
@@ -491,6 +547,8 @@ export const patternMemoryGame: GameModule<PatternMemoryState> = {
       startedAt: null,
       finishReason: null,
       lastEvent: null,
+      tileCount: tileCountFor(1),
+      eventCounter: 0,
     };
   },
 
@@ -505,6 +563,7 @@ export const patternMemoryGame: GameModule<PatternMemoryState> = {
       round: state.round,
       totalRounds: state.totalRounds,
       patternLength: state.patternLength,
+      tileCount: state.tileCount,
       shown: state.shown,
       showStepMs: state.showStepMs,
       inputEndsAt: state.inputEndsAt,
@@ -523,6 +582,8 @@ export const patternMemoryGame: GameModule<PatternMemoryState> = {
             mistakes: player.mistakes,
             score: player.score,
             streak: player.streak,
+            bestStreak: player.bestStreak,
+            latestInputSeq: player.latestInputSeq,
             completedRounds: player.completedRounds,
             disconnected: player.disconnected,
             left: player.left,
@@ -548,7 +609,7 @@ export const patternMemoryGame: GameModule<PatternMemoryState> = {
       return { type: 'tap', payload: { tile: expected } };
     }
     // Wrong tap: any other tile.
-    let wrong = Math.floor(ctx.random() * (TILE_COUNT - 1));
+    let wrong = Math.floor(ctx.random() * (state.tileCount - 1));
     if (wrong >= expected) wrong += 1;
     return { type: 'tap', payload: { tile: wrong } };
   },

@@ -16,6 +16,8 @@ export interface TerritoryRunnerPublic {
   percent: number;
   captures: number;
   deaths: number;
+  largestCapture: number;
+  latestInputSeq: number;
   frozenUntil: number;
   disconnected: boolean;
 }
@@ -25,6 +27,10 @@ export interface TerritoryRushPublicState {
   cols: number;
   rows: number;
   grid: string;
+  walls: number[];
+  layout: 'open' | 'crossroads' | 'islands';
+  stage: number;
+  nextStageAt: number | null;
   stepMs: number;
   stepIndex: number;
   startedAt: number | null;
@@ -52,7 +58,11 @@ const DPAD: Array<{
 const OWNER_FILL = ['#0f172a', '#6366f1', '#10b981', '#ec4899', '#f59e0b'];
 const OWNER_TRAIL = ['#334155', '#a5b4fc', '#6ee7b7', '#f9a8d4', '#fcd34d'];
 
-function ownerColor(players: Player[], playerId: string | null, runners: Record<string, TerritoryRunnerPublic>): string {
+function ownerColor(
+  players: Player[],
+  playerId: string | null,
+  runners: Record<string, TerritoryRunnerPublic>,
+): string {
   const seat = players.findIndex((player) => player.id === playerId);
   const owner = playerId ? (runners[playerId]?.owner ?? seat + 1) : 0;
   return OWNER_FILL[owner] ?? OWNER_FILL[0]!;
@@ -69,6 +79,7 @@ function TerritoryRushGame({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const previousEvent = useRef<string | null>(null);
+  const inputSequence = useRef(0);
 
   const phase = state?.phase ?? 'idle';
   const me = myPlayerId ? state?.runners?.[myPlayerId] : undefined;
@@ -77,11 +88,15 @@ function TerritoryRushGame({
   const turn = useCallback(
     (direction: 'up' | 'down' | 'left' | 'right') => {
       if (!canSteer) return;
-      sendAction({ type: 'turn', payload: { direction } } satisfies GameAction);
+      inputSequence.current = Math.max(inputSequence.current, me?.latestInputSeq ?? -1) + 1;
+      sendAction({
+        type: 'turn',
+        payload: { direction, sequence: inputSequence.current },
+      } satisfies GameAction);
       play('click');
       vibrate('buttonPress');
     },
-    [canSteer, sendAction, play, vibrate],
+    [canSteer, me?.latestInputSeq, sendAction, play, vibrate],
   );
 
   useEffect(() => {
@@ -103,7 +118,11 @@ function TerritoryRushGame({
       const direction = map[event.key];
       if (!direction) return;
       const target = event.target as HTMLElement | null;
-      if (target && (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) || target.isContentEditable)) {
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+          target.isContentEditable)
+      ) {
         return;
       }
       event.preventDefault();
@@ -121,6 +140,9 @@ function TerritoryRushGame({
     if (lastEvent.startsWith('capture:')) {
       play(lastEvent.includes(myPlayerId ?? '') ? 'score' : 'notification');
       if (lastEvent.includes(myPlayerId ?? '')) vibrate('success');
+    } else if (lastEvent.startsWith('stage:')) {
+      play('gameStart');
+      vibrate('success');
     } else if (lastEvent.startsWith('cut:')) {
       play(lastEvent.includes(myPlayerId ?? '') ? 'wrong' : 'notification');
       if (lastEvent.includes(myPlayerId ?? '')) vibrate('error');
@@ -143,6 +165,12 @@ function TerritoryRushGame({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#020617';
     ctx.fillRect(0, 0, cssWidth, cssHeight);
+    ctx.fillStyle = 'rgba(148,163,184,.5)';
+    for (const index of state.walls) {
+      const x = index % cols;
+      const y = Math.floor(index / cols);
+      ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2);
+    }
     for (let i = 0; i < state.grid.length; i += 1) {
       const owner = Number(state.grid[i] ?? '0') || 0;
       if (owner === 0) continue;
@@ -157,7 +185,12 @@ function TerritoryRushGame({
       ctx.fillStyle = OWNER_TRAIL[runner.owner] ?? '#94a3b8';
       for (const segment of runner.trail) {
         ctx.globalAlpha = 0.85;
-        ctx.fillRect(segment.x * cell + cell * 0.25, segment.y * cell + cell * 0.25, cell * 0.5, cell * 0.5);
+        ctx.fillRect(
+          segment.x * cell + cell * 0.25,
+          segment.y * cell + cell * 0.25,
+          cell * 0.5,
+          cell * 0.5,
+        );
       }
     }
     ctx.globalAlpha = 1;
@@ -212,6 +245,12 @@ function TerritoryRushGame({
               {player.nickname} · {state.runners?.[player.id]?.percent ?? 0}%
             </Badge>
           ))}
+        <Badge tone={state.stage === 3 ? 'warning' : 'default'}>
+          Stage {state.stage}/3 · {state.layout}
+        </Badge>
+        {me && me.largestCapture > 0 ? (
+          <Badge tone="success">Best loop +{me.largestCapture}</Badge>
+        ) : null}
         {phase === 'finished' ? <Badge tone="accent">Match over</Badge> : null}
       </div>
 
@@ -272,7 +311,8 @@ function TerritoryRushGame({
         ))}
       </ul>
       <p className="text-center text-xs text-slate-500">
-        Leave home, loop back, paint the enclosed cells. The server owns every capture.
+        Leave home and close skillful loops before rivals cut your trail. Three accelerating stages
+        and solid map barriers are server-authoritative.
       </p>
     </div>
   );

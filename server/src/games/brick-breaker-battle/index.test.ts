@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createTestPlatform, waitFor, type TestPlatform } from '../../test/harness';
+import {
+  createGameFixture,
+  createTestPlatform,
+  waitFor,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
   brickBreakerGame,
+  brickDurabilityForLevel,
   brickRect,
   computeBreakerRanking,
   finishBreakerOnTimeout,
@@ -39,7 +45,15 @@ describe('Brick Breaker Battle', () => {
   const publicState = () =>
     platform.gameManager.getPublicState(room, players[0]!.id) as {
       phase: string;
-      arenas: Record<string, { bricks: boolean[]; lives: number; score: number; ball: { x: number; y: number; vx: number; vy: number } }>;
+      arenas: Record<
+        string,
+        {
+          bricks: boolean[];
+          lives: number;
+          score: number;
+          ball: { x: number; y: number; vx: number; vy: number };
+        }
+      >;
     };
 
   /** Aims one player's ball straight up at a bottom-row brick (clear approach). */
@@ -109,14 +123,22 @@ describe('Brick Breaker Battle', () => {
       ).valid,
     ).toBe(false);
     expect(
-      brickBreakerGame.validateAction('ghost', { type: 'move', payload: { direction: 'left' } }, state(), context())
-        .valid,
+      brickBreakerGame.validateAction(
+        'ghost',
+        { type: 'move', payload: { direction: 'left' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
 
     state().phase = 'idle';
     expect(
-      brickBreakerGame.validateAction(playerId, { type: 'move', payload: { direction: 'left' } }, state(), context())
-        .valid,
+      brickBreakerGame.validateAction(
+        playerId,
+        { type: 'move', payload: { direction: 'left' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
   });
 
@@ -170,7 +192,7 @@ describe('Brick Breaker Battle', () => {
     expect(a.destroyed).toBe(1);
     expect(a.score).toBe(10); // chain 1 → x1
     expect(a.ball.vy).toBeGreaterThan(0); // reflected downward
-    expect(state().lastEvent).toBe(`brick:${playerId}`);
+    expect(state().lastEvent).toMatch(new RegExp(`^brick:${playerId}:`));
   });
 
   it('chains combos: consecutive bricks multiply up to x4', async () => {
@@ -190,6 +212,19 @@ describe('Brick Breaker Battle', () => {
     expect(a.score).toBe(20 + 40);
   });
 
+  it('awards a deterministic server-owned power-up every ninth brick', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const playerId = players[0]!.id;
+    const a = arena(playerId);
+    a.bricksBroken = 8;
+    aimAtBrick(playerId, 22); // (22 + level 1) % 3 => extra life
+    stepBreaker(state(), 50, context().now(), context());
+    expect(a.powerUp).toBe('life');
+    expect(a.lives).toBe(4);
+    expect(a.powerUpUntil).toBeGreaterThan(context().now());
+    expect(state().lastEvent).toBe(`power:${playerId}:life`);
+  });
+
   it('a paddle save reflects the ball and resets the chain', async () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const playerId = players[0]!.id;
@@ -198,7 +233,8 @@ describe('Brick Breaker Battle', () => {
     a.chain = 3;
     a.paddleX = 50;
     a.ball = { x: 50, y: 62, vx: 5, vy: 40 };
-    stepBreaker(state(), 50, context().now(), context());
+    // Fine-grained 16ms substeps need enough elapsed time to reach the paddle.
+    stepBreaker(state(), 100, context().now(), context());
     expect(a.ball.vy).toBeLessThan(0);
     expect(a.chain).toBe(0);
     expect(state().lastEvent).toBe(`save:${playerId}`);
@@ -242,8 +278,33 @@ describe('Brick Breaker Battle', () => {
     const rect = brickRect(27);
     a.ball = { x: rect.x + rect.w / 2, y: rect.y + rect.h + 2, vx: 0, vy: -40 };
     stepBreaker(state(), 50, context().now(), context());
-    expect(a.score).toBe(100 + 10); // clear bonus + last brick (chain 1)
+    expect(a.score).toBe(100 + 10); // level-one bonus + last brick (chain 1)
+    expect(a.done).toBe(false);
+    expect(a.level).toBe(2);
+    expect(a.levelsCleared).toBe(1);
+    expect(a.bricks.filter(Boolean)).toHaveLength(a.levelBrickCount);
+    expect(a.bricks.some((alive) => !alive)).toBe(true);
+    expect(a.brickHp.some((hp) => hp === 2)).toBe(true);
+
+    // Complete the final level; intermediate levels use the same authoritative transition.
+    a.level = state().maxLevels;
+    a.levelsCleared = state().maxLevels - 1;
+    const totalLayoutBricks = [1, 2, 3].reduce(
+      (total, level) => total + brickDurabilityForLevel(level).filter((hp) => hp > 0).length,
+      0,
+    );
+    a.bricks.fill(false);
+    a.bricks[27] = true;
+    a.brickHp.fill(0);
+    a.brickHp[27] = 1;
+    a.levelBrickCount = brickDurabilityForLevel(3).filter((hp) => hp > 0).length;
+    a.destroyed = a.levelBrickCount - 1;
+    a.bricksBroken = totalLayoutBricks - 1;
+    a.launchAt = null;
+    a.ball = { x: rect.x + rect.w / 2, y: rect.y + rect.h + 2, vx: 0, vy: -40 };
+    stepBreaker(state(), 50, context().now(), context());
     expect(a.done).toBe(true);
+    expect(a.levelsCleared).toBe(state().maxLevels);
 
     // Rival still running → match continues.
     expect(state().phase).toBe('playing');
@@ -258,8 +319,9 @@ describe('Brick Breaker Battle', () => {
     expect(state().finishReason).toBe('completed');
 
     const draft = brickBreakerGame.getResult(state(), context());
-    expect(draft.winners).toEqual([aId]); // 110 > 0
-    expect(draft.rankings[0]!.stats.bricks).toBe(28);
+    expect(draft.winners).toEqual([aId]);
+    expect(draft.rankings[0]!.stats.bricks).toBe(totalLayoutBricks);
+    expect(draft.rankings[0]!.stats.levels).toBe(3);
     expect(draft.rankings[0]!.stats.cleared).toBe(1);
   });
 
@@ -368,5 +430,59 @@ describe('Brick Breaker Battle', () => {
     expect(Object.keys(view.arenas)).toHaveLength(2);
     expect(view.arenas[playerId]!.bricks).toHaveLength(28);
     expect(JSON.stringify(view)).not.toContain('"seed"');
+  });
+
+  it('uses mechanically distinct layouts with reinforced and open cells', () => {
+    const classic = brickDurabilityForLevel(1);
+    const diamond = brickDurabilityForLevel(2);
+    const fortress = brickDurabilityForLevel(3);
+    expect(classic.every((hp) => hp === 1)).toBe(true);
+    expect(diamond).not.toEqual(classic);
+    expect(fortress).not.toEqual(diamond);
+    expect(diamond.some((hp) => hp === 0)).toBe(true);
+    expect(diamond.some((hp) => hp === 2)).toBe(true);
+    expect(fortress.filter((hp) => hp === 2).length).toBeGreaterThan(5);
+  });
+
+  it('cracks durable bricks before destruction and publishes each impact', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const playerId = players[0]!.id;
+    const a = arena(playerId);
+    const index = 21;
+    a.brickHp[index] = 2;
+    a.brickMaxHp[index] = 2;
+    aimAtBrick(playerId, index);
+    stepBreaker(state(), 64, context().now(), context());
+    expect(a.bricks[index]).toBe(true);
+    expect(a.brickHp[index]).toBe(1);
+    expect(a.lastImpact).toMatchObject({ id: 1, brickIndex: index, kind: 'crack', remainingHp: 1 });
+    aimAtBrick(playerId, index);
+    stepBreaker(state(), 64, context().now(), context());
+    expect(a.bricks[index]).toBe(false);
+    expect(a.brickHp[index]).toBe(0);
+    expect(a.lastImpact).toMatchObject({
+      id: 2,
+      brickIndex: index,
+      kind: 'destroy',
+      remainingHp: 0,
+    });
+  });
+
+  it('rejects stale sequenced paddle input without changing direction', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const playerId = players[0]!.id;
+    expect(
+      platform.gameManager.handleAction(room, playerId, {
+        type: 'move',
+        payload: { direction: 'right', sequence: 9 },
+      }).accepted,
+    ).toBe(true);
+    expect(
+      platform.gameManager.handleAction(room, playerId, {
+        type: 'move',
+        payload: { direction: 'left', sequence: 8 },
+      }).accepted,
+    ).toBe(false);
+    expect(arena(playerId).paddleDir).toBe(1);
   });
 });

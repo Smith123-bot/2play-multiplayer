@@ -1,9 +1,6 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
-import type {
-  ClientToServerEvents,
-  ServerToClientEvents,
-} from '@2play/shared';
+import type { ClientToServerEvents, ServerToClientEvents } from '@2play/shared';
 import {
   APP_VERSION,
   GAME_STATE_BROADCAST_THROTTLE_MS,
@@ -54,6 +51,18 @@ export class SocketManager {
       maxHttpBufferSize: SOCKET_MAX_PAYLOAD_BYTES,
     });
 
+    // Bound unauthenticated connection churn before allocating application
+    // listeners/session work. This complements per-event and auth limits.
+    this.io.use((socket, next) => {
+      const address = socket.handshake.address || 'unknown';
+      const limit = this.platform.rateLimiter.consume(`socket-connect:${address}`, 120, 60_000);
+      if (!limit.allowed) {
+        next(new Error('Connection rate limit exceeded.'));
+        return;
+      }
+      next();
+    });
+
     this.io.on('connection', (socket) => {
       this.logger.debug('socket connected', { socketId: socket.id });
       socket.emit(SERVER_EVENTS.CONNECTION_ESTABLISHED, {
@@ -78,8 +87,7 @@ export class SocketManager {
    */
   private emitRaw(target: string, event: string, payload: unknown): void {
     const emitter = this.io?.to(target) as unknown as
-      | { emit: (name: string, body: unknown) => void }
-      | undefined;
+      { emit: (name: string, body: unknown) => void } | undefined;
     emitter?.emit(event, payload);
   }
 
@@ -91,7 +99,12 @@ export class SocketManager {
     this.emitRaw(socketId, event, payload);
   }
 
-  emitToPlayer(room: Room, playerId: string, event: keyof ServerToClientEvents, payload: unknown): void {
+  emitToPlayer(
+    room: Room,
+    playerId: string,
+    event: keyof ServerToClientEvents,
+    payload: unknown,
+  ): void {
     const player = room.getPlayer(playerId);
     if (!player?.socketId) return;
     this.emitToSocket(player.socketId, event, payload);
@@ -136,7 +149,9 @@ export class SocketManager {
     for (const player of room.players.values()) {
       if (player.isAI || !player.socketId) continue;
       const gameState = this.platform.gameManager.getPublicState(room, player.id);
-      this.io.to(player.socketId).emit(SERVER_EVENTS.ROOM_UPDATED, { room: room.toState(player.id, gameState) });
+      this.io
+        .to(player.socketId)
+        .emit(SERVER_EVENTS.ROOM_UPDATED, { room: room.toState(player.id, gameState) });
     }
   }
 

@@ -28,6 +28,7 @@ export type GameSocket = Socket<
 >;
 
 const logger = createLogger('SocketHandlers');
+const SOCKET_EVENTS_PER_SECOND = 120;
 
 export interface HandlerContext {
   platform: Platform;
@@ -41,7 +42,10 @@ export interface HandlerContext {
  *  - rate-limit / validation failures are logged at debug level only.
  */
 export function safeHandler<TPayload, TResult>(
-  handler: (payload: TPayload, ack?: (response: AckResponse<TResult>) => void) => TResult | Promise<TResult>,
+  handler: (
+    payload: TPayload,
+    ack?: (response: AckResponse<TResult>) => void,
+  ) => TResult | Promise<TResult>,
 ) {
   return async function wrapped(
     this: HandlerContext,
@@ -49,6 +53,12 @@ export function safeHandler<TPayload, TResult>(
     ack?: (response: AckResponse<TResult>) => void,
   ): Promise<void> {
     try {
+      const eventLimit = this.platform.rateLimiter.consume(
+        `socket-event:${this.socket.id}`,
+        SOCKET_EVENTS_PER_SECOND,
+        1_000,
+      );
+      if (!eventLimit.allowed) throw AppError.rateLimited('Too many socket events. Slow down.');
       const result = await handler.call(this, payload, ack);
       ack?.({ ok: true, ...(result !== undefined ? { data: result as TResult } : {}) });
     } catch (error) {
@@ -64,8 +74,8 @@ export function safeHandler<TPayload, TResult>(
           message: apiError.message,
         });
       }
-      ack?.({ ok: false, error: apiError });
-      this.socket.emit('error', { error: apiError });
+      if (ack) ack({ ok: false, error: apiError });
+      else this.socket.emit('error', { error: apiError });
     }
   };
 }
@@ -75,13 +85,23 @@ export function requireSession(context: HandlerContext): Session {
   if (!token) throw AppError.unauthorized('Authenticate before doing that.');
   const session = context.platform.connectionManager.getSessionByToken(token);
   if (!session) throw AppError.unauthorized('Your session expired. Please reconnect.');
+  // A bearer token is bound to exactly one live socket. Authentication on a
+  // newer socket invalidates stale tabs before they can act as the player.
+  if (
+    session.socketId !== context.socket.id ||
+    context.platform.connectionManager.getSessionBySocket(context.socket.id)?.token !== token
+  ) {
+    throw AppError.unauthorized('This connection is no longer the active session.');
+  }
   return session;
 }
 
 /** Resolves the room a socket currently belongs to, and the player inside it. */
-export function requireRoomAndPlayer(
-  context: HandlerContext,
-): { room: Room; player: ServerPlayer; session: Session } {
+export function requireRoomAndPlayer(context: HandlerContext): {
+  room: Room;
+  player: ServerPlayer;
+  session: Session;
+} {
   const session = requireSession(context);
   const roomId = session.roomId;
   if (!roomId) throw AppError.roomNotFound('You are not in a room.');

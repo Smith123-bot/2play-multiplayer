@@ -115,7 +115,18 @@ export interface LudoState {
   tokensToWin: number;
   finishedOrder: string[];
   lastEvent: string | null;
-  lastMove: { playerId: string; tokenId: string; from: number; to: number; captured: string | null } | null;
+  lastMove: {
+    id: number;
+    playerId: string;
+    tokenId: string;
+    from: number;
+    to: number;
+    /** Every authoritative progress value crossed, used for visual step animation. */
+    path: number[];
+    captured: string | null;
+    capturedFrom: number | null;
+  } | null;
+  moveCounter: number;
   finishReason: GameFinishReason | null;
   rollsThisMatch: number;
 }
@@ -184,7 +195,11 @@ export function isBlockedFor(state: LudoState, seatIndex: number, cell: number):
  * Every legal move for `playerId` given `dice`. This is the single source of
  * truth: the client renders it and the server validates against it.
  */
-export function computeLegalMoves(state: LudoState, playerId: string, dice: number): LudoLegalMove[] {
+export function computeLegalMoves(
+  state: LudoState,
+  playerId: string,
+  dice: number,
+): LudoLegalMove[] {
   const slot = state.players[playerId];
   if (!slot || dice < 1 || dice > 6) return [];
   const moves: LudoLegalMove[] = [];
@@ -437,11 +452,14 @@ export const ludoGame: GameModule<LudoState> = {
       finishedOrder: [],
       lastEvent: null,
       lastMove: null,
+      moveCounter: 0,
       finishReason: null,
       rollsThisMatch: 0,
     };
     players.forEach((player, index) => {
-      state.players[player.id] = makeSlot(typeof player.seatIndex === 'number' ? player.seatIndex : index);
+      state.players[player.id] = makeSlot(
+        typeof player.seatIndex === 'number' ? player.seatIndex : index,
+      );
     });
     return state;
   },
@@ -452,7 +470,8 @@ export const ludoGame: GameModule<LudoState> = {
       existing.disconnected = false;
       return;
     }
-    const seat = typeof player.seatIndex === 'number' ? player.seatIndex : Object.keys(state.players).length;
+    const seat =
+      typeof player.seatIndex === 'number' ? player.seatIndex : Object.keys(state.players).length;
     state.players[player.id] = makeSlot(seat);
     if (!state.turnOrder.includes(player.id)) state.turnOrder.push(player.id);
   },
@@ -489,12 +508,15 @@ export const ludoGame: GameModule<LudoState> = {
     state.players = {};
     state.turnOrder = ctx.players.map((player) => player.id);
     ctx.players.forEach((player, index) => {
-      state.players[player.id] = makeSlot(typeof player.seatIndex === 'number' ? player.seatIndex : index);
+      state.players[player.id] = makeSlot(
+        typeof player.seatIndex === 'number' ? player.seatIndex : index,
+      );
     });
     state.finishedOrder = [];
     state.finishReason = null;
     state.rollsThisMatch = 0;
     state.lastMove = null;
+    state.moveCounter = 0;
     state.phase = 'awaiting-roll';
     state.lastEvent = 'start';
     const first = state.turnOrder[0];
@@ -507,7 +529,9 @@ export const ludoGame: GameModule<LudoState> = {
 
   validateAction(playerId, action, state, ctx): ValidationResult {
     // Outcome-asserting actions are never accepted from a client.
-    if (['score', 'win', 'finish', 'dice', 'setDice', 'complete', 'capture'].includes(action.type)) {
+    if (
+      ['score', 'win', 'finish', 'dice', 'setDice', 'complete', 'capture'].includes(action.type)
+    ) {
       return { valid: false, reason: 'The server owns the dice and the result.' };
     }
     if (state.phase === 'finished') return { valid: false, reason: 'The match is over.' };
@@ -531,7 +555,8 @@ export const ludoGame: GameModule<LudoState> = {
       if (!legal) return { valid: false, reason: 'That token cannot make that move.' };
       // Guard against a token id belonging to another seat.
       const token = findToken(state, tokenId);
-      if (!token || token.seatIndex !== slot.seatIndex) return { valid: false, reason: 'That is not your token.' };
+      if (!token || token.seatIndex !== slot.seatIndex)
+        return { valid: false, reason: 'That is not your token.' };
       return { valid: true };
     }
 
@@ -580,9 +605,25 @@ export const ludoGame: GameModule<LudoState> = {
         return actionAccepted();
       }
       state.phase = 'awaiting-move';
+      // Rolling late in a turn must not leave only a fraction of a second to
+      // inspect the board. Re-arm the de-duplicated timer for token selection.
+      state.turnEndsAt = ctx.now() + state.turnMs;
+      ctx.schedule(
+        state.turnMs,
+        () => {
+          if (state.phase !== 'awaiting-move' || state.currentPlayerId !== playerId) return;
+          state.lastEvent = `timeout:${playerId}`;
+          advanceTurn(state, ctx);
+        },
+        'turn',
+        'turn-timeout',
+      );
       ctx.markStateChanged();
       if (ctx.players.find((entry) => entry.id === playerId)?.isAI) {
-        ctx.requestAI(playerId, AI_DELAY[ctx.players.find((e) => e.id === playerId)?.aiDifficulty ?? 'medium']);
+        ctx.requestAI(
+          playerId,
+          AI_DELAY[ctx.players.find((e) => e.id === playerId)?.aiDifficulty ?? 'medium'],
+        );
       }
       return actionAccepted();
     }
@@ -596,7 +637,8 @@ export const ludoGame: GameModule<LudoState> = {
     const move = state.legalMoves.find((candidate) => candidate.tokenId === tokenId);
     if (!move) return actionRejected('Illegal move.');
     const token = findToken(state, tokenId);
-    if (!token || token.seatIndex !== slot.seatIndex) return actionRejected('That is not your token.');
+    if (!token || token.seatIndex !== slot.seatIndex)
+      return actionRejected('That is not your token.');
 
     const dice = state.dice ?? 0;
     const advanced = move.to - Math.max(0, move.from);
@@ -605,12 +647,14 @@ export const ludoGame: GameModule<LudoState> = {
 
     // Capture is recomputed from the authoritative board, not trusted from the move.
     let captured: string | null = null;
+    let capturedFrom: number | null = null;
     if (move.to < TRACK_LENGTH) {
       const cell = trackIndexFor(slot.seatIndex, move.to);
       const victimId = captureAt(state, slot.seatIndex, cell);
       if (victimId) {
         const victim = findToken(state, victimId);
         if (victim) {
+          capturedFrom = victim.progress;
           victim.progress = -1;
           captured = victimId;
           slot.captures += 1;
@@ -626,7 +670,22 @@ export const ludoGame: GameModule<LudoState> = {
       reachedHome = true;
     }
 
-    state.lastMove = { playerId, tokenId, from: move.from, to: move.to, captured };
+    state.moveCounter += 1;
+    const firstStep = move.entersBoard ? 0 : move.from + 1;
+    const path = Array.from(
+      { length: Math.max(1, move.to - firstStep + 1) },
+      (_entry, index) => firstStep + index,
+    );
+    state.lastMove = {
+      id: state.moveCounter,
+      playerId,
+      tokenId,
+      from: move.from,
+      to: move.to,
+      path,
+      captured,
+      capturedFrom,
+    };
     state.lastEvent = captured
       ? `capture:${playerId}`
       : reachedHome
@@ -711,11 +770,12 @@ export const ludoGame: GameModule<LudoState> = {
       return (right?.score ?? 0) - (left?.score ?? 0);
     });
 
-    const winners = state.finishedOrder.length > 0
-      ? [state.finishedOrder[0] as string]
-      : ranked.length > 0
-        ? [ranked[0]!.id]
-        : [];
+    const winners =
+      state.finishedOrder.length > 0
+        ? [state.finishedOrder[0] as string]
+        : ranked.length > 0
+          ? [ranked[0]!.id]
+          : [];
 
     const rankings: RankingDraft[] = ranked.map((player, index) => {
       const slot = state.players[player.id];
@@ -756,6 +816,7 @@ export const ludoGame: GameModule<LudoState> = {
       finishedOrder: [],
       lastEvent: null,
       lastMove: null,
+      moveCounter: 0,
       finishReason: null,
       rollsThisMatch: 0,
     };
@@ -789,7 +850,7 @@ export const ludoGame: GameModule<LudoState> = {
       tokensToWin: state.tokensToWin,
       finishedOrder: [...state.finishedOrder],
       lastEvent: state.lastEvent,
-      lastMove: state.lastMove ? { ...state.lastMove } : null,
+      lastMove: state.lastMove ? { ...state.lastMove, path: [...state.lastMove.path] } : null,
       finishReason: state.finishReason,
       serverTime: ctx.now(),
       boardSize: BOARD_SIZE,

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createPlayer, createTestPlatform, type TestPlatform } from '../../test/harness';
+import {
+  createGameFixture,
+  createPlayer,
+  createTestPlatform,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
@@ -58,14 +63,16 @@ describe('Ludo', () => {
   async function startWithPlayers(count: 2 | 3 | 4): Promise<void> {
     const local = createTestPlatform();
     const ids = [];
-    for (let i = 0; i < count; i += 1) ids.push(await createPlayer(local.platform, `Ld${count}${i}`));
+    for (let i = 0; i < count; i += 1)
+      ids.push(await createPlayer(local.platform, `Ld${count}${i}`));
     const extra = local.platform.roomManager.createRoom({
       gameId: 'ludo',
       maxPlayers: count,
       isPrivate: false,
       host: ids[0]!,
     });
-    for (let i = 1; i < count; i += 1) local.platform.roomManager.joinRoom({ roomId: extra.id, player: ids[i]! });
+    for (let i = 1; i < count; i += 1)
+      local.platform.roomManager.joinRoom({ roomId: extra.id, player: ids[i]! });
     extra.status = 'PLAYING';
     extra.gameStartedAt = Date.now();
     local.platform.gameManager.createState(extra);
@@ -93,15 +100,18 @@ describe('Ludo', () => {
     expect(state().players[players[1]!.id]!.color).toBe('green');
   });
 
-  it.each([2, 3, 4] as const)('initialises a %i player match with distinct colours and seats', async (count) => {
-    await startWithPlayers(count);
-    const slots = Object.values(state().players);
-    expect(slots).toHaveLength(count);
-    expect(new Set(slots.map((slot) => slot.color)).size).toBe(count);
-    expect(new Set(slots.map((slot) => slot.seatIndex)).size).toBe(count);
-    expect(state().turnOrder).toHaveLength(count);
-    expect(slots.every((slot) => slot.tokens.length === TOKENS_PER_PLAYER)).toBe(true);
-  });
+  it.each([2, 3, 4] as const)(
+    'initialises a %i player match with distinct colours and seats',
+    async (count) => {
+      await startWithPlayers(count);
+      const slots = Object.values(state().players);
+      expect(slots).toHaveLength(count);
+      expect(new Set(slots.map((slot) => slot.color)).size).toBe(count);
+      expect(new Set(slots.map((slot) => slot.seatIndex)).size).toBe(count);
+      expect(state().turnOrder).toHaveLength(count);
+      expect(slots.every((slot) => slot.tokens.length === TOKENS_PER_PLAYER)).toBe(true);
+    },
+  );
 
   it('has a well formed 52 cell track with four evenly spaced starts', () => {
     expect(TRACK_CELLS).toHaveLength(TRACK_LENGTH);
@@ -140,7 +150,9 @@ describe('Ludo', () => {
     );
     // Explicit dice-setting actions are always rejected.
     for (const type of ['dice', 'setDice', 'score', 'win', 'finish', 'capture']) {
-      expect(ludoGame.validateAction(playerId, { type, payload: { dice: 6 } }, state(), context()).valid).toBe(false);
+      expect(
+        ludoGame.validateAction(playerId, { type, payload: { dice: 6 } }, state(), context()).valid,
+      ).toBe(false);
     }
   });
 
@@ -201,7 +213,9 @@ describe('Ludo', () => {
     // A token id that is not in the legal set is refused.
     setDice(playerId, 3);
     expect(act(playerId, { type: 'move', payload: { tokenId: 'red-3' } }).accepted).toBe(false);
-    expect(act(playerId, { type: 'move', payload: { tokenId: 'not-a-token' } }).accepted).toBe(false);
+    expect(act(playerId, { type: 'move', payload: { tokenId: 'not-a-token' } }).accepted).toBe(
+      false,
+    );
     // A token belonging to another seat is refused.
     expect(act(playerId, { type: 'move', payload: { tokenId: 'green-0' } }).accepted).toBe(false);
   });
@@ -212,9 +226,14 @@ describe('Ludo', () => {
     expect(ludoGame.validateAction(second, { type: 'roll' }, state(), context()).valid).toBe(false);
     expect(act(second, { type: 'roll' }).accepted).toBe(false);
     // Move before rolling.
-    expect(ludoGame.validateAction(first, { type: 'move', payload: { tokenId: 'red-0' } }, state(), context()).valid).toBe(
-      false,
-    );
+    expect(
+      ludoGame.validateAction(
+        first,
+        { type: 'move', payload: { tokenId: 'red-0' } },
+        state(),
+        context(),
+      ).valid,
+    ).toBe(false);
     // After the match.
     finishLudo(state(), context(), 'completed');
     expect(ludoGame.validateAction(first, { type: 'roll' }, state(), context()).valid).toBe(false);
@@ -264,7 +283,8 @@ describe('Ludo', () => {
     const [redId, greenId] = players.map((player) => player.id);
     const green = state().players[greenId]!;
     const safeCell = SAFE_INDICES[1]!; // 8
-    green.tokens[0]!.progress = (safeCell - START_INDEX[green.seatIndex]! + TRACK_LENGTH) % TRACK_LENGTH;
+    green.tokens[0]!.progress =
+      (safeCell - START_INDEX[green.seatIndex]! + TRACK_LENGTH) % TRACK_LENGTH;
     expect(absoluteCell(green.tokens[0]!)).toBe(safeCell);
     expect(captureAt(state(), state().players[redId]!.seatIndex, safeCell)).toBeNull();
   });
@@ -326,7 +346,9 @@ describe('Ludo', () => {
       state().consecutiveSixes = MAX_CONSECUTIVE_SIXES - 1;
       state().phase = 'awaiting-roll';
     }
-    expect(state().currentPlayerId === second || state().lastEvent?.startsWith('triple-six')).toBe(true);
+    expect(state().currentPlayerId === second || state().lastEvent?.startsWith('triple-six')).toBe(
+      true,
+    );
   });
 
   it('skips a player who runs out of time (server authoritative turn timer)', () => {
@@ -443,7 +465,9 @@ describe('Ludo', () => {
     for (const difficulty of ['easy', 'medium', 'hard'] as const) {
       state().phase = 'awaiting-roll';
       state().currentPlayerId = playerId;
-      expect(ludoGame.getAIMove?.(playerId, difficulty, state(), context())).toEqual({ type: 'roll' });
+      expect(ludoGame.getAIMove?.(playerId, difficulty, state(), context())).toEqual({
+        type: 'roll',
+      });
 
       setDice(playerId, 6);
       const move = ludoGame.getAIMove?.(playerId, difficulty, state(), context());
@@ -464,7 +488,8 @@ describe('Ludo', () => {
     const red = state().players[redId]!;
     const green = state().players[greenId]!;
     const cell = trackIndexFor(red.seatIndex, 5);
-    green.tokens[0]!.progress = (cell - START_INDEX[green.seatIndex]! + TRACK_LENGTH) % TRACK_LENGTH;
+    green.tokens[0]!.progress =
+      (cell - START_INDEX[green.seatIndex]! + TRACK_LENGTH) % TRACK_LENGTH;
     red.tokens[0]!.progress = 2; // 3 steps behind the victim
     red.tokens[1]!.progress = 20; // an unrelated alternative
 
@@ -504,5 +529,36 @@ describe('Ludo', () => {
     expect(state().phase).toBe('awaiting-roll');
     expect(state().dice).toBeNull();
     expect(state().turnEndsAt).toBeGreaterThan(context().now());
+  });
+
+  it('publishes every authoritative board step and the captured token origin', () => {
+    const [redId, greenId] = players.map((player) => player.id);
+    const red = state().players[redId]!;
+    const green = state().players[greenId]!;
+    red.tokens[0]!.progress = 2;
+    const landing = trackIndexFor(red.seatIndex, 5);
+    green.tokens[0]!.progress =
+      (landing - START_INDEX[green.seatIndex]! + TRACK_LENGTH) % TRACK_LENGTH;
+    const capturedFrom = green.tokens[0]!.progress;
+
+    setDice(redId, 3);
+    expect(act(redId, { type: 'move', payload: { tokenId: red.tokens[0]!.id } }).accepted).toBe(
+      true,
+    );
+    expect(state().lastMove).toMatchObject({
+      id: 1,
+      tokenId: red.tokens[0]!.id,
+      from: 2,
+      to: 5,
+      path: [3, 4, 5],
+      captured: green.tokens[0]!.id,
+      capturedFrom,
+    });
+    expect(green.tokens[0]!.progress).toBe(-1);
+    const view = platform.gameManager.getPublicState(room, redId) as {
+      lastMove: { path: number[] };
+    };
+    expect(view.lastMove.path).toEqual([3, 4, 5]);
+    expect(view.lastMove.path).not.toBe(state().lastMove!.path);
   });
 });

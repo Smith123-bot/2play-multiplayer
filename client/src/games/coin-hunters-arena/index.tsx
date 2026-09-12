@@ -23,7 +23,17 @@ export interface CoinHuntersPublicState {
   bonus: { x: number; y: number; w: number; h: number };
   slow: number[];
   blocker: { x: number; y: number; direction: string };
-  coins: Array<{ id: string; x: number; y: number; kind: CoinKind; value: number; expiresAt: number }>;
+  walls: number[];
+  layout: 'classic' | 'lanes' | 'corners';
+  round: number;
+  coins: Array<{
+    id: string;
+    x: number;
+    y: number;
+    kind: CoinKind;
+    value: number;
+    expiresAt: number;
+  }>;
   hunters: Record<
     string,
     {
@@ -33,6 +43,9 @@ export interface CoinHuntersPublicState {
       score: number;
       coins: number;
       multiplier: boolean;
+      streak: number;
+      bestStreak: number;
+      latestInputSeq: number;
       disconnected: boolean;
     }
   >;
@@ -69,6 +82,7 @@ function CoinHuntersGame({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const previousEvent = useRef<string | null>(null);
+  const inputSequence = useRef(0);
 
   const phase = state?.phase ?? 'idle';
   const me = myPlayerId ? state?.hunters?.[myPlayerId] : undefined;
@@ -77,10 +91,14 @@ function CoinHuntersGame({
   const move = useCallback(
     (direction: 'up' | 'down' | 'left' | 'right') => {
       if (!canMove) return;
-      sendAction({ type: 'move', payload: { direction } } satisfies GameAction);
+      inputSequence.current = Math.max(inputSequence.current, me?.latestInputSeq ?? -1) + 1;
+      sendAction({
+        type: 'move',
+        payload: { direction, sequence: inputSequence.current },
+      } satisfies GameAction);
       vibrate('buttonPress');
     },
-    [canMove, sendAction, vibrate],
+    [canMove, me?.latestInputSeq, sendAction, vibrate],
   );
 
   useEffect(() => {
@@ -102,7 +120,11 @@ function CoinHuntersGame({
       const direction = map[event.key];
       if (!direction) return;
       const target = event.target as HTMLElement | null;
-      if (target && (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) || target.isContentEditable)) {
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+          target.isContentEditable)
+      ) {
         return;
       }
       event.preventDefault();
@@ -117,7 +139,10 @@ function CoinHuntersGame({
     if (lastEvent === previousEvent.current) return;
     previousEvent.current = lastEvent;
     if (!lastEvent) return;
-    if (lastEvent.startsWith('collect:') || lastEvent.startsWith('multi:')) {
+    if (lastEvent.startsWith('round:')) {
+      play('gameStart');
+      vibrate('success');
+    } else if (lastEvent.startsWith('collect:') || lastEvent.startsWith('multi:')) {
       play(lastEvent.includes(myPlayerId ?? '') ? 'score' : 'notification');
       if (lastEvent.includes(myPlayerId ?? '')) vibrate('success');
     } else if (lastEvent.startsWith('block:') && lastEvent.includes(myPlayerId ?? '')) {
@@ -142,8 +167,19 @@ function CoinHuntersGame({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#020617';
     ctx.fillRect(0, 0, cssWidth, cssHeight);
+    ctx.fillStyle = 'rgba(100,116,139,.65)';
+    for (const index of state.walls) {
+      const x = index % cols;
+      const y = Math.floor(index / cols);
+      ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2);
+    }
     ctx.fillStyle = 'rgba(52, 211, 153, 0.18)';
-    ctx.fillRect(state.bonus.x * cell, state.bonus.y * cell, state.bonus.w * cell, state.bonus.h * cell);
+    ctx.fillRect(
+      state.bonus.x * cell,
+      state.bonus.y * cell,
+      state.bonus.w * cell,
+      state.bonus.h * cell,
+    );
     ctx.fillStyle = 'rgba(148, 163, 184, 0.22)';
     for (const index of state.slow ?? []) {
       const x = index % cols;
@@ -153,7 +189,13 @@ function CoinHuntersGame({
     for (const coin of state.coins ?? []) {
       ctx.fillStyle = COIN_FILL[coin.kind];
       ctx.beginPath();
-      ctx.arc(coin.x * cell + cell / 2, coin.y * cell + cell / 2, cell * (coin.kind === 'rare' ? 0.36 : 0.28), 0, Math.PI * 2);
+      ctx.arc(
+        coin.x * cell + cell / 2,
+        coin.y * cell + cell / 2,
+        cell * (coin.kind === 'rare' ? 0.36 : 0.28),
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
       if (coin.kind === 'multi') {
         ctx.fillStyle = '#0f172a';
@@ -164,7 +206,12 @@ function CoinHuntersGame({
       }
     }
     ctx.fillStyle = '#ef4444';
-    ctx.fillRect(state.blocker.x * cell + cell * 0.15, state.blocker.y * cell + cell * 0.15, cell * 0.7, cell * 0.7);
+    ctx.fillRect(
+      state.blocker.x * cell + cell * 0.15,
+      state.blocker.y * cell + cell * 0.15,
+      cell * 0.7,
+      cell * 0.7,
+    );
     players.forEach((player, seat) => {
       const hunter = state.hunters?.[player.id];
       if (!hunter) return;
@@ -182,7 +229,9 @@ function CoinHuntersGame({
 
   const collectNearby = () => {
     if (!canMove || !me || !state) return;
-    const nearby = state.coins.find((coin) => Math.abs(coin.x - me.x) + Math.abs(coin.y - me.y) <= 1);
+    const nearby = state.coins.find(
+      (coin) => Math.abs(coin.x - me.x) + Math.abs(coin.y - me.y) <= 1,
+    );
     if (!nearby) return;
     sendAction({ type: 'collect', payload: { coinId: nearby.id } } satisfies GameAction);
     play('click');
@@ -214,6 +263,10 @@ function CoinHuntersGame({
 
       <div className="flex flex-wrap items-center gap-2">
         {me ? <Badge tone="primary">{me.coins} coins</Badge> : null}
+        <Badge tone={state.round === 3 ? 'warning' : 'default'}>
+          Round {state.round}/3 · {state.layout}
+        </Badge>
+        {me && me.streak > 1 ? <Badge tone="success">Streak x{me.streak}</Badge> : null}
         {me?.multiplier ? <Badge tone="accent">2× multiplier</Badge> : null}
         {phase === 'finished' ? <Badge tone="accent">Match over</Badge> : null}
       </div>
@@ -272,7 +325,8 @@ function CoinHuntersGame({
         </button>
       </div>
       <p className="text-center text-xs text-slate-500">
-        Gold and rare coins pay more. Green is 2×. Grey tiles slow you. Red is a blocker. The server confirms every collect.
+        Coins spawn in the fairest distant quarter of free cells. Build quick collection streaks,
+        chase 2× zones, and adapt through three faster server-owned rounds.
       </p>
     </div>
   );

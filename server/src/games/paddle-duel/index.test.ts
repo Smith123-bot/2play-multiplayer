@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createTestPlatform, waitFor, type TestPlatform } from '../../test/harness';
+import {
+  createGameFixture,
+  createTestPlatform,
+  waitFor,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
@@ -74,8 +79,12 @@ describe('Paddle Duel', () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const playerId = players[0]!.id;
     expect(
-      paddleDuelGame.validateAction(playerId, { type: 'move', payload: { direction: 'up' } }, state(), context())
-        .valid,
+      paddleDuelGame.validateAction(
+        playerId,
+        { type: 'move', payload: { direction: 'up' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(true);
 
     const down = platform.gameManager.handleAction(room, playerId, {
@@ -104,19 +113,37 @@ describe('Paddle Duel', () => {
   it('rejects invalid actions, bad directions, ghosts and non-playing phases', async () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const playerId = players[0]!.id;
-    expect(paddleDuelGame.validateAction(playerId, { type: 'dash' }, state(), context()).valid).toBe(false);
     expect(
-      paddleDuelGame.validateAction(playerId, { type: 'move', payload: { direction: 'sideways' } }, state(), context())
-        .valid,
+      paddleDuelGame.validateAction(playerId, { type: 'dash' }, state(), context()).valid,
     ).toBe(false);
     expect(
-      paddleDuelGame.validateAction('ghost', { type: 'move', payload: { direction: 'up' } }, state(), context()).valid,
+      paddleDuelGame.validateAction(
+        playerId,
+        { type: 'move', payload: { direction: 'sideways' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
-    expect(paddleDuelGame.validateAction(playerId, { type: 'move' }, state(), context()).valid).toBe(false);
+    expect(
+      paddleDuelGame.validateAction(
+        'ghost',
+        { type: 'move', payload: { direction: 'up' } },
+        state(),
+        context(),
+      ).valid,
+    ).toBe(false);
+    expect(
+      paddleDuelGame.validateAction(playerId, { type: 'move' }, state(), context()).valid,
+    ).toBe(false);
 
     state().phase = 'idle';
     expect(
-      paddleDuelGame.validateAction(playerId, { type: 'move', payload: { direction: 'up' } }, state(), context()).valid,
+      paddleDuelGame.validateAction(
+        playerId,
+        { type: 'move', payload: { direction: 'up' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
   });
 
@@ -173,6 +200,8 @@ describe('Paddle Duel', () => {
     expect(ball.vy).toBeLessThan(0); // above-centre hit angles up
     expect(state().rallyHits).toBe(1);
     expect(state().paddles[players[0]!.id]!.rallies).toBe(1);
+    expect(state().paddles[players[0]!.id]!.bestRally).toBe(1);
+    expect(state().lastHit).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
     expect(state().lastEvent).toBe('paddle');
   });
 
@@ -204,6 +233,8 @@ describe('Paddle Duel', () => {
 
     stepDuel(state(), 50, context().now(), context());
     expect(state().paddles[leftId]!.score).toBe(1);
+    expect(state().paddles[leftId]!.pointStreak).toBe(1);
+    expect(state().pointNumber).toBe(1);
     expect(state().serveAt).not.toBeNull();
     expect(state().servingTo).toBe('right'); // conceder receives
     expect(state().ball.x).toBe(50); // ball re-centred
@@ -337,5 +368,43 @@ describe('Paddle Duel', () => {
     expect(resetPoint).toBeDefined();
     expect(launchServe).toBeDefined();
     expect(stepDuel).toBeDefined();
+  });
+
+  it('rejects duplicated and out-of-order input sequences', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const playerId = players[0]!.id;
+    const first = platform.gameManager.handleAction(room, playerId, {
+      type: 'move',
+      payload: { direction: 'down', sequence: 4 },
+    });
+    expect(first.accepted).toBe(true);
+    expect(state().paddles[playerId]!.latestInputSeq).toBe(4);
+    expect(
+      platform.gameManager.handleAction(room, playerId, {
+        type: 'move',
+        payload: { direction: 'up', sequence: 4 },
+      }).accepted,
+    ).toBe(false);
+    expect(
+      platform.gameManager.handleAction(room, playerId, {
+        type: 'move',
+        payload: { direction: 'up', sequence: 2 },
+      }).accepted,
+    ).toBe(false);
+    expect(state().paddles[playerId]!.dir).toBe(1);
+  });
+
+  it('records canonical wall impacts for synchronized client feedback', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    state().serveAt = null;
+    state().servingTo = null;
+    state().ball = { x: 50, y: 1.2, vx: 12, vy: -45 };
+    stepDuel(state(), 32, context().now(), context());
+    expect(state().lastImpact).toMatchObject({ id: 1, kind: 'wall' });
+    expect(state().ball.vy).toBeGreaterThan(0);
+    const view = platform.gameManager.getPublicState(room, players[0]!.id) as {
+      lastImpact: { kind: string };
+    };
+    expect(view.lastImpact.kind).toBe('wall');
   });
 });

@@ -73,7 +73,9 @@ describe('access control on personal data endpoints (IDOR)', () => {
 
   it('refuses reads with an unknown or forged session token', async () => {
     for (const path of personalPaths()) {
-      const response = await http(path, { headers: { 'x-session-token': 'forged-token-not-real' } });
+      const response = await http(path, {
+        headers: { 'x-session-token': 'forged-token-not-real' },
+      });
       // An unknown token must fail exactly like no token — never fall through.
       expect(response.status, `${path} accepted a forged token`).toBe(401);
     }
@@ -115,11 +117,48 @@ describe('access control on personal data endpoints (IDOR)', () => {
 
     const authed = await http('/api/favorites', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-session-token': victim.session.sessionToken },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-token': victim.session.sessionToken,
+      },
       body: JSON.stringify({ gameId: 'chess' }),
     });
     expect(authed.status).toBe(201);
   }, 30_000);
+});
+
+describe('room discovery privacy', () => {
+  it('never enumerates private rooms through Socket.IO or REST', async () => {
+    const host = await createClient(server.url, 'PrivateHost');
+    const seeker = await createClient(server.url, 'PrivateSeeker');
+    try {
+      const created = await emitAck<{ room: { id: string } }>(host.socket, 'room:create', {
+        gameId: 'chess',
+        maxPlayers: 2,
+        isPrivate: true,
+      });
+      expect(created.ok).toBe(true);
+      const roomId = created.data!.room.id;
+
+      const listed = await emitAck<{ rooms: Array<{ id: string }> }>(seeker.socket, 'room:list', {
+        includePrivate: true,
+      });
+      expect(listed.ok).toBe(true);
+      expect(listed.data?.rooms.some((room) => room.id === roomId)).toBe(false);
+
+      const probed = await http(`/api/rooms/${roomId}`);
+      expect(probed.status).toBe(404);
+      expect(probed.body).not.toContain(roomId);
+    } finally {
+      host.close();
+      seeker.close();
+    }
+  }, 30_000);
+
+  it('validates REST room codes before lookup', async () => {
+    const response = await http('/api/rooms/not-a-valid-room-code');
+    expect(response.status).toBe(400);
+  });
 });
 
 describe('transport and payload limits', () => {
@@ -235,6 +274,51 @@ describe('socket authentication and authorization', () => {
     }
   }, 40_000);
 
+  it('requires an already authenticated matching session before reconnect', async () => {
+    const victim = await createClient(server.url, 'ReconnectOwner');
+    try {
+      const created = await emitAck<{ room: { id: string } }>(victim.socket, 'room:create', {
+        gameId: 'chess',
+        maxPlayers: 2,
+        isPrivate: true,
+      });
+      const attacker = raw();
+      await once(attacker, 'connect');
+      try {
+        const response = await emitAck(attacker, 'reconnect:attempt', {
+          roomId: created.data!.room.id,
+          sessionToken: victim.session.sessionToken,
+        });
+        expect(response.ok).toBe(false);
+        expect(response.error?.code).toBe('E002');
+      } finally {
+        attacker.close();
+      }
+    } finally {
+      victim.close();
+    }
+  }, 30_000);
+
+  it('invalidates the previous socket when a session is restored elsewhere', async () => {
+    const first = await createClient(server.url, 'SessionOwner');
+    const replacement = raw();
+    await once(replacement, 'connect');
+    const disconnected = once(first.socket, 'disconnect', 8_000);
+    try {
+      const restored = await emitAck(replacement, 'authenticate', {
+        nickname: 'SessionOwner',
+        avatar: first.session.avatar,
+        sessionToken: first.session.sessionToken,
+      });
+      expect(restored.ok).toBe(true);
+      await disconnected;
+      expect(first.socket.connected).toBe(false);
+    } finally {
+      replacement.close();
+      first.close();
+    }
+  }, 30_000);
+
   it('does not let a client claim another player identity on reconnect', async () => {
     const victim = await createClient(server.url, 'ReconVictim');
     try {
@@ -269,11 +353,38 @@ describe('socket authentication and authorization', () => {
   }, 40_000);
 });
 
+describe('post-membership isolation', () => {
+  it('disconnects a kicked socket so it cannot keep receiving room events', async () => {
+    const host = await createClient(server.url, 'KickSecurityHost');
+    const guest = await createClient(server.url, 'KickSecurityGuest');
+    try {
+      const created = await emitAck<{ room: { id: string } }>(host.socket, 'room:create', {
+        gameId: 'chess',
+        maxPlayers: 2,
+        isPrivate: true,
+      });
+      await emitAck(guest.socket, 'room:join', { roomId: created.data!.room.id });
+      const disconnected = once(guest.socket, 'disconnect', 8_000);
+      const kicked = await emitAck(host.socket, 'room:kick', { playerId: guest.playerId });
+      expect(kicked.ok).toBe(true);
+      await disconnected;
+      expect(guest.socket.connected).toBe(false);
+    } finally {
+      host.close();
+      guest.close();
+    }
+  }, 30_000);
+});
+
 describe('input validation and injection resistance', () => {
   it('strips markup from chat instead of storing raw HTML', async () => {
     const host = await createClient(server.url, 'ChatSanitize');
     try {
-      await emitAck(host.socket, 'room:create', { gameId: 'chess', maxPlayers: 2, isPrivate: false });
+      await emitAck(host.socket, 'room:create', {
+        gameId: 'chess',
+        maxPlayers: 2,
+        isPrivate: false,
+      });
 
       const payloads = [
         '<script>alert(1)</script>',
@@ -370,7 +481,9 @@ describe('server authority over game outcomes', () => {
         { type: 'setState', payload: { board: [] } },
       ];
       for (const action of forged) {
-        const response = await emitAck<{ accepted: boolean }>(client.socket, 'game:action', { action });
+        const response = await emitAck<{ accepted: boolean }>(client.socket, 'game:action', {
+          action,
+        });
         // The server may ack the transport, but must never ACCEPT the action.
         if (response.ok) expect(response.data?.accepted, `${action.type} was accepted`).toBe(false);
       }

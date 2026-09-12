@@ -35,11 +35,14 @@ export interface AuthenticateInput {
 export class ConnectionManager {
   private readonly sessionsByToken = new Map<string, Session>();
   private readonly tokenBySocket = new Map<string, string>();
+  private readonly tokenByPlayer = new Map<string, string>();
   private readonly logger = createLogger('ConnectionManager');
 
   constructor(private readonly platform: Platform) {}
 
-  async authenticate(input: AuthenticateInput): Promise<{ session: SessionInfo; restored: boolean }> {
+  async authenticate(
+    input: AuthenticateInput,
+  ): Promise<{ session: SessionInfo; restored: boolean }> {
     const limit = this.platform.rateLimiter.consume(
       `auth:${input.clientKey}`,
       AUTH_RATE_LIMIT_PER_MIN,
@@ -91,6 +94,7 @@ export class ConnectionManager {
     session.playerId = session.userId;
 
     this.sessionsByToken.set(token, session);
+    this.tokenByPlayer.set(session.playerId, token);
     this.tokenBySocket.set(input.socketId, token);
     this.logger.info('session created', { userId: session.userId, nickname: session.nickname });
 
@@ -111,6 +115,11 @@ export class ConnectionManager {
 
   getSessionByToken(token: string): Session | undefined {
     return this.sessionsByToken.get(token);
+  }
+
+  getSessionByPlayer(playerId: string): Session | undefined {
+    const token = this.tokenByPlayer.get(playerId);
+    return token ? this.sessionsByToken.get(token) : undefined;
   }
 
   getSessionBySocket(socketId: string): Session | undefined {
@@ -147,6 +156,7 @@ export class ConnectionManager {
   dropSession(token: string): void {
     const session = this.sessionsByToken.get(token);
     if (session?.socketId) this.tokenBySocket.delete(session.socketId);
+    if (session) this.tokenByPlayer.delete(session.playerId);
     this.sessionsByToken.delete(token);
   }
 

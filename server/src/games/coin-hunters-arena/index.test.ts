@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createTestPlatform, waitFor, type TestPlatform } from '../../test/harness';
+import {
+  createGameFixture,
+  createTestPlatform,
+  waitFor,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
@@ -7,6 +12,7 @@ import {
   coinHuntersGame,
   COIN_VALUES,
   finishHunt,
+  huntWalls,
   inBonus,
   spawnCoin,
   stepHunters,
@@ -63,8 +69,12 @@ describe('Coin Hunters Arena', () => {
     expect(state().hunters[playerId]!.score).toBe(10);
     expect(tryCollect(state(), playerId, coin.id, context().now())).toBe(0);
     expect(
-      coinHuntersGame.validateAction(playerId, { type: 'collect', payload: { coinId: coin.id } }, state(), context())
-        .valid,
+      coinHuntersGame.validateAction(
+        playerId,
+        { type: 'collect', payload: { coinId: coin.id } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
   });
 
@@ -76,8 +86,12 @@ describe('Coin Hunters Arena', () => {
     coin.x = (hunter.x + 8) % state().cols;
     coin.y = (hunter.y + 8) % state().rows;
     expect(
-      coinHuntersGame.validateAction(playerId, { type: 'collect', payload: { coinId: coin.id } }, state(), context())
-        .valid,
+      coinHuntersGame.validateAction(
+        playerId,
+        { type: 'collect', payload: { coinId: coin.id } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
     expect(tryCollect(state(), playerId, coin.id, context().now())).toBe(0);
   });
@@ -116,10 +130,16 @@ describe('Coin Hunters Arena', () => {
     state().hunters[playerId]!.direction = 'right';
     state().hunters[playerId]!.pending = null;
     expect(
-      coinHuntersGame.validateAction(playerId, { type: 'move', payload: { direction: 'left' } }, state(), context())
-        .valid,
+      coinHuntersGame.validateAction(
+        playerId,
+        { type: 'move', payload: { direction: 'left' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
-    expect(coinHuntersGame.validateAction(playerId, { type: 'fly' }, state(), context()).valid).toBe(false);
+    expect(
+      coinHuntersGame.validateAction(playerId, { type: 'fly' }, state(), context()).valid,
+    ).toBe(false);
   });
 
   it('steps hunters and can auto-collect an overlapping coin', async () => {
@@ -167,5 +187,57 @@ describe('Coin Hunters Arena', () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const move = coinHuntersGame.getAIMove?.(players[0]!.id, 'hard', state(), context());
     expect(move?.type === 'move' || move?.type === 'collect').toBe(true);
+  });
+
+  it('uses distinct obstacle layouts, fair distant spawning and stale-input protection', async () => {
+    expect(huntWalls('classic', 18, 12)).toHaveLength(0);
+    expect(huntWalls('lanes', 18, 12).length).toBeGreaterThan(0);
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const id = players[0]!.id;
+    state().coins = [];
+    const coin = spawnCoin(state(), context())!;
+    const nearest = Math.min(
+      ...Object.values(state().hunters).map(
+        (hunter) => Math.abs(hunter.x - coin.x) + Math.abs(hunter.y - coin.y),
+      ),
+    );
+    expect(nearest).toBeGreaterThan(2);
+    expect(
+      platform.gameManager.handleAction(room, id, {
+        type: 'move',
+        payload: { direction: 'down', sequence: 7 },
+      }).accepted,
+    ).toBe(true);
+    expect(
+      platform.gameManager.handleAction(room, id, {
+        type: 'move',
+        payload: { direction: 'down', sequence: 6 },
+      }).accepted,
+    ).toBe(false);
+  });
+
+  it('builds a timed collection streak entirely on the server', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const id = players[0]!.id;
+    const hunter = state().hunters[id]!;
+    state().coins = [];
+    for (let n = 0; n < 2; n += 1) {
+      const coin = spawnCoin(state(), context())!;
+      coin.x = hunter.x;
+      coin.y = hunter.y;
+      coin.kind = 'normal';
+      coin.value = 10;
+      awardCollection(state(), id, coin, context().now());
+    }
+    expect(hunter.streak).toBe(2);
+    expect(hunter.score).toBe(25);
+  });
+
+  it('progresses to faster coin-rich rounds on the server clock', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    state().startedAt = context().now() - state().durationMs * 0.7;
+    coinHuntersGame.update(state(), 1, context());
+    expect(state().round).toBe(3);
+    expect(state().stepMs).toBe(190);
   });
 });

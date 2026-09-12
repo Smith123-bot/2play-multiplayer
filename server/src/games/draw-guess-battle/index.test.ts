@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createTestPlatform, waitFor, type TestPlatform } from '../../test/harness';
+import {
+  createGameFixture,
+  createTestPlatform,
+  waitFor,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
@@ -37,6 +42,7 @@ describe('Draw & Guess Battle', () => {
     platform.gameManager.getPublicState(room, viewerId) as {
       phase: string;
       word: string | null;
+      guesses: Array<{ text: string; correct: boolean }>;
       drawerId: string | null;
       strokes: unknown[];
       solved: string[];
@@ -53,7 +59,9 @@ describe('Draw & Guess Battle', () => {
   });
 
   it('starts with a drawer and a hidden word for guessers', async () => {
-    await waitFor(() => state().phase === 'prepare' || state().phase === 'drawing', { timeoutMs: 5000 });
+    await waitFor(() => state().phase === 'prepare' || state().phase === 'drawing', {
+      timeoutMs: 5000,
+    });
     const drawerId = state().current!.drawerId;
     const guesser = players.find((player) => player.id !== drawerId)!;
     const hidden = publicState(guesser.id);
@@ -72,7 +80,15 @@ describe('Draw & Guess Battle', () => {
     const guesser = players.find((player) => player.id !== drawerId)!;
     const stroke = {
       type: 'stroke',
-      payload: { color: '#111827', size: 8, tool: 'brush', points: [{ x: 0.2, y: 0.3 }, { x: 0.4, y: 0.5 }] },
+      payload: {
+        color: '#111827',
+        size: 8,
+        tool: 'brush',
+        points: [
+          { x: 0.2, y: 0.3 },
+          { x: 0.4, y: 0.5 },
+        ],
+      },
     };
     expect(drawGuessGame.validateAction(guesser.id, stroke, state(), context()).valid).toBe(false);
     const result = platform.gameManager.handleAction(room, drawerId, stroke);
@@ -86,12 +102,17 @@ describe('Draw & Guess Battle', () => {
     expect(
       drawGuessGame.validateAction(
         drawerId,
-        { type: 'stroke', payload: { color: '#ff00ff', size: 8, tool: 'brush', points: [{ x: 0, y: 0 }] } },
+        {
+          type: 'stroke',
+          payload: { color: '#ff00ff', size: 8, tool: 'brush', points: [{ x: 0, y: 0 }] },
+        },
         state(),
         context(),
       ).valid,
     ).toBe(false);
-    expect(drawGuessGame.validateAction(drawerId, { type: 'fly' }, state(), context()).valid).toBe(false);
+    expect(drawGuessGame.validateAction(drawerId, { type: 'fly' }, state(), context()).valid).toBe(
+      false,
+    );
   });
 
   it('scores the first correct guess 100 and bonuses the drawer', async () => {
@@ -111,9 +132,14 @@ describe('Draw & Guess Battle', () => {
       payload: { text: state().current!.word },
     });
     expect(hit.accepted).toBe(true);
-    expect(state().scores[guesser.id]).toBe(100);
+    expect(state().scores[guesser.id]).toBe(140); // placement + maximum speed bonus
     expect(state().scores[drawerId]).toBe(40);
     expect(state().current!.solvedOrder).toContain(guesser.id);
+    state().phase = 'drawing'; // exercise the in-flight privacy projection before reveal
+    state().history = [];
+    const guesserView = publicState(guesser.id);
+    expect(guesserView.guesses.at(-1)).toMatchObject({ text: 'solved it', correct: true });
+    expect(JSON.stringify(guesserView)).not.toContain(state().current!.word);
   });
 
   it('rejects duplicate correct guesses and drawer guesses', async () => {
@@ -193,5 +219,39 @@ describe('Draw & Guess Battle', () => {
     await waitFor(() => state().current !== null, { timeoutMs: 5000 });
     drawGuessGame.playerLeft(players[0]!.id, state(), context(), 'disconnect');
     expect(state().phase === 'finished').toBe(false);
+  });
+
+  it('undo removes only the drawer latest authoritative stroke', async () => {
+    await waitFor(() => state().current !== null, { timeoutMs: 5000 });
+    openDrawing(state(), context());
+    const drawerId = state().current!.drawerId;
+    const stroke = {
+      type: 'stroke',
+      payload: {
+        color: '#111827',
+        size: 8,
+        tool: 'brush',
+        points: [
+          { x: 0.1, y: 0.1 },
+          { x: 0.2, y: 0.2 },
+        ],
+      },
+    };
+    platform.gameManager.handleAction(room, drawerId, stroke);
+    platform.gameManager.handleAction(room, drawerId, stroke);
+    expect(state().current!.strokes).toHaveLength(2);
+    expect(platform.gameManager.handleAction(room, drawerId, { type: 'undo' }).accepted).toBe(true);
+    expect(state().current!.strokes).toHaveLength(1);
+    const guesser = players.find((player) => player.id !== drawerId)!;
+    expect(
+      drawGuessGame.validateAction(guesser.id, { type: 'undo' }, state(), context()).valid,
+    ).toBe(false);
+  });
+
+  it('selects genuinely harder prompt pools as rounds progress', () => {
+    for (let index = 0; index < 30; index += 1) {
+      expect(pickPrompt([], context().random, 'easy').word.length).toBeLessThanOrEqual(5);
+      expect(pickPrompt([], context().random, 'hard').word.length).toBeGreaterThan(5);
+    }
   });
 });

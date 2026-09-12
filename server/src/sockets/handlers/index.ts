@@ -37,6 +37,7 @@ export function registerSocketHandlers(
 
   socket.on('disconnect', (reason: string) => {
     try {
+      platform.rateLimiter.reset(`socket-event:${socket.id}`);
       handleDisconnect(platform, socket, reason);
     } catch (error) {
       logger.error('disconnect handling failed', {

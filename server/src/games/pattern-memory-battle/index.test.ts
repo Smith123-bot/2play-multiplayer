@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createTestPlatform, waitFor, type TestPlatform } from '../../test/harness';
+import {
+  createGameFixture,
+  createTestPlatform,
+  waitFor,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
@@ -13,6 +18,7 @@ import {
   patternMemoryGame,
   roundsFor,
   showStepFor,
+  tileCountFor,
   type PatternMemoryState,
 } from './index';
 import type { Room } from '../../rooms/Room';
@@ -45,7 +51,10 @@ describe('Pattern Memory Battle', () => {
       flash: number | null;
       revealPattern: number[] | null;
       inputEndsAt: number | null;
-      players: Record<string, { progress: number; locked: boolean; score: number; streak: number; mistakes: number }>;
+      players: Record<
+        string,
+        { progress: number; locked: boolean; score: number; streak: number; mistakes: number }
+      >;
     };
 
   /* ---------------------------------------------------------------- */
@@ -122,10 +131,24 @@ describe('Pattern Memory Battle', () => {
     beginInput(state(), context());
 
     // Invalid before anything: unknown action, bad tile, ghost, show phase.
-    expect(patternMemoryGame.validateAction(a, { type: 'swipe' }, state(), context()).valid).toBe(false);
-    expect(patternMemoryGame.validateAction(a, { type: 'tap', payload: { tile: 9 } }, state(), context()).valid).toBe(false);
-    expect(patternMemoryGame.validateAction(a, { type: 'tap' }, state(), context()).valid).toBe(false);
-    expect(patternMemoryGame.validateAction('ghost', { type: 'tap', payload: { tile: 0 } }, state(), context()).valid).toBe(false);
+    expect(patternMemoryGame.validateAction(a, { type: 'swipe' }, state(), context()).valid).toBe(
+      false,
+    );
+    expect(
+      patternMemoryGame.validateAction(a, { type: 'tap', payload: { tile: 9 } }, state(), context())
+        .valid,
+    ).toBe(false);
+    expect(patternMemoryGame.validateAction(a, { type: 'tap' }, state(), context()).valid).toBe(
+      false,
+    );
+    expect(
+      patternMemoryGame.validateAction(
+        'ghost',
+        { type: 'tap', payload: { tile: 0 } },
+        state(),
+        context(),
+      ).valid,
+    ).toBe(false);
 
     // Correct first tile.
     const tap1 = platform.gameManager.handleAction(room, a, {
@@ -138,17 +161,24 @@ describe('Pattern Memory Battle', () => {
     // Wrong second tile → locked, mistake recorded, streak reset.
     const correct1 = state().pattern[1]!;
     const wrong = correct1 === 0 ? 1 : correct1 - 1;
-    const tap2 = platform.gameManager.handleAction(room, a, { type: 'tap', payload: { tile: wrong } });
+    const tap2 = platform.gameManager.handleAction(room, a, {
+      type: 'tap',
+      payload: { tile: wrong },
+    });
     expect(tap2.accepted).toBe(true);
     expect(state().players[a]!.locked).toBe(true);
     expect(state().players[a]!.mistakes).toBe(1);
     expect(
-      patternMemoryGame.validateAction(a, { type: 'tap', payload: { tile: 0 } }, state(), context()).valid,
+      patternMemoryGame.validateAction(a, { type: 'tap', payload: { tile: 0 } }, state(), context())
+        .valid,
     ).toBe(false); // locked
 
     // Rival replays perfectly.
     for (let i = 0; i < 3; i += 1) {
-      platform.gameManager.handleAction(room, b, { type: 'tap', payload: { tile: state().pattern[i] } });
+      platform.gameManager.handleAction(room, b, {
+        type: 'tap',
+        payload: { tile: state().pattern[i] },
+      });
     }
     expect(state().players[b]!.succeeded).toBe(true);
     expect(state().players[b]!.score).toBeGreaterThanOrEqual(30);
@@ -168,7 +198,10 @@ describe('Pattern Memory Battle', () => {
     beginInput(state(), context());
     state().inputStartedAt = context().now() - 2000; // burn some clock → small speed bonus
     for (let i = 0; i < 3; i += 1) {
-      platform.gameManager.handleAction(room, a, { type: 'tap', payload: { tile: state().pattern[i] } });
+      platform.gameManager.handleAction(room, a, {
+        type: 'tap',
+        payload: { tile: state().pattern[i] },
+      });
     }
     // 30 base + speed(≥0) + streak bonus 6 (capped at 2×3).
     expect(state().players[a]!.score).toBeGreaterThanOrEqual(36);
@@ -245,7 +278,10 @@ describe('Pattern Memory Battle', () => {
     for (let i = 0; i < 3; i += 1) advanceShow(state(), context());
     beginInput(state(), context());
     const correct = state().pattern[0]!;
-    platform.gameManager.handleAction(room, a, { type: 'tap', payload: { tile: correct === 0 ? 1 : 0 } });
+    platform.gameManager.handleAction(room, a, {
+      type: 'tap',
+      payload: { tile: correct === 0 ? 1 : 0 },
+    });
     expect(state().phase).toBe('reveal'); // sole active player locked → round done
 
     // Disconnect just flags (reconnection window).
@@ -303,5 +339,36 @@ describe('Pattern Memory Battle', () => {
     expect(publicState().flash).toBe(state().pattern[0]);
     advanceShow(state(), context());
     expect(publicState().flash).toBe(state().pattern[1]);
+  });
+
+  it('progresses through authoritative 2x2, 3x2 and 3x3 layouts', () => {
+    expect([1, 3, 6].map(tileCountFor)).toEqual([4, 6, 9]);
+    const compact = buildPattern(6, () => 0.74, 4);
+    expect(compact.every((tile) => tile >= 0 && tile < 4)).toBe(true);
+  });
+
+  it('rejects duplicate input sequences and records historical best streak', async () => {
+    await waitFor(() => state().phase === 'show', { timeoutMs: 5000 });
+    state().phase = 'input';
+    state().pattern = [0, 1];
+    state().patternLength = 2;
+    state().tileCount = 4;
+    const id = players[0]!.id;
+    expect(
+      platform.gameManager.handleAction(room, id, {
+        type: 'tap',
+        payload: { tile: 0, sequence: 5 },
+      }).accepted,
+    ).toBe(true);
+    expect(
+      platform.gameManager.handleAction(room, id, {
+        type: 'tap',
+        payload: { tile: 1, sequence: 5 },
+      }).accepted,
+    ).toBe(false);
+    state().players[id]!.streak = 3;
+    state().players[id]!.bestStreak = 4;
+    const result = patternMemoryGame.getResult(state(), context());
+    expect(result.rankings.find((entry) => entry.playerId === id)?.stats.bestStreak).toBe(4);
   });
 });

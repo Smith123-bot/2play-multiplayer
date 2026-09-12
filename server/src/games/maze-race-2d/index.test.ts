@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGameFixture, createTestPlatform, waitFor, type TestPlatform } from '../../test/harness';
+import {
+  createGameFixture,
+  createTestPlatform,
+  waitFor,
+  type TestPlatform,
+} from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
   allActiveRunnersFinished,
+  buildCourseFeatures,
   createMazeRandom,
   distancesToGoal,
   finishMazeOnTimeout,
@@ -129,11 +135,19 @@ describe('Maze Race 2D', () => {
       const [dx, dy] = delta;
       const nx = runner.x + dx;
       const ny = runner.y + dy;
-      return nx >= 0 && ny >= 0 && nx < state().cols && ny < state().rows && !state().walls[ny * state().cols + nx];
+      return (
+        nx >= 0 &&
+        ny >= 0 &&
+        nx < state().cols &&
+        ny < state().rows &&
+        !state().walls[ny * state().cols + nx]
+      );
     });
     expect(legal.length).toBeGreaterThan(0);
 
-    const blocked = (['up', 'down', 'left', 'right'] as MazeDirection[]).find((direction) => !legal.includes(direction));
+    const blocked = (['up', 'down', 'left', 'right'] as MazeDirection[]).find(
+      (direction) => !legal.includes(direction),
+    );
     if (blocked) {
       expect(
         mazeRaceGame.validateAction(
@@ -158,7 +172,9 @@ describe('Maze Race 2D', () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const playerId = players[0]!.id;
 
-    expect(mazeRaceGame.validateAction(playerId, { type: 'jump' }, state(), context()).valid).toBe(false);
+    expect(mazeRaceGame.validateAction(playerId, { type: 'jump' }, state(), context()).valid).toBe(
+      false,
+    );
     expect(
       mazeRaceGame.validateAction(
         playerId,
@@ -167,7 +183,9 @@ describe('Maze Race 2D', () => {
         context(),
       ).valid,
     ).toBe(false);
-    expect(mazeRaceGame.validateAction(playerId, { type: 'move' }, state(), context()).valid).toBe(false);
+    expect(mazeRaceGame.validateAction(playerId, { type: 'move' }, state(), context()).valid).toBe(
+      false,
+    );
     expect(
       mazeRaceGame.validateAction(
         'ghost-player',
@@ -179,8 +197,12 @@ describe('Maze Race 2D', () => {
 
     state().phase = 'finished';
     expect(
-      mazeRaceGame.validateAction(playerId, { type: 'move', payload: { direction: 'up' } }, state(), context())
-        .valid,
+      mazeRaceGame.validateAction(
+        playerId,
+        { type: 'move', payload: { direction: 'up' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
     state().phase = 'playing';
   });
@@ -191,8 +213,12 @@ describe('Maze Race 2D', () => {
     const runner = state().runners[playerId]!;
     runner.finished = true;
     expect(
-      mazeRaceGame.validateAction(playerId, { type: 'move', payload: { direction: 'up' } }, state(), context())
-        .valid,
+      mazeRaceGame.validateAction(
+        playerId,
+        { type: 'move', payload: { direction: 'up' } },
+        state(),
+        context(),
+      ).valid,
     ).toBe(false);
   });
 
@@ -204,11 +230,13 @@ describe('Maze Race 2D', () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const [first, second] = players.map((player) => player.id);
 
-    // Teleport both runners next to the goal and walk them in.
+    // Complete the required checkpoint route, then walk both runners into the goal.
     const firstRunner = state().runners[first]!;
+    firstRunner.checkpointIndex = state().checkpoints.length;
     firstRunner.x = state().goal.x - 1;
     firstRunner.y = state().goal.y;
     const secondRunner = state().runners[second]!;
+    secondRunner.checkpointIndex = state().checkpoints.length;
     secondRunner.x = state().goal.x;
     secondRunner.y = state().goal.y - 1;
 
@@ -244,9 +272,13 @@ describe('Maze Race 2D', () => {
     const [first, second] = players.map((player) => player.id);
 
     const firstRunner = state().runners[first]!;
+    firstRunner.checkpointIndex = state().checkpoints.length;
     firstRunner.x = state().goal.x - 1;
     firstRunner.y = state().goal.y;
-    platform.gameManager.handleAction(room, first, { type: 'move', payload: { direction: 'right' } });
+    platform.gameManager.handleAction(room, first, {
+      type: 'move',
+      payload: { direction: 'right' },
+    });
     expect(firstRunner.finished).toBe(true);
 
     state().phase = 'finished';
@@ -370,5 +402,73 @@ describe('Maze Race 2D', () => {
     mazeRaceGame.playerLeft(other, state(), context(), 'leave');
     expect(state().phase).toBe('finished');
     expect(state().finishReason).toBe('completed');
+  });
+
+  it('builds deterministic floor checkpoints and hazards', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const starts = Object.values(state().runners).map((runner) => ({
+      x: runner.startX,
+      y: runner.startY,
+    }));
+    const a = buildCourseFeatures(
+      state().cols,
+      state().rows,
+      state().walls,
+      state().goal,
+      starts,
+      createMazeRandom(91),
+    );
+    const b = buildCourseFeatures(
+      state().cols,
+      state().rows,
+      state().walls,
+      state().goal,
+      starts,
+      createMazeRandom(91),
+    );
+    expect(a).toEqual(b);
+    expect(a.checkpoints).toHaveLength(2);
+    expect(a.hazards.length).toBeGreaterThan(0);
+    for (const cell of [...a.checkpoints, ...a.hazards])
+      expect(state().walls[cell.y * state().cols + cell.x]).toBe(false);
+  });
+
+  it('locks the goal until checkpoints are complete and applies each hazard once', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const id = players[0]!.id;
+    const runner = state().runners[id]!;
+    runner.x = state().goal.x - 1;
+    runner.y = state().goal.y;
+    runner.checkpointIndex = 0;
+    platform.gameManager.handleAction(room, id, {
+      type: 'move',
+      payload: { direction: 'right', sequence: 1 },
+    });
+    expect(runner.finished).toBe(false);
+    const direction = (['left', 'right', 'up', 'down'] as MazeDirection[]).find((candidate) => {
+      const delta = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[candidate]!;
+      const x = runner.x + delta[0]!;
+      const y = runner.y + delta[1]!;
+      return (
+        x >= 0 &&
+        y >= 0 &&
+        x < state().cols &&
+        y < state().rows &&
+        !state().walls[y * state().cols + x]
+      );
+    })!;
+    const delta = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[direction]!;
+    state().hazards = [{ x: runner.x + delta[0]!, y: runner.y + delta[1]!, penaltyMs: 1500 }];
+    platform.gameManager.handleAction(room, id, {
+      type: 'move',
+      payload: { direction, sequence: 2 },
+    });
+    expect(runner.penaltyMs).toBe(1500);
+    expect(
+      platform.gameManager.handleAction(room, id, {
+        type: 'move',
+        payload: { direction, sequence: 2 },
+      }).accepted,
+    ).toBe(false);
   });
 });

@@ -52,7 +52,8 @@ export async function runMigrations(): Promise<MigrationResult> {
 
   const client = new pg.Client({
     connectionString: env.SUPABASE_DB_URL,
-    ssl: { rejectUnauthorized: false },
+    // Never disable certificate verification for production database traffic.
+    ssl: { rejectUnauthorized: true },
     connectionTimeoutMillis: 15_000,
   });
 

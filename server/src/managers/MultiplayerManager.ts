@@ -39,12 +39,17 @@ export class MultiplayerManager {
 
     const result = this.platform.gameManager.handleAction(room, playerId, action);
 
-    this.platform.socketManager?.emitToRoom(room.id, 'game:player-action', {
-      roomId: room.id,
-      playerId,
-      action,
-      accepted: result.accepted,
-    });
+    if (result.accepted) {
+      // Broadcast only non-sensitive action metadata. The canonical per-viewer
+      // state carries the gameplay result; raw choices, guesses and coordinates
+      // can contain hidden information and needlessly inflate every action.
+      this.platform.socketManager?.emitToRoom(room.id, 'game:player-action', {
+        roomId: room.id,
+        playerId,
+        action: { type: action.type },
+        accepted: true,
+      });
+    }
 
     if (!result.accepted) {
       this.platform.socketManager?.emitToPlayer(room, playerId, 'game:error', {

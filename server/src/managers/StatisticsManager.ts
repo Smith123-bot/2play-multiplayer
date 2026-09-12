@@ -1,4 +1,10 @@
-import type { GameHistoryEntry, GamePopularity, GameResult, GameStatistics, PlayerSummary } from '@2play/shared';
+import type {
+  GameHistoryEntry,
+  GamePopularity,
+  GameResult,
+  GameStatistics,
+  PlayerSummary,
+} from '@2play/shared';
 import type { Platform } from '../core/Platform';
 import type { GameRepositoryStats } from './types';
 import type { Room } from '../rooms/Room';
@@ -29,11 +35,18 @@ export class StatisticsManager {
    * layer on top of the existing per-user persistence rather than a new
    * database table. It never blocks or replaces `recordMatch`.
    */
-  private readonly globalPlayCounts = new Map<string, { count: number; players: Set<string>; lastPlayedAt: number }>();
+  private readonly globalPlayCounts = new Map<
+    string,
+    { count: number; players: Set<string>; lastPlayedAt: number }
+  >();
 
   constructor(private readonly platform: Platform) {
     this.platform.eventBus.on('game:finished', ({ room, result }) => {
-      this.recordGlobalPopularity(room.gameId, room.humanPlayers.map((player) => player.id), result.finishedAt);
+      this.recordGlobalPopularity(
+        room.gameId,
+        room.humanPlayers.map((player) => player.id),
+        result.finishedAt,
+      );
 
       // Fire-and-forget: persistence must never block or break gameplay.
       void this.recordMatch(room, result).catch((error: unknown) => {
@@ -46,7 +59,11 @@ export class StatisticsManager {
   }
 
   private recordGlobalPopularity(gameId: string, playerIds: string[], finishedAt: number): void {
-    const entry = this.globalPlayCounts.get(gameId) ?? { count: 0, players: new Set<string>(), lastPlayedAt: 0 };
+    const entry = this.globalPlayCounts.get(gameId) ?? {
+      count: 0,
+      players: new Set<string>(),
+      lastPlayedAt: 0,
+    };
     entry.count += 1;
     for (const playerId of playerIds) entry.players.add(playerId);
     entry.lastPlayedAt = Math.max(entry.lastPlayedAt, finishedAt);
@@ -76,46 +93,48 @@ export class StatisticsManager {
       Math.round((result.finishedAt - (room.gameStartedAt ?? result.finishedAt)) / 1000),
     );
 
-    for (const player of room.humanPlayers) {
-      if (!player.userId) continue;
-      const ranking = result.rankings.find((entry) => entry.playerId === player.id);
-      const outcome: 'win' | 'loss' | 'draw' = result.isDraw
-        ? 'draw'
-        : result.winners.includes(player.id)
-          ? 'win'
-          : 'loss';
-      const score = ranking?.score ?? player.score;
+    await Promise.all(
+      room.humanPlayers.map(async (player) => {
+        if (!player.userId) return;
+        const ranking = result.rankings.find((entry) => entry.playerId === player.id);
+        const outcome: 'win' | 'loss' | 'draw' = result.isDraw
+          ? 'draw'
+          : result.winners.includes(player.id)
+            ? 'win'
+            : 'loss';
+        const score = ranking?.score ?? player.score;
 
-      try {
-        await this.platform.database.recordMatch({
-          userId: player.userId,
-          gameId: room.gameId,
-          result: outcome,
-          score,
-          history: {
+        try {
+          await this.platform.database.recordMatch({
             userId: player.userId,
             gameId: room.gameId,
-            roomId: room.id,
-            players,
-            winnerId: result.winners[0] ?? null,
             result: outcome,
             score,
-            durationSeconds,
-          },
-        });
-        this.logger.debug('match recorded', {
-          userId: player.userId,
-          gameId: room.gameId,
-          outcome,
-          score,
-        });
-      } catch (error) {
-        this.logger.error('recordMatch failed', {
-          userId: player.userId,
-          message: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
+            history: {
+              userId: player.userId,
+              gameId: room.gameId,
+              roomId: room.id,
+              players,
+              winnerId: result.winners[0] ?? null,
+              result: outcome,
+              score,
+              durationSeconds,
+            },
+          });
+          this.logger.debug('match recorded', {
+            userId: player.userId,
+            gameId: room.gameId,
+            outcome,
+            score,
+          });
+        } catch (error) {
+          this.logger.error('recordMatch failed', {
+            userId: player.userId,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }),
+    );
 
     // A database outage must never take the platform down.
     void this.platform.database.ensureHealthy();
@@ -146,8 +165,11 @@ export class StatisticsManager {
     }));
   }
 
-  async getSummary(userId: string): Promise<StatisticsSummary> {
-    const stats = await this.getStatistics(userId);
+  async getSummary(
+    userId: string,
+    existingStatistics?: GameStatistics[],
+  ): Promise<StatisticsSummary> {
+    const stats = existingStatistics ?? (await this.getStatistics(userId));
     const totals = stats.reduce(
       (acc, entry) => ({
         totalPlayed: acc.totalPlayed + entry.totalPlayed,

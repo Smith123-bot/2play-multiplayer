@@ -49,7 +49,11 @@ export class ReconnectionManager {
     // Let the game decide how to continue (skip turns, ignore, etc.).
     this.platform.gameManager.playerLeft(room, player.id, 'disconnect');
 
-    this.platform.eventBus.emit('player:disconnected', { room, player, reconnectDeadline: deadline });
+    this.platform.eventBus.emit('player:disconnected', {
+      room,
+      player,
+      reconnectDeadline: deadline,
+    });
     this.platform.socketManager?.emitToRoom(room.id, 'player:disconnected', {
       roomId: room.id,
       playerId: player.id,
@@ -88,6 +92,9 @@ export class ReconnectionManager {
       // Same socket asking twice: idempotent success.
       return { room, player, restored: false };
     }
+    if (player.isConnected) {
+      throw AppError.unauthorized('This seat is already connected.');
+    }
 
     const deadline = player.reconnectDeadline;
     if (deadline !== null && Date.now() > deadline) {
@@ -106,8 +113,6 @@ export class ReconnectionManager {
       playerId: player.id,
       nickname: player.nickname,
     });
-    this.platform.socketManager?.broadcastRoomState(room);
-
     this.logger.info('player reconnected', { roomId: room.id, playerId: player.id });
     return { room, player, restored: true };
   }

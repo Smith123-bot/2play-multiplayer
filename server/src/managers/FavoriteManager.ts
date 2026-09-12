@@ -22,10 +22,10 @@ export class FavoriteManager {
   async add(userId: string, gameId: string): Promise<FavoriteGame> {
     this.assertGame(gameId);
     await this.platform.database.addFavorite(userId, gameId);
-    const favorites = await this.platform.database.getFavorites(userId);
-    const entry = favorites.find((favorite) => favorite.gameId === gameId);
     this.logger.debug('favorite added', { userId, gameId });
-    return { gameId, createdAt: entry?.createdAt ?? new Date().toISOString() };
+    // The write is idempotent; avoid a second full-list query merely to echo
+    // the server timestamp. Subsequent list reads return the persisted value.
+    return { gameId, createdAt: new Date().toISOString() };
   }
 
   async remove(userId: string, gameId: string): Promise<void> {

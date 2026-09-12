@@ -40,9 +40,10 @@ const list = safeHandler<RoomListPayload, RoomListResultPayload>(async function 
 ) {
   const input = parseOrThrow(roomListSchema, payload ?? {}, 'room list payload');
   requireSession(this);
+  // Private/Quick Play rooms are never enumerable. Possession of a room code
+  // permits a join attempt; it does not grant directory access.
   const rooms = this.platform.roomManager.listRooms({
     ...(input.gameId ? { gameId: input.gameId } : {}),
-    includePrivate: input.includePrivate ?? false,
   });
   return { rooms };
 });
@@ -80,7 +81,10 @@ const create = safeHandler<CreateRoomPayload, RoomCreatedPayload>(async function
   this.platform.socketManager?.broadcastRoomState(room, true);
 
   return {
-    room: room.toState(session.playerId, this.platform.gameManager.getPublicState(room, session.playerId)),
+    room: room.toState(
+      session.playerId,
+      this.platform.gameManager.getPublicState(room, session.playerId),
+    ),
     playerId: session.playerId,
   };
 });
@@ -122,7 +126,10 @@ const quickPlay = safeHandler<QuickPlayPayload, RoomCreatedPayload>(async functi
   this.platform.socketManager?.broadcastRoomState(room, true);
 
   return {
-    room: room.toState(session.playerId, this.platform.gameManager.getPublicState(room, session.playerId)),
+    room: room.toState(
+      session.playerId,
+      this.platform.gameManager.getPublicState(room, session.playerId),
+    ),
     playerId: session.playerId,
   };
 });

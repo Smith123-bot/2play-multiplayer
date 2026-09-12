@@ -29,13 +29,20 @@ export interface DatabaseLike extends DatabaseRepository {
  * Nothing above this layer knows which implementation is active, and a
  * mid-session database outage swaps implementations instead of failing.
  */
-class Database implements DatabaseLike {
+export class Database implements DatabaseLike {
   private repository: DatabaseRepository;
   private readonly logger = createLogger('Database');
   private initialised = false;
+  private healthCache: {
+    expiresAt: number;
+    value: { ok: boolean; mode: string; detail?: string };
+  } | null = null;
+  private healthInFlight: Promise<{ ok: boolean; mode: string; detail?: string }> | null = null;
+  private static readonly HEALTH_CACHE_MS = 5_000;
 
-  constructor() {
-    this.repository = hasSupabaseConfig() ? new SupabaseRepository() : new MemoryRepository();
+  constructor(repository?: DatabaseRepository) {
+    this.repository =
+      repository ?? (hasSupabaseConfig() ? new SupabaseRepository() : new MemoryRepository());
   }
 
   get mode(): DatabaseMode {
@@ -50,17 +57,30 @@ class Database implements DatabaseLike {
   }
 
   async healthStatus(): Promise<{ ok: boolean; mode: string; detail?: string }> {
-    const health = await this.repository.health();
-    return {
-      ok: health.ok,
-      mode: this.repository.mode,
-      ...(health.detail ? { detail: health.detail } : {}),
-    };
+    const now = Date.now();
+    if (this.healthCache && this.healthCache.expiresAt > now) return this.healthCache.value;
+    if (this.healthInFlight) return this.healthInFlight;
+
+    this.healthInFlight = (async () => {
+      const health = await this.repository.health();
+      const value = {
+        ok: health.ok,
+        mode: this.repository.mode,
+        ...(health.detail ? { detail: health.detail } : {}),
+      };
+      this.healthCache = { expiresAt: Date.now() + Database.HEALTH_CACHE_MS, value };
+      return value;
+    })();
+    try {
+      return await this.healthInFlight;
+    } finally {
+      this.healthInFlight = null;
+    }
   }
 
   async ensureHealthy(): Promise<void> {
     if (this.repository.mode !== 'supabase') return;
-    const health = await this.repository.health();
+    const health = await this.healthStatus();
     if (!health.ok) {
       this.logger.warn('Supabase unhealthy — switching to in-memory repository.', {
         detail: health.detail,
@@ -68,6 +88,7 @@ class Database implements DatabaseLike {
       const fallback = new MemoryRepository();
       await fallback.init();
       this.repository = fallback;
+      this.healthCache = null;
     }
   }
 
@@ -141,6 +162,8 @@ class Database implements DatabaseLike {
 
   async close(): Promise<void> {
     await this.repository.close();
+    this.healthCache = null;
+    this.healthInFlight = null;
     this.initialised = false;
   }
 }

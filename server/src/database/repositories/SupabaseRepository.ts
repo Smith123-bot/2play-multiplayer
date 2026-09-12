@@ -3,12 +3,7 @@ import type { GameStatistics, PlayerSummary } from '@2play/shared';
 import { HISTORY_MAX_ITEMS } from '@2play/shared';
 import { env } from '../../config/env';
 import { createLogger } from '../../utils/logger';
-import type {
-  DatabaseRepository,
-  HistoryRecord,
-  NewHistoryRecord,
-  UserRecord,
-} from './types';
+import type { DatabaseRepository, HistoryRecord, NewHistoryRecord, UserRecord } from './types';
 
 interface UserRow {
   id: string;
@@ -64,7 +59,7 @@ export class SupabaseRepository implements DatabaseRepository {
 
   constructor() {
     const url = env.SUPABASE_URL;
-    const key = env.SUPABASE_SERVICE_ROLE_KEY ?? env.SUPABASE_ANON_KEY;
+    const key = env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) {
       this.logger.warn('Supabase credentials missing — repository will not initialise.');
       return;
@@ -244,26 +239,17 @@ export class SupabaseRepository implements DatabaseRepository {
   }): Promise<void> {
     if (!this.client) return;
     try {
-      const { error: rpcError } = await this.client.rpc('record_match_result', {
+      const { error } = await this.client.rpc('record_match_with_history', {
         p_user_id: input.userId,
         p_game_id: input.gameId,
         p_result: input.result,
         p_score: input.score,
+        p_room_id: input.history.roomId,
+        p_players: input.history.players,
+        p_winner_id: input.history.winnerId,
+        p_duration_seconds: input.history.durationSeconds,
       });
-      if (rpcError) throw rpcError;
-
-      const { error: historyError } = await this.client.from('game_history').insert({
-        user_id: input.userId,
-        game_id: input.history.gameId,
-        room_id: input.history.roomId,
-        players_json: input.history.players,
-        winner_id: input.history.winnerId,
-        result: input.history.result,
-        score: input.history.score,
-        duration_seconds: input.history.durationSeconds,
-        played_at: new Date().toISOString(),
-      });
-      if (historyError) throw historyError;
+      if (error) throw error;
     } catch (error) {
       this.logger.error('recordMatch failed', {
         message: (error as Error).message,

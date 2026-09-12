@@ -36,7 +36,9 @@ const envSchema = z.object({
   HOST: z.string().default('0.0.0.0'),
   CLIENT_URL: z.string().default('http://localhost:5173'),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
-  TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(1),
+  // Fail closed when deployed directly. Reverse-proxy deployments must opt in
+  // with the exact trusted hop count so X-Forwarded-For cannot bypass limits.
+  TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(0),
 
   SUPABASE_URL: optionalUrl,
   SUPABASE_ANON_KEY: optionalString,
@@ -70,7 +72,7 @@ function parseEnv(): Env {
       .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
       .join('\n');
     // Logging to stderr directly: the logger itself depends on env.
-     
+
     console.error(`[2PLAY] Invalid environment configuration:\n${issues}`);
     throw new Error('Invalid environment configuration.');
   }
@@ -113,5 +115,8 @@ export function parseCorsOrigins(): string[] | '*' {
 
 /** True when Supabase credentials are (at least partially) configured. */
 export function hasSupabaseConfig(): boolean {
-  return Boolean(env.SUPABASE_URL && (env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY));
+  // Server-side persistence depends on service-role-only RPCs. An anon key is
+  // intentionally insufficient and must never be promoted to a write-capable
+  // backend credential.
+  return Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
 }

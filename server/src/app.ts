@@ -21,6 +21,7 @@ export function createApp(platform: Platform): Express {
   const origins = parseCorsOrigins();
 
   app.set('trust proxy', env.TRUST_PROXY);
+  app.set('query parser', 'simple');
   app.disable('x-powered-by');
 
   app.use(
@@ -30,7 +31,7 @@ export function createApp(platform: Platform): Express {
         directives: {
           defaultSrc: ["'self'"],
           baseUri: ["'self'"],
-          frameAncestors: ["'self'", 'https://*.e2b.app'],
+          frameAncestors: isProduction ? ["'self'"] : ["'self'", 'https://*.e2b.app'],
           imgSrc: ["'self'", 'data:', 'blob:'],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
@@ -63,7 +64,7 @@ export function createApp(platform: Platform): Express {
 
   // Reject unknown API routes with JSON instead of HTML.
   app.use('/api', (req: Request, res: Response) => {
-    res.status(404).json(makeErrorPayload('E001', `Route ${req.method} ${req.path} not found.`));
+    res.status(404).json(makeErrorPayload('E001', 'API route not found.'));
   });
 
   // Production: serve the built SPA (same origin => relative API/socket URLs).

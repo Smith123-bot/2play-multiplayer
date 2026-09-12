@@ -76,10 +76,8 @@ export function createPersistenceRouter(platform: Platform): Router {
     '/statistics/:userId',
     asyncRoute(async (req: Request, res: Response) => {
       const userId = resolveUserId(platform, req, req.params.userId);
-      const [statistics, summary] = await Promise.all([
-        platform.statisticsManager.getStatistics(userId),
-        platform.statisticsManager.getSummary(userId),
-      ]);
+      const statistics = await platform.statisticsManager.getStatistics(userId);
+      const summary = await platform.statisticsManager.getSummary(userId, statistics);
       res.json({ userId, statistics, summary });
     }),
   );

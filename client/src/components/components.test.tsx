@@ -53,6 +53,20 @@ describe('UI components', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Too short');
   });
 
+  it('Input shows a clear button only while it has a value', async () => {
+    const onClear = vi.fn();
+    const { rerender } = render(
+      <Input label="Search" type="search" value="" onClear={onClear} clearLabel="Clear search" />,
+    );
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+
+    rerender(
+      <Input label="Search" type="search" value="chess" onClear={onClear} clearLabel="Clear search" />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
+
   it('Card header renders title, subtitle and action', () => {
     render(
       <Card>

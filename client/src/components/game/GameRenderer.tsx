@@ -1,6 +1,16 @@
-import { Component, useCallback, type ComponentType, type ErrorInfo, type ReactNode } from 'react';
+import {
+  Component,
+  useCallback,
+  useEffect,
+  useState,
+  type ComponentType,
+  type ErrorInfo,
+  type ReactNode,
+} from 'react';
 import type { GameAction, Player, RoomState } from '@2play/shared';
-import { getGameComponent } from '../../games/registry';
+import { hasClientGame, loadGameModule } from '../../games/registry';
+import type { ClientGameModule } from '../../games/registry/types';
+import { LoadingBlock } from '../ui/Spinner';
 import { useGameActions } from '../../hooks/useGameActions';
 import { audioManager } from '../../audio/AudioManager';
 import { hapticsManager } from '../../haptics/HapticsManager';
@@ -58,7 +68,36 @@ export function GameRenderer({
   myPlayerId: string | null;
 }) {
   const { sendAction } = useGameActions();
-  const entry = getGameComponent(room.gameId);
+
+  /**
+   * Each game ships as its own lazily imported chunk, so the module is resolved
+   * asynchronously when the room first needs it. Three states matter and must
+   * not be confused: the chunk is still in flight, this client genuinely does
+   * not know the game, or the download failed (offline / bad deploy) — the last
+   * one is retryable, the second is not.
+   */
+  const gameId = room.gameId;
+  const known = hasClientGame(gameId);
+  const [entry, setEntry] = useState<ClientGameModule | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!known) return;
+    let active = true;
+    setLoadFailed(false);
+    void loadGameModule(gameId)
+      .then((loaded) => {
+        if (active) setEntry(loaded ?? null);
+      })
+      .catch((error) => {
+        console.error('[2PLAY] could not load game chunk', gameId, error);
+        if (active) setLoadFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [gameId, known, attempt]);
 
   const handleAction = useCallback(
     (action: GameAction) => {
@@ -67,7 +106,7 @@ export function GameRenderer({
     [sendAction],
   );
 
-  if (!entry) {
+  if (!known) {
     return (
       <EmptyState
         icon="🎮"
@@ -75,6 +114,21 @@ export function GameRenderer({
         description={`This client does not know how to render "${room.gameId}".`}
       />
     );
+  }
+
+  if (loadFailed) {
+    return (
+      <EmptyState
+        icon="📡"
+        title="Could not load this game"
+        description="The game module did not download. The room is still alive — try again."
+        action={<Button onClick={() => setAttempt((value) => value + 1)}>Try again</Button>}
+      />
+    );
+  }
+
+  if (!entry) {
+    return <LoadingBlock message="Loading game…" />;
   }
 
   const GameComponent = entry.Component as ComponentType<

@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
+import { GamesLoadError } from '../components/game/GamesLoadError';
 import { useGameStore } from '../stores/gameStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useStatisticsStore } from '../stores/statisticsStore';
@@ -18,11 +19,14 @@ import { useIdentityGate } from '../hooks/useIdentityGate';
 import type { RoomSummary } from '@2play/shared';
 import { APP_CONFIG } from '../core/config';
 import { useConnectionStore } from '../stores/connectionStore';
+import { formatCategory } from '../utils/format';
 
 export function HomeScreen() {
   const navigate = useNavigate();
   const gate = useIdentityGate();
   const games = useGameStore((store) => store.games);
+  const gamesLoading = useGameStore((store) => store.loading);
+  const gamesError = useGameStore((store) => store.error);
   const loadGames = useGameStore((store) => store.load);
   const favorites = useFavoritesStore((store) => store.favorites);
   const loadFavorites = useFavoritesStore((store) => store.load);
@@ -149,6 +153,16 @@ export function HomeScreen() {
         </section>
       ) : null}
 
+      {gamesError && games.length === 0 ? (
+        // Without the catalogue every game rail below would silently vanish,
+        // so say what happened and offer a retry instead.
+        <GamesLoadError
+          message={gamesError}
+          busy={gamesLoading}
+          onRetry={() => void loadGames(true)}
+        />
+      ) : null}
+
       {featured.length > 0 ? (
         <section>
           <div className="mb-4 flex items-center justify-between">
@@ -264,7 +278,7 @@ export function HomeScreen() {
                     {popular.counts.get(game.id)?.playCount ?? 0} played
                   </Badge>
                 ) : (
-                  <Badge>{game.category}</Badge>
+                  <Badge>{formatCategory(game.category)}</Badge>
                 )}
               </li>
             ))}

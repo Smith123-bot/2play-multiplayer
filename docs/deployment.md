@@ -59,6 +59,23 @@ location / {
 }
 ```
 
+* **Enable gzip/brotli at the proxy.** The Node server deliberately does not
+  compress responses, and the client entry chunk is ~480 KB uncompressed
+  (~150 KB gzipped). Without proxy compression every visitor downloads the full
+  480 KB:
+
+  ```nginx
+  gzip on;
+  gzip_comp_level 6;
+  gzip_types text/css application/javascript application/json image/svg+xml;
+  gzip_vary on;
+  ```
+
+* Hashed build assets are served by the API with
+  `Cache-Control: public, max-age=31536000, immutable` (a new build always means
+  a new filename), while `index.html` is served with `max-age=0` so it
+  revalidates. Keep that split if you serve the SPA from a CDN — caching
+  `index.html` would pin users to a stale bundle.
 * Set `TRUST_PROXY` so the HTTP rate limiter sees the real client IP.
 * Keep `pingInterval` (10 s) and `pingTimeout` (20 s) below any proxy idle timeout
   (60 s+ recommended), otherwise mobile clients will be dropped.

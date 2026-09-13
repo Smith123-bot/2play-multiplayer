@@ -3,6 +3,19 @@ import { formatDuration as sharedFormatDuration } from '@2play/shared';
 
 export { sharedFormatDuration as formatDuration };
 
+/**
+ * Category ids are lowercase machine values ('reflex', 'coop'); the UI shows
+ * them as words. Kept in one place so a card, the details page and the filter
+ * dropdown can never disagree about capitalisation.
+ */
+export function formatCategory(category: string): string {
+  return category
+    .split(/[-\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 export function formatScore(score: number): string {
   return Number.isInteger(score) ? String(score) : score.toFixed(1);
 }

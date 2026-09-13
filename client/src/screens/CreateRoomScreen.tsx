@@ -8,10 +8,12 @@ import { Select } from '../components/ui/Select';
 import { Toggle } from '../components/ui/Toggle';
 import { Badge } from '../components/ui/Badge';
 import { LoadingBlock } from '../components/ui/Spinner';
+import { GamesLoadError } from '../components/game/GamesLoadError';
 import { useGameStore } from '../stores/gameStore';
 import { useRoomActions } from '../hooks/useRoomActions';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import { cn } from '../utils/cn';
+import { formatCategory } from '../utils/format';
 
 /**
  * Create Room — human multiplayer ONLY (spec: "2PLAY — UX + ROOM LIFECYCLE
@@ -25,6 +27,8 @@ export function CreateRoomScreen() {
   const navigate = useNavigate();
   const gate = useIdentityGate();
   const games = useGameStore((store) => store.games);
+  const gamesLoading = useGameStore((store) => store.loading);
+  const gamesError = useGameStore((store) => store.error);
   const loadGames = useGameStore((store) => store.load);
   const { createRoom } = useRoomActions();
 
@@ -82,6 +86,18 @@ export function CreateRoomScreen() {
     });
   };
 
+  // A failed catalogue request must not masquerade as "still loading" — this
+  // screen used to spin forever when /api/games errored.
+  if (gamesError && games.length === 0) {
+    return (
+      <GamesLoadError
+        message={gamesError}
+        busy={gamesLoading}
+        onRetry={() => void loadGames(true)}
+      />
+    );
+  }
+
   if (games.length === 0) return <LoadingBlock message="Loading games…" />;
 
   return (
@@ -115,7 +131,7 @@ export function CreateRoomScreen() {
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold text-white">{entry.name}</span>
-                  <span className="block truncate text-xs text-slate-400">{entry.category}</span>
+                  <span className="block truncate text-xs text-slate-400">{formatCategory(entry.category)}</span>
                 </span>
               </button>
             ))}

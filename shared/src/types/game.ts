@@ -13,6 +13,12 @@ export interface HowToPlay {
   timeLimit: string;
   specialRules: string[];
   playerCount: string;
+  /**
+   * How play is sequenced: whose turn it is, how long a turn lasts and what
+   * the server does when a turn times out. Omitted for games where the concept
+   * genuinely does not apply.
+   */
+  turnSystem?: string;
 }
 
 export interface GameMetadata {

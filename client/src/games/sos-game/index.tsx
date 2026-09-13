@@ -43,7 +43,7 @@ function SosGameComponent({
   vibrate,
 }: GameComponentProps<SosPublicState>) {
   const previousEvent = useRef<string | null>(null);
-  const rules = useHowToPlay(SOS_GAME_METADATA.id);
+  const rules = useHowToPlay(SOS_GAME_METADATA.id, false);
   const [letter, setLetter] = useState<SosLetter>('S');
 
   const phase = state?.phase ?? 'idle';

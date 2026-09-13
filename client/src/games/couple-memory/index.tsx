@@ -60,7 +60,7 @@ function CoupleMemoryGame({
 }: GameComponentProps<MemoryPublicState>) {
   const previousEvent = useRef<string | null>(null);
   const hintRef = useRef<string | null>(null);
-  const rules = useHowToPlay(COUPLE_MEMORY_METADATA.id);
+  const rules = useHowToPlay(COUPLE_MEMORY_METADATA.id, false);
 
   const phase = state?.phase ?? 'idle';
   // Co-op rule: you cannot flip the second card of your own pair.

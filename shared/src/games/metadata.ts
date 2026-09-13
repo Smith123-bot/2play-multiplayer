@@ -39,6 +39,14 @@ export const REACTION_RACE_METADATA = {
   defaultRounds: 5,
   howToPlay: {
     controls: { mobile: 'Tap the big reaction pad the instant GO appears.', desktop: 'Click the pad or press Space the instant GO appears.' },
+    turnSystem: 'Simultaneous — everyone reacts to the same GO at the same instant. Nobody takes turns.',
+    timeLimit: 'No match clock. Best of 5 rounds: the server waits a random 1.5–5 s, GO stays live for 4 s, then there is a 2.2 s result pause before the next round.',
+    winCondition: 'Win the most of the five rounds. Level round wins are split by average reaction time; if those are level too, the match is a draw.',
+    specialRules: [
+      'A reaction under 150 ms is not humanly possible, so the server rejects it as a false start.',
+      'Tapping before GO appears scores nothing for that round.',
+      'The GO timestamp is owned by the server, so nobody can anticipate it from client state.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -74,6 +82,14 @@ export const MEMORY_MATCH_METADATA = {
   gridOptions: ['4x4', '6x4', '6x6'],
   howToPlay: {
     controls: { mobile: 'Tap a face-down card to flip it.', desktop: 'Click a card to flip it.' },
+    turnSystem: 'Strict turns in seat order. Collect a pair and you flip again immediately; miss and the turn passes to the next player.',
+    timeLimit: 'No turn timer and no match clock — play at your own pace. A mismatched pair stays face up for 1 s before flipping back. A stalled match is capped at 20 minutes.',
+    winCondition: 'Collect the most pairs once the board is clear. Equal pair counts are a draw.',
+    specialRules: [
+      'The full card layout never leaves the server — a client only ever receives cards that are face up.',
+      'Board size is chosen in the lobby: 4×4, 6×4 or 6×6.',
+      'The AI remembers only cards it has actually seen, so it cannot cheat.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -110,6 +126,14 @@ export const WORD_RACE_METADATA = {
   defaultRounds: 3,
   howToPlay: {
     controls: { mobile: 'Type on the on-screen keyboard, then tap Submit.', desktop: 'Type your word and press Enter.' },
+    turnSystem: 'Simultaneous — every player types against the same category and the same clock.',
+    timeLimit: '3 rounds of 60 s each, with a 3 s intro before a round and a 3 s result pause after it — about 3.5 minutes in total.',
+    winCondition: 'Score the most valid words across the three rounds. Equal totals are a draw.',
+    specialRules: [
+      'Only the server dictionary decides whether a word is valid; a client cannot invent one.',
+      'A word already used in that round scores nothing, so duplicates are wasted.',
+      'Each round has its own category.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -144,6 +168,15 @@ export const DOTS_AND_BOXES_METADATA = {
   gridOptions: ['4x4', '6x6', '8x8'],
   howToPlay: {
     controls: { mobile: 'Tap the gap between two dots to draw a line.', desktop: 'Click a gap between two dots to draw a line.' },
+    turnSystem: 'Strict turns in seat order. Completing a box scores a point and earns another turn straight away.',
+    timeLimit: 'No turn timer and no match clock — play ends when every box is claimed. A stalled match is capped at 30 minutes.',
+    winCondition: 'Own the most boxes when the grid is full. Equal box counts are a draw.',
+    specialRules: [
+      'Closing the fourth side of a box is the only way to score.',
+      'Grid size is chosen in the lobby: 4×4, 6×6 or 8×8.',
+      'Because a box earns another turn, a chain of completed boxes is claimed in a single turn.',
+      'The server tracks every line and box, so a client cannot claim one it did not draw.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -178,6 +211,15 @@ export const MATH_RUSH_METADATA = {
   featured: true,
   howToPlay: {
     controls: { mobile: 'Tap the on-screen keypad, then tap Submit.', desktop: 'Type digits, minus and Backspace; press Enter to submit.' },
+    turnSystem: 'Simultaneous — everyone is shown the same question at the same moment and races to answer it.',
+    timeLimit: '10 questions. Each one is timed by the room difficulty — 20 s on easy, 16 s on medium, 13 s on hard — followed by a 2.2 s reveal of the answer.',
+    winCondition: 'Highest total after the tenth question wins. Equal totals are a draw.',
+    specialRules: [
+      'A wrong answer locks you out of that question and scores nothing.',
+      'An unanswered question scores nothing once its timer runs out.',
+      'The speed bonus scales with how much of the question time was left, up to +10.',
+      'Questions and answers are owned by the server.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -213,6 +255,15 @@ export const BATTLE_2048_METADATA = {
   featured: false,
   howToPlay: {
     controls: { mobile: 'Swipe across the board or use the on-screen D-pad.', desktop: 'Arrow keys or WASD slide every tile.' },
+    turnSystem: 'Simultaneous — both players slide their own private board at the same time; there are no turns.',
+    timeLimit: 'One shared 3-minute clock for both boards. The match also ends early if both boards lock.',
+    winCondition: 'Finish with the higher score when the clock ends or both boards lock. Equal scores are a draw.',
+    specialRules: [
+      'Each player has a private 4×4 board, and the opponent\'s tiles are never sent to your client.',
+      'Equal neighbours merge only once per move.',
+      'Every valid move spawns a new tile on your board — a 2, occasionally a 4.',
+      'A board with no legal moves left locks; that player stays in the match and waits for the clock.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -247,7 +298,16 @@ export const MAZE_RACE_METADATA = {
   featured: false,
   gridOptions: ['11x11', '15x15', '19x19'],
   howToPlay: {
-    controls: { mobile: 'Use the on-screen D-pad to step through the maze.', desktop: 'Arrow keys or WASD to move.' },
+    controls: { mobile: 'Swipe across the maze (at least 28 px, one step per swipe) or tap the on-screen D-pad.', desktop: 'Arrow keys or WASD to move.' },
+    turnSystem: 'Simultaneous — everyone runs the same maze at the same time, one cell per move.',
+    timeLimit: 'The race clock depends on the maze size picked in the lobby: 90 s on 11×11, 120 s on 15×15, 180 s on 19×19.',
+    winCondition: 'Reach the flag first; later finishers take the next ranks. If the clock expires with nobody finished, the match is a draw.',
+    specialRules: [
+      'The maze is generated from the server seed, so it is identical for every player in the match.',
+      'Each player starts from their own start cell, the same distance from the goal.',
+      'Walls block movement and you advance one cell per input.',
+      'Players who never reach the flag rank below every finisher, closest to the goal first.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -285,6 +345,15 @@ export const WORD_SCRAMBLE_METADATA = {
   defaultRounds: 5,
   howToPlay: {
     controls: { mobile: 'Type the letters on the on-screen keyboard, then tap Submit.', desktop: 'Type your answer and press Enter.' },
+    turnSystem: 'Simultaneous — everyone unscrambles the same word against the same clock.',
+    timeLimit: 'Rounds of 20 s each — 5 by default, configurable from 1 to 15 in the lobby — with a 2.5 s reveal of the original word after every round.',
+    winCondition: 'Solve more words than your rivals across all rounds. Equal totals are a draw.',
+    specialRules: [
+      'The server picks the word and shuffles its letters; the original stays hidden until the reveal.',
+      'The first correct answer scores, and solving in the first half of the round earns a bonus point.',
+      'A wrong answer costs nothing — you can try again inside the same round.',
+      'A round ends early once every active player has solved it.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -321,6 +390,15 @@ export const SHAPE_MATCH_METADATA = {
   defaultRounds: 10,
   howToPlay: {
     controls: { mobile: 'Tap the option that matches the target shape.', desktop: 'Click the option that matches the target shape.' },
+    turnSystem: 'Simultaneous — all players see the same target shape and pick at the same time.',
+    timeLimit: 'Rounds of 10 s each — 10 by default, configurable from 3 to 15 in the lobby — plus a 2 s reveal.',
+    winCondition: 'Match more shapes than your rivals. Equal scores are a draw.',
+    specialRules: [
+      'Exactly one of the four options matches the target shape.',
+      'You get only one pick per round: a wrong option scores nothing and cannot be retried.',
+      'A correct pick in the first half of the round earns a bonus point.',
+      'A round ends early once every active player has picked.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -356,6 +434,15 @@ export const SNAKE_BATTLE_METADATA = {
   featured: false,
   howToPlay: {
     controls: { mobile: 'Swipe across the board or use the on-screen D-pad.', desktop: 'Arrow keys or WASD to steer.' },
+    turnSystem: 'Simultaneous and real-time — both snakes move on the same server step, so there are no turns.',
+    timeLimit: 'A 3-minute arena clock, with both snakes advancing one cell every 250 ms. Your own run ends the moment you crash.',
+    winCondition: 'Outlive your rival. If both snakes die on the same step the higher score takes it; if scores are level too, the match is a draw.',
+    specialRules: [
+      'The 17×17 grid is shared and the server owns both snakes and every step.',
+      'Reversing directly into your own body is rejected by the server.',
+      'Hitting a wall, any snake body or the other head kills your snake instantly.',
+      'A dead snake is out, but the survivor keeps eating until the clock ends or it crashes too.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -392,6 +479,15 @@ export const TARGET_RUSH_METADATA = {
   defaultRounds: 8,
   howToPlay: {
     controls: { mobile: 'Tap the highlighted target as fast as you can.', desktop: 'Click the highlighted target as fast as you can.' },
+    turnSystem: 'Simultaneous — both players watch the same prompt and race to tap the matching target.',
+    timeLimit: 'Rounds of 6 s each — 8 by default, configurable from 3 to 15 in the lobby — with a 1.5 s reveal. A wrong tap locks you out for 1 s.',
+    winCondition: 'Highest total after the final round wins. Finish level on points and the match is a draw with both players credited as winners — a longer streak does not break the tie.',
+    specialRules: [
+      'Exactly one of the three targets matches the prompt symbol.',
+      'Only the first correct tap scores, and the round ends there.',
+      'A wrong tap scores nothing, breaks your streak and locks you out for 1 s.',
+      'If a round times out, every streak resets.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -428,6 +524,15 @@ export const PADDLE_DUEL_METADATA = {
   defaultRounds: 7,
   howToPlay: {
     controls: { mobile: 'Drag up and down on the touch surface to slide your paddle.', desktop: 'Arrow Up / Arrow Down (or W / S) move the paddle.' },
+    turnSystem: 'Simultaneous and real-time — the server simulates both paddles and the ball on a fixed 16 ms step; there are no turns.',
+    timeLimit: 'First to 7 points wins — the limit is configurable from 3 to 15 in the lobby. A 3-minute cap ends the match and the leader takes it. The ball is served 1.2 s after each point.',
+    winCondition: 'Reach the point limit first, or lead when the 3-minute clock expires. Level scores at the clock are a draw.',
+    specialRules: [
+      'The ball is owned by the server; clients only ever send paddle intent.',
+      'Returning the ball speeds it up slightly.',
+      'Hitting with the edge of your paddle angles the ball sharply.',
+      'If the ball passes your paddle, your rival scores the point.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -462,6 +567,16 @@ export const BRICK_BREAKER_METADATA = {
   featured: false,
   howToPlay: {
     controls: { mobile: 'Drag left and right on the touch surface to slide your paddle.', desktop: 'Arrow Left / Arrow Right (or A / D) move the paddle.' },
+    turnSystem: 'Simultaneous and real-time — each player breaks their own identical wall while the server simulates both balls on a 16 ms step.',
+    timeLimit: 'A 3-minute clock, three lives and up to 3 walls. Power-ups last 10 s. Your own run ends early if you lose all three lives.',
+    winCondition: 'Most points when the clock ends. Ties break on whoever finished their wall earlier, then on lives remaining; still level, it is a draw.',
+    specialRules: [
+      'Bricks are worth more the higher they sit: 10 to 30 points.',
+      'Chaining bricks without touching your paddle multiplies them, up to ×4.',
+      'Clearing a whole wall banks a 100-point bonus.',
+      'Missing the ball costs one of your three lives.',
+      'Both walls are mirrored, so neither player can see a private layout.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -498,6 +613,14 @@ export const PATTERN_MEMORY_METADATA = {
   defaultRounds: 8,
   howToPlay: {
     controls: { mobile: 'Tap the tiles in the order they flashed.', desktop: 'Click the tiles in the order they flashed.' },
+    turnSystem: 'Simultaneous — both players memorise and replay the same server-generated sequence at the same time.',
+    timeLimit: '8 rounds by default (configurable 3–15). The pattern is shown at 620 ms per tile, accelerating to 340 ms; your replay window is 1.5 s plus 0.9 s per tile, then a 1.4 s reveal.',
+    winCondition: 'Highest total after the final round wins. Level on points, whoever completed more rounds takes it; still level, the match is a draw.',
+    specialRules: [
+      'The sequence starts at three tiles and grows by one every two rounds.',
+      'Every correct tap advances you; one wrong tap ends that attempt.',
+      'The sequence stays hidden until the reveal, so it cannot be read from client state.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -535,6 +658,16 @@ export const DRAW_GUESS_METADATA = {
   defaultRounds: 6,
   howToPlay: {
     controls: { mobile: 'Draw with your finger on the canvas; tap the guess field to answer.', desktop: 'Draw with the mouse; type a guess and press Enter.' },
+    turnSystem: 'Rotating roles — each round a different player is the drawer while everyone else guesses simultaneously.',
+    timeLimit: '6 rounds by default (configurable 2–12). Each round has a 3 s prepare phase, 45 s to draw and guess, then a 3.5 s reveal.',
+    winCondition: 'Highest score across all drawing rounds wins. Equal totals are a draw.',
+    specialRules: [
+      'The drawer receives a secret word nobody else can see.',
+      'Strokes are sent as points on a shared 2D canvas, never a screenshot.',
+      'The first correct guess scores the most; later solvers score progressively less.',
+      'The drawer earns a bonus for every unique solver.',
+      'A round ends early once every guesser has solved it.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -572,6 +705,17 @@ export const SECRET_ROLE_METADATA = {
   defaultRounds: 4,
   howToPlay: {
     controls: { mobile: 'Tap the clue field to submit a clue and tap a player to vote.', desktop: 'Click the clue field to submit a clue and click a player to vote.' },
+    turnSystem: 'Phased rounds — clues are given in turn order, then everyone votes simultaneously inside the vote window.',
+    timeLimit: '4 rounds by default (configurable 2–8). Each round runs a 4 s role intro, 20 s of clues, 18 s to vote, 12 s for the agent\'s location guess and a 4 s reveal.',
+    winCondition: 'Highest cumulative score after all rounds wins. Equal totals are a draw.',
+    specialRules: [
+      'Roles are private: you only ever see your own role, plus the location if you are a Citizen.',
+      'Exactly one Secret Agent per round; every other player is a Citizen who knows the location.',
+      'A clue must describe the location without naming it.',
+      'A majority vote on the agent wins the round for the Citizens.',
+      'The agent may instead guess the location — a correct guess wins the round for the agent.',
+      'If the agent is neither voted out nor guessing correctly, the agent wins the round.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -608,6 +752,15 @@ export const COLOR_CLASH_METADATA = {
   defaultRounds: 12,
   howToPlay: {
     controls: { mobile: 'Tap the labelled colour button that matches the prompt.', desktop: 'Click the labelled colour button that matches the prompt.' },
+    turnSystem: 'Simultaneous — every player answers the same prompt inside the same window.',
+    timeLimit: '12 rounds by default (configurable 4–16): a 0.9 s preview, 5 s to answer, then a 1.4 s reveal — about 1.5 minutes in total.',
+    winCondition: 'Highest score after the final round wins. Equal scores are a draw.',
+    specialRules: [
+      'The server picks both the challenge type and the correct colour; clients never decide.',
+      'Name: tap the colour that is named. Stroop: tap the ink colour, not the written word.',
+      'Memory: a colour flashes, then you pick it from the options. Race: one tile is the target.',
+      'One pick per round — the fastest correct tap scores the most, later correct taps score less, a wrong tap scores 0.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -642,6 +795,15 @@ export const TERRITORY_RUSH_METADATA = {
   featured: true,
   howToPlay: {
     controls: { mobile: 'Swipe anywhere on the grid to change direction.', desktop: 'Arrow keys or WASD to steer.' },
+    turnSystem: 'Simultaneous and real-time — everyone expands territory on the same server step; there are no turns.',
+    timeLimit: 'A 3-minute clock; you move one cell every 250 ms. Being sent home freezes you for 0.9 s.',
+    winCondition: 'Largest territory when the clock ends. Ties break on successful captures, then on fewer deaths; still level, it is a draw.',
+    specialRules: [
+      'You start with a small home territory and are safe on your own colour; homes can never be stolen.',
+      'Leaving home lays a trail — close a loop back to your own land to capture the enclosed cells.',
+      'A rival stepping on your trail sends you home, and so does hitting your own trail.',
+      'You cannot leave the map, and you cannot reverse direction instantly.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -676,6 +838,16 @@ export const COIN_HUNTERS_METADATA = {
   featured: true,
   howToPlay: {
     controls: { mobile: 'Swipe anywhere on the arena to change direction.', desktop: 'Arrow keys or WASD to move.' },
+    turnSystem: 'Simultaneous and real-time — everyone collects in the same arena on the same server step.',
+    timeLimit: 'A 2.5-minute arena clock, moving one cell every 250 ms. Coins live for 8 s, a 2× multiplier lasts 4 s and a streak window is 3.5 s.',
+    winCondition: 'Highest score when the 2.5-minute arena clock ends. A level total is a draw — how many coins you collected or how often you doubled them is not a tie-break.',
+    specialRules: [
+      'The server spawns coins: normal +10, gold +25, rare +50, plus a 2× multiplier pickup.',
+      'Distance and identity are checked server-side, so you cannot collect a coin you are not standing on.',
+      'Standing in a bonus zone doubles collections; slow tiles double your step time.',
+      'A moving blocker occupies a cell — walking into it bounces you back.',
+      'Duplicate collects award nothing.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -698,7 +870,7 @@ export const SHOP_RUSH_METADATA = {
   difficulty: 'easy' as const,
   controls: 'Move with WASD / arrows / swipe / D-pad. Pick up on a shelf, check out on the till.',
   rules: [
-    'Each shopper gets a private 3-item list. Inventory holds at most 3 items.',
+    'Each shopper gets a private 3-item list. The basket holds at most 4 items.',
     'Stand on a shelf and pick to collect. Only the server grants the item.',
     'Bonus candy is never on the list but pays extra at checkout.',
     'Checkout scores matching list items and candy, then deals a fresh list. Wrong items stay in the basket.',
@@ -710,6 +882,16 @@ export const SHOP_RUSH_METADATA = {
   featured: true,
   howToPlay: {
     controls: { mobile: 'Swipe to move, then tap Grab and Check out on the action buttons.', desktop: 'Arrow keys or WASD to move, E or Space to grab, Enter to check out at the till.' },
+    turnSystem: 'Simultaneous and real-time — every shopper works their own private list inside the same shared shop.',
+    timeLimit: 'The shop closes after 2 minutes. Your first order has a 28 s deadline; every checkout shortens the next one by 1 s, down to a 16 s floor.',
+    winCondition: 'Highest checkout score when the shop closes. Equal scores are a draw.',
+    specialRules: [
+      'Your basket holds at most 4 items, and your shopping list is private — other players\' lists never leave the server.',
+      'You must stand next to a shelf to pick, and only the server grants the item.',
+      'Bonus candy is never on the list but pays extra at checkout.',
+      'Checking out scores matching items and candy, then deals a fresh list; wrong items stay in the basket.',
+      'Missing an order deadline empties your basket, resets your combo and deals a new list.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -745,6 +927,14 @@ export const FAKE_DOOR_METADATA = {
   defaultRounds: 5,
   howToPlay: {
     controls: { mobile: 'Tap the door you believe is safe.', desktop: 'Click the door you believe is safe.' },
+    turnSystem: 'Simultaneous — every player faces the same four doors and the same clue inside the same window.',
+    timeLimit: '5 rounds of 8 s each with a 1.2 s reveal. A wrong door costs a 1.5 s penalty before you can pick again.',
+    winCondition: 'Highest total after the five rounds wins. Equal totals are a draw.',
+    specialRules: [
+      'Exactly one of the four doors is safe, and it never leaves the server until the reveal.',
+      'Clues are never random: colour match, unique symbol, even number, far-right, or memory of last round.',
+      'A correct pick advances you; a fake door costs time and scores nothing.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -778,6 +968,16 @@ export const MAGNET_THIEF_METADATA = {
   featured: true,
   howToPlay: {
     controls: { mobile: 'Swipe to move and tap the Pull or Repel buttons.', desktop: 'Arrow keys or WASD to move, E or Space to pull, Q to repel.' },
+    turnSystem: 'Simultaneous and real-time — everyone moves and magnetises in the same arena at the same time.',
+    timeLimit: 'A 60-second arena clock. The magnet has a 2 s cooldown between uses.',
+    winCondition: 'Highest score when the 60-second buzzer sounds. Only gems you are still holding at that moment are worth their +50, so one late steal can decide the match. A level total is a draw.',
+    specialRules: [
+      'Stepping onto a coin collects it, and the server grants the points.',
+      'Activating the magnet in a direction pulls nearby coins one cell toward you.',
+      'A carried gem can be stolen if you magnetise within range and the owner is not in a safe corner.',
+      'Magnetic zones double your magnet range.',
+      'A client can never assign itself an object — ownership is decided server-side.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -813,6 +1013,15 @@ export const CHAIN_REACTION_METADATA = {
   defaultRounds: 4,
   howToPlay: {
     controls: { mobile: 'Tap a node you own to trigger its chain.', desktop: 'Click a node you own to trigger its chain.' },
+    turnSystem: 'Simultaneous within a round — everyone spends their triggers on the same board deal inside the 22 s window.',
+    timeLimit: '4 rounds of 22 s each, with a 1.5 s break between rounds.',
+    winCondition: 'Highest total after the four rounds wins. Equal totals are a draw.',
+    specialRules: [
+      'Each round the server deals a coloured board of normal, bonus, multiplier, blocker and arrow nodes.',
+      'Triggering a node chains into same-colour neighbours; arrows continue in their direction; blockers never chain.',
+      'You get exactly two triggers per round.',
+      'Clients submit a node id — the chain length and the score are computed by the server.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -846,6 +1055,14 @@ export const ONE_BUTTON_METADATA = {
   featured: true,
   howToPlay: {
     controls: { mobile: 'Tap the single big button when the cue tells you to.', desktop: 'Press Space or click the single button when the cue tells you to.' },
+    turnSystem: 'Simultaneous — every player faces the same cue sequence at the same moment, with one button each.',
+    timeLimit: 'A 48-second event sequence. Each cue gives a 0.9 s timing window, with a 1.2 s lead-in and 2.4 s between events.',
+    winCondition: 'Highest score after the sequence wins. Equal scores are a draw.',
+    specialRules: [
+      'The current context (jump, dash, dodge, switch, collect, shield) is shown before each cue.',
+      'Pressing inside the window succeeds; an early or late press misses and breaks your streak.',
+      'The server owns the window, the context and the score — a client only ever sends a tap.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -883,6 +1100,16 @@ export const SPLIT_WORLD_METADATA = {
   defaultRounds: 5,
   howToPlay: {
     controls: { mobile: 'Swipe anywhere on the grid to move.', desktop: 'Arrow keys or WASD to move.' },
+    turnSystem: 'Simultaneous and real-time — everyone acts in the same world at the same time, but each seat sees it through a different lens.',
+    timeLimit: '5 arenas. Each round has a 4 s prep phase and 45 s of play, with a 3 s intermission between rounds — about 4.5 minutes in total. Hazards stun you for 1.2 s.',
+    winCondition: 'Highest total score after the five rounds wins, with rounds won breaking a tie. Still level, it is a draw.',
+    specialRules: [
+      'Five rounds, five arenas: a gate, a key vault, a switch order, pressure plates and an extraction.',
+      'The true layout lives on the server; each seat gets a different lens on the same world.',
+      'Wardens see switches and the exit, Gatekeepers see hazards and the gate, Scouts see keys and traps.',
+      'Decoy tiles look real through some lenses but are plain floor — only chat separates truth from bait.',
+      'Real walls and closed gates block everyone; hidden tiles and secret orders never leave the server.',
+    ],
   },
   version: '2.0.0',
 } satisfies GameMetadata;
@@ -917,6 +1144,15 @@ export const LUDO_METADATA = {
   featured: true,
   howToPlay: {
     controls: { mobile: 'Tap the dice to roll, then tap one of your tokens to move it.', desktop: 'Press Space or Enter to roll, then click a token to move it.' },
+    turnSystem: 'Strict turns in seat order. A six, a capture or bringing a token home earns another roll; three sixes in a row forfeits the turn.',
+    timeLimit: '20 seconds per turn. A turn that runs out is skipped automatically so a match can never stall, and a stalled match is capped at 25 minutes.',
+    winCondition: 'Be the first to bring all four tokens home. If a match is cut short, the player with the most tokens home — then the most points — ranks first.',
+    specialRules: [
+      'The server rolls the dice — the result is never decided on your device.',
+      'Roll a six to bring a token out of the yard.',
+      'Landing on a lone enemy token sends it back to its yard; safe squares and pairs are protected.',
+      'You need the exact roll to enter the final home cell.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -953,6 +1189,15 @@ export const ARROW_PUZZLE_METADATA = {
   defaultRounds: 3,
   howToPlay: {
     controls: { mobile: 'Tap a tile to fire its arrow; tap Hint if you are stuck.', desktop: 'Click a tile to fire its arrow; use the Hint button if you are stuck.' },
+    turnSystem: 'Simultaneous — everyone races on an identical board at the same time; there are no turns.',
+    timeLimit: '3 rounds of 2 minutes each, on boards that get bigger and denser: easy, then medium, then hard.',
+    winCondition: 'Highest score after the final round wins, with the fastest solve breaking a tie. Still level, it is a draw.',
+    specialRules: [
+      'An arrow can only be fired when every cell between it and the board edge is empty.',
+      'Firing an arrow removes it, which opens the path for the arrows behind it.',
+      'The server generates the board and guarantees it is solvable.',
+      'Firing a blocked arrow costs points, so look before you tap.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -987,6 +1232,16 @@ export const BLACK_BLAST_METADATA = {
   featured: true,
   howToPlay: {
     controls: { mobile: 'Tap a node to pulse it and tap Overcharge for the bigger blast.', desktop: 'Arrow keys or WASD to move, Space for a standard pulse, E to overcharge.' },
+    turnSystem: 'Simultaneous and real-time — everyone drops pulses in the same arena on the same server step.',
+    timeLimit: 'A 3-minute clock. A pulse fuses for 0.9 s and chain links for 0.26 s, the pulse cooldown is 1.4 s and overcharge is 2.1 s. A combo stays alive for 2.5 s, nodes respawn after 6 s and a new wave arrives every 30 s.',
+    winCondition: 'Highest score when the 3-minute clock expires. Equal scores are a draw.',
+    specialRules: [
+      'Move your marker and drop a pulse: it charges briefly, then expands into a circular zone.',
+      'Every energy node caught in the zone is collected and scores.',
+      'Rich nodes detonate too, chaining into new pulses — deeper chains multiply your score.',
+      'Landing pulses back to back builds a combo multiplier up to ×4; a pulse that hits nothing resets it.',
+      'Nodes respawn, so the arena never runs dry.',
+    ],
   },
   version: '1.0.0',
 } satisfies GameMetadata;
@@ -1022,6 +1277,7 @@ export const COUPLE_SYNC_METADATA = {
   hasRounds: true,
   defaultRounds: 10,
   howToPlay: {
+    turnSystem: 'Co-op and simultaneous — both partners act inside the same round window. Some rounds need you to act together within 0.7 s of each other, others relay a code, agree on a symbol, act in a set order or react on cue.',
     objective: 'Clear ten short coordination rounds together as a team.',
     steps: [
       'Read the round brief — each round type asks for something different.',
@@ -1032,7 +1288,7 @@ export const COUPLE_SYNC_METADATA = {
     ],
     controls: { mobile: 'Large tap targets, symbol buttons and an on-screen keypad.', desktop: 'Click or press Space to act; type the code when relaying.' },
     scoring: 'Each round won scores 100 plus a speed bonus, with a growing streak bonus. Failing a round costs 20.',
-    winCondition: 'Win at least five of the ten rounds to clear the challenge.',
+    winCondition: 'Win at least five of the ten rounds to clear the challenge. Falling short is recorded as a draw for the pair — there is no opponent to beat.',
     timeLimit: 'Each round gives you about 9 seconds after a short brief.',
     specialRules: [
       'In a relay round the code holder cannot submit — only their partner can.',
@@ -1075,6 +1331,7 @@ export const COUPLE_MEMORY_METADATA = {
   hasRounds: true,
   defaultRounds: 10,
   howToPlay: {
+    turnSystem: 'Co-op and alternating — one partner flips the first card and the OTHER partner must flip its match. The server refuses to let one player flip both cards of a pair.',
     objective: 'Clear the board of matching pairs with your partner before time runs out.',
     steps: [
       'One partner flips any face-down card.',
@@ -1126,6 +1383,7 @@ export const CONNECT_FOUR_METADATA = {
   tags: ['board', 'classic', 'strategy', 'turn-based', '2 players'],
   featured: true,
   howToPlay: {
+    turnSystem: 'Strict turns — one disc per turn, 30 s on the clock. Let it run out and the server drops a disc into a random legal column so the game cannot stall.',
     objective: 'Be the first to line up four of your discs in a row.',
     steps: [
       'Wait for your turn — the highlighted player is on move.',
@@ -1136,7 +1394,7 @@ export const CONNECT_FOUR_METADATA = {
     ],
     controls: { mobile: 'Tap a column to drop your disc.', desktop: 'Click a column, or press 1-7.' },
     scoring: 'A win scores 100 and a draw scores 40 for both players.',
-    winCondition: 'Four of your discs in a row — horizontal, vertical or diagonal.',
+    winCondition: 'Four of your discs in a row — horizontal, vertical or diagonal. If the board fills with no line of four, the game is a draw and both players score 40.',
     timeLimit: '30 seconds per turn.',
     specialRules: [
       'Discs always fall to the lowest free slot — you choose the column, not the row.',
@@ -1179,6 +1437,7 @@ export const HANGMAN_METADATA = {
   hasRounds: true,
   defaultRounds: 5,
   howToPlay: {
+    turnSystem: 'Strict turns, 20 s each. A correct letter keeps your turn; a wrong one costs the whole team an attempt. Let the clock run out and you lose an attempt and pass play on.',
     objective: 'Uncover the hidden word before the six attempts run out — and score more than your opponent.',
     steps: [
       'The server picks a secret word and shows you only blanks and a category hint.',
@@ -1189,7 +1448,7 @@ export const HANGMAN_METADATA = {
     ],
     controls: { mobile: 'Tap a letter on the on-screen keyboard.', desktop: 'Click a letter or press it on your keyboard.' },
     scoring: 'Correct letter scores 15 per occurrence with a growing streak bonus. Solving adds 100 plus 15 for every attempt left. A wrong letter costs 8.',
-    winCondition: 'The higher total score after all five rounds wins.',
+    winCondition: 'The higher total score after all five rounds wins. Players tied at the top share a draw.',
     timeLimit: '20 seconds per turn; a missed turn costs an attempt.',
     specialRules: [
       'The secret word is stored on the server and is only revealed once the round ends.',
@@ -1231,6 +1490,7 @@ export const SOS_GAME_METADATA = {
   featured: true,
   gridOptions: ['4x4', '5x5', '6x6', '8x8'],
   howToPlay: {
+    turnSystem: 'Strict turns — place one S or one O per turn, 30 s on the clock. Let it run out and the server plays a random legal cell so the board always progresses. Scoring an SOS earns another turn.',
     objective: 'Create more S-O-S lines than your opponent before the board fills up.',
     steps: [
       'Choose whether you are placing an S or an O.',
@@ -1283,6 +1543,7 @@ export const CHESS_METADATA = {
   featured: true,
   gridOptions: ['3min', '5min', '10min'],
   howToPlay: {
+    turnSystem: 'Strict turns — White moves first and players alternate. Instead of a per-turn timer each player has their own chess clock (3, 5 or 10 minutes, chosen in the lobby) that only runs during their turn.',
     objective: 'Checkmate your opponent\u2019s king — attack it so that no legal move can save it.',
     steps: [
       'White moves first. Tap one of your pieces to select it.',
@@ -1293,7 +1554,7 @@ export const CHESS_METADATA = {
     ],
     controls: { mobile: 'Tap a piece, then tap a highlighted square.', desktop: 'Click a piece, then click a destination. Escape clears the selection.' },
     scoring: 'A win scores 1000 and a draw 500, plus 10 for every piece you capture.',
-    winCondition: 'Checkmate, a win on time, or your opponent resigning.',
+    winCondition: 'Checkmate, a win on time, or your opponent resigning. Stalemate, insufficient mating material, the fifty-move rule and threefold repetition are draws — and if a flag falls while the opponent cannot force mate, that is a draw too.',
     timeLimit: 'Choose 3, 5 or 10 minutes per player in the lobby. The clock is kept by the server.',
     specialRules: [
       'Castling: king and rook unmoved, squares between them empty, and the king may not start, cross or land on an attacked square.',
@@ -1339,6 +1600,7 @@ export const UNO_METADATA = {
   hasRounds: true,
   defaultRounds: 3,
   howToPlay: {
+    turnSystem: 'Strict turns in seat order, 30 s each. Play a matching card or draw. Let the clock run out and the server draws one card for you and passes the turn.',
     objective: 'Be the first to get rid of all your cards, then score the cards left in everyone else\u2019s hands.',
     steps: [
       'You are dealt 7 cards. Only you can see them.',
@@ -1353,7 +1615,7 @@ export const UNO_METADATA = {
     },
     scoring:
       'The round winner scores the total of every opponent\u2019s remaining cards \u2014 number cards at face value, Skip/Reverse/Draw Two 20 each, and wilds 50 each.',
-    winCondition: 'The highest total score after the last round wins. Reaching 200 points ends the match early.',
+    winCondition: 'The highest total score after the last round wins. Reaching 200 points ends the match early. Two or more players tied at the top share a draw.',
     timeLimit: '30 seconds per turn. Time out and you draw a card and your turn passes.',
     specialRules: [
       'Skip: the next player loses their turn.',
@@ -1396,6 +1658,7 @@ export const SIM_METADATA = {
   tags: ['strategy', 'abstract', 'graph', 'classic', '2 players'],
   featured: true,
   howToPlay: {
+    turnSystem: 'Strict turns — claim exactly one edge per turn, 30 s on the clock. Let it run out and the server claims a random edge for you, preferring one that does not complete your own triangle.',
     objective: 'Avoid ever joining three dots into a triangle using your own colour. Force your opponent to do it first.',
     steps: [
       'The board shows six dots and every possible line between them.',
@@ -1449,6 +1712,7 @@ export const MIRROR_GRID_METADATA = {
   hasRounds: true,
   defaultRounds: 5,
   howToPlay: {
+    turnSystem: 'Simultaneous — everyone works their own reflection puzzle against the same level clock; there are no turns.',
     objective: 'Build the pattern exactly as it appears after being reflected through the mirror line.',
     steps: [
       'Study the source pattern and the mirror line direction shown above the board.',
@@ -1507,6 +1771,7 @@ export const FUSE_METADATA = {
   hasRounds: true,
   defaultRounds: 4,
   howToPlay: {
+    turnSystem: 'Simultaneous — everyone rotates tiles on their own circuit against the same level clock; there are no turns.',
     objective: 'Rotate the wires until every source is connected to its own matching bulb.',
     steps: [
       'Look at the sources and the bulb that shares each one\u2019s colour.',
@@ -1521,7 +1786,7 @@ export const FUSE_METADATA = {
     },
     scoring:
       'Completing a board scores 250 plus a placement bonus (120/70/40/20) and a speed bonus of up to 150. Every rotation costs 1 point, so tidy solutions score better.',
-    winCondition: 'The highest total score after the last board wins.',
+    winCondition: 'The highest total score after the last board wins. Players tied at the top share a draw.',
     timeLimit: '2.5 minutes per board.',
     specialRules: [
       'A connection needs BOTH tiles to open toward each other.',
@@ -1565,6 +1830,7 @@ export const DOMINO_MIND_METADATA = {
   hasRounds: true,
   defaultRounds: 5,
   howToPlay: {
+    turnSystem: 'Simultaneous — everyone builds their own domino chain against the same level clock; there are no turns.',
     objective: 'Build a chain reaction that knocks over every target when you push the start domino.',
     steps: [
       'Find the START domino \u2014 it is the only one you are allowed to push.',

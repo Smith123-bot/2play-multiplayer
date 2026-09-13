@@ -95,7 +95,7 @@ function DominoMindGame({
   vibrate,
 }: GameComponentProps<DominoMindPublicState>) {
   const previousEvent = useRef<string | null>(null);
-  const rules = useHowToPlay(DOMINO_MIND_METADATA.id);
+  const rules = useHowToPlay(DOMINO_MIND_METADATA.id, false);
   const [facing, setFacing] = useState<Facing>('E');
   const [selected, setSelected] = useState<string | null>(null);
 

@@ -72,7 +72,7 @@ function CoupleSyncGame({
   vibrate,
 }: GameComponentProps<CoupleSyncPublicState>) {
   const previousEvent = useRef<string | null>(null);
-  const rules = useHowToPlay(COUPLE_SYNC_METADATA.id);
+  const rules = useHowToPlay(COUPLE_SYNC_METADATA.id, false);
   const [codeEntry, setCodeEntry] = useState('');
 
   const phase = state?.phase ?? 'idle';

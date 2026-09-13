@@ -103,7 +103,7 @@ function MirrorGridGame({
   vibrate,
 }: GameComponentProps<MirrorPublicState>) {
   const previousEvent = useRef<string | null>(null);
-  const rules = useHowToPlay(MIRROR_GRID_METADATA.id);
+  const rules = useHowToPlay(MIRROR_GRID_METADATA.id, false);
   const [symbol, setSymbol] = useState<SymbolName>('circle');
   const [color, setColor] = useState<ColorName>('red');
 

@@ -97,7 +97,7 @@ function CardFace({ card, small = false }: { card: UnoCard; small?: boolean }) {
 
 function UnoGame({ state, players, myPlayerId, sendAction, play, vibrate }: GameComponentProps<UnoPublicState>) {
   const previousEvent = useRef<string | null>(null);
-  const rules = useHowToPlay(UNO_METADATA.id);
+  const rules = useHowToPlay(UNO_METADATA.id, false);
   const [wildCardId, setWildCardId] = useState<string | null>(null);
 
   const phase = state?.phase ?? 'idle';

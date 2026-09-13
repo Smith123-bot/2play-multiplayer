@@ -70,7 +70,7 @@ function Gallows({ used, max }: { used: number; max: number }) {
 
 function HangmanGame({ state, players, myPlayerId, sendAction, play, vibrate }: GameComponentProps<HangmanPublicState>) {
   const previousEvent = useRef<string | null>(null);
-  const rules = useHowToPlay(HANGMAN_METADATA.id);
+  const rules = useHowToPlay(HANGMAN_METADATA.id, false);
 
   const phase = state?.phase ?? 'idle';
   const canGuess = phase === 'playing' && Boolean(state?.isMyTurn);

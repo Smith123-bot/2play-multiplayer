@@ -140,7 +140,7 @@ function TileArt({ tile }: { tile: TileView }) {
 
 function FuseGame({ state, players, myPlayerId, sendAction, play, vibrate }: GameComponentProps<FusePublicState>) {
   const previousEvent = useRef<string | null>(null);
-  const rules = useHowToPlay(FUSE_METADATA.id);
+  const rules = useHowToPlay(FUSE_METADATA.id, false);
 
   const phase = state?.phase ?? 'idle';
   const solved = state?.me?.solved ?? false;

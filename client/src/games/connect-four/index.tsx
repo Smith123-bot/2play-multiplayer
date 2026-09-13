@@ -40,7 +40,7 @@ function ConnectFourGame({
   vibrate,
 }: GameComponentProps<ConnectFourPublicState>) {
   const previousEvent = useRef<string | null>(null);
-  const rules = useHowToPlay(CONNECT_FOUR_METADATA.id);
+  const rules = useHowToPlay(CONNECT_FOUR_METADATA.id, false);
   const [hovered, setHovered] = useState<number | null>(null);
 
   const phase = state?.phase ?? 'idle';

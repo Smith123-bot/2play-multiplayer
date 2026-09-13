@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, LogOut, Play } from 'lucide-react';
+import { ArrowLeft, HelpCircle, LogOut, Play } from 'lucide-react';
 import type { RoomState } from '@2play/shared';
 import { RoomCodeCard } from '../components/room/RoomCodeCard';
 import { PlayerList } from '../components/room/PlayerList';
@@ -8,7 +8,7 @@ import { HostControls } from '../components/room/HostControls';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { CountdownOverlay } from '../components/game/CountdownOverlay';
 import { GameRenderer } from '../components/game/GameRenderer';
-import { HowToPlayModal } from '../components/game/HowToPlayModal';
+import { HowToPlayModal, useHowToPlay } from '../components/game/HowToPlayModal';
 import { ResultPanel } from '../components/result/ResultPanel';
 import { RematchPanel } from '../components/rematch/RematchPanel';
 import { Button } from '../components/ui/Button';
@@ -128,6 +128,30 @@ export function RoomScreen() {
   useLeaveRoomOnBackNavigation(Boolean(room && room.id === roomId), leaveOnBack);
 
   const game = useMemo(() => games.find((entry) => entry.id === room?.gameId), [games, room?.gameId]);
+
+  /**
+   * Centralised How to Play (all 39 games).
+   *
+   * The pre-match popup fires once per game before play begins, so no match can
+   * start without its rules being one tap away; the header Rules button re-opens
+   * the very same modal at any time, including mid-match. Auto-open is gated off
+   * while playing or on the result screen so it can never interrupt live play,
+   * and the "seen" flag is per game, so returning players are not re-blocked.
+   */
+  const roomStatus = room?.status;
+  const preMatchEnabled =
+    Boolean(game) &&
+    roomStatus !== undefined &&
+    (LOBBY_STATUSES.includes(roomStatus) ||
+      roomStatus === 'COUNTDOWN' ||
+      roomStatus === 'NEW_MATCH');
+  const preMatchRules = useHowToPlay(game?.id, preMatchEnabled);
+  const openRules = () => setRulesOpen(true);
+  const closeRules = () => {
+    setRulesOpen(false);
+    // Marks the game as seen, so the pre-match popup does not repeat.
+    preMatchRules.close();
+  };
   const myPlayerId = session?.playerId ?? getLocalPlayerId();
   const me = room?.players.find((player) => player.id === myPlayerId) ?? null;
   const isHost = Boolean(me?.isHost);
@@ -169,6 +193,18 @@ export function RoomScreen() {
         </Link>
         <div className="flex items-center gap-2">
           <Badge tone={status === 'PLAYING' ? 'success' : 'default'}>{status}</Badge>
+          {/* Platform-level Help: available for all 39 games, before and during play. */}
+          {game ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={openRules}
+              icon={<HelpCircle className="h-4 w-4" />}
+              data-testid="room-rules-toggle"
+            >
+              <span className="sr-only sm:not-sr-only">Rules</span>
+            </Button>
+          ) : null}
           {playing ? (
             <Button size="sm" variant="ghost" onClick={() => void leaveMatch()} disabled={busy}>
               End match
@@ -317,7 +353,7 @@ export function RoomScreen() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setRulesOpen(true)}
+                    onClick={openRules}
                     data-testid="room-how-to-play"
                   >
                     How to play
@@ -329,13 +365,21 @@ export function RoomScreen() {
                   <li key={rule}>• {rule}</li>
                 ))}
               </ul>
-              {/* In-match guide for the 28 games that do not auto-open one;
-                  games owning `useHowToPlay` keep their own behaviour. */}
-              <HowToPlayModal game={game} open={rulesOpen} onClose={() => setRulesOpen(false)} />
             </Card>
           ) : null}
         </div>
       </div>
+
+      {/* One shared How to Play surface for every game: the pre-match popup and
+          the header Rules button drive the same modal. Rendered at the root so
+          it stays available during play. */}
+      {game ? (
+        <HowToPlayModal
+          game={game}
+          open={rulesOpen || preMatchRules.open}
+          onClose={closeRules}
+        />
+      ) : null}
     </div>
   );
 }

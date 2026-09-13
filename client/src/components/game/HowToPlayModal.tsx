@@ -16,6 +16,27 @@ export interface HowToPlayContentProps {
   game: GameMetadata;
 }
 
+/**
+ * Player count, including whether the same rules apply against the AI.
+ *
+ * A game may describe its own seat layout (for example "2 players (co-op)"), but
+ * the AI note is a platform guarantee — the rules have to hold in both solo and
+ * multiplayer mode — so it is always appended unless the override already
+ * mentions the AI itself.
+ */
+function playerCountFor(game: GameMetadata): string {
+  const seats =
+    game.minPlayers === game.maxPlayers
+      ? `${game.minPlayers} players`
+      : `${game.minPlayers}–${game.maxPlayers} players`;
+  const aiNote = game.hasAI
+    ? `Solo play against the AI (${game.aiDifficulties.join(', ')}) uses the same rules.`
+    : 'Human opponents only — there is no AI for this game.';
+  const override = game.howToPlay?.playerCount?.trim();
+  const base = override || seats;
+  return /\bAI\b/i.test(base) ? base : `${base}. ${aiNote}`;
+}
+
 function sectionsFor(game: GameMetadata): HowToPlay {
   // Derived from the metadata every game already has.
   const derived: HowToPlay = {
@@ -26,10 +47,7 @@ function sectionsFor(game: GameMetadata): HowToPlay {
     winCondition: game.winCondition,
     timeLimit: `About ${Math.max(1, Math.round(game.estimatedDuration / 60))} min per match.`,
     specialRules: [],
-    playerCount:
-      game.minPlayers === game.maxPlayers
-        ? `${game.minPlayers} players`
-        : `${game.minPlayers}–${game.maxPlayers} players`,
+    playerCount: playerCountFor(game),
   };
   // A game may override any subset of the sections; everything else is derived.
   const override = game.howToPlay;
@@ -38,6 +56,8 @@ function sectionsFor(game: GameMetadata): HowToPlay {
     ...derived,
     ...override,
     controls: { ...derived.controls, ...(override.controls ?? {}) },
+    // playerCountFor() already folds the override in, then re-adds the AI note.
+    playerCount: playerCountFor(game),
   };
 }
 
@@ -77,15 +97,21 @@ export function HowToPlayContent({ game }: HowToPlayContentProps) {
         </p>
       </Section>
 
+      {content.turnSystem ? (
+        <Section icon="🔄" title="Turn system">
+          <p>{content.turnSystem}</p>
+        </Section>
+      ) : null}
+
       <Section icon="⭐" title="Scoring">
         <p>{content.scoring}</p>
       </Section>
 
-      <Section icon="🏆" title="Win condition">
+      <Section icon="🏆" title="Win, loss & draw">
         <p>{content.winCondition}</p>
       </Section>
 
-      <Section icon="⏱" title="Time limit">
+      <Section icon="⏱" title="Timer rules">
         <p>{content.timeLimit}</p>
       </Section>
 
@@ -137,6 +163,12 @@ const STORAGE_PREFIX = '2play:howtoplay:';
  * Shows the rules popup automatically the first time a player opens a given
  * game, and exposes a manual re-open. The "seen" flag is per game and stored
  * locally, so it never costs a server round trip.
+ *
+ * Auto-open is owned by exactly one place: `RoomScreen` calls this with
+ * `enabled = true` before a match starts, which covers all 39 games. Individual
+ * game components therefore pass `enabled = false` and use the returned
+ * `show`/`close` purely as an in-board Help button. Passing `true` in a game
+ * component would stack a second popup over the platform one — do not do it.
  */
 export function useHowToPlay(gameId: string | undefined, enabled = true): {
   open: boolean;

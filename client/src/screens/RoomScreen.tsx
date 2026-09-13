@@ -130,7 +130,7 @@ export function RoomScreen() {
   const game = useMemo(() => games.find((entry) => entry.id === room?.gameId), [games, room?.gameId]);
 
   /**
-   * Centralised How to Play (all 39 games).
+   * Centralised How to Play (all 40 games).
    *
    * The pre-match popup fires once per game before play begins, so no match can
    * start without its rules being one tap away; the header Rules button re-opens
@@ -193,7 +193,7 @@ export function RoomScreen() {
         </Link>
         <div className="flex items-center gap-2">
           <Badge tone={status === 'PLAYING' ? 'success' : 'default'}>{status}</Badge>
-          {/* Platform-level Help: available for all 39 games, before and during play. */}
+          {/* Platform-level Help: available for all 40 games, before and during play. */}
           {game ? (
             <Button
               size="sm"

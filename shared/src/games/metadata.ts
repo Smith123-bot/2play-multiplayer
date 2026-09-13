@@ -1868,6 +1868,69 @@ export const DOMINO_MIND_METADATA = {
  * *which* modules are actually loaded; this list is the canonical reference
  * used by tests and by any consumer that needs the full catalogue.
  */
+
+export const ROCK_PAPER_SCISSORS_METADATA = {
+  id: 'rock-paper-scissors',
+  name: 'Rock Paper Scissors',
+  description:
+    'The classic hand duel, head to head. Read your opponent, throw rock, paper or scissors, and take the round before they read you.',
+  category: 'reflex' as const,
+  icon: '✊',
+  thumbnail: '✊',
+  minPlayers: 2,
+  maxPlayers: 2,
+  supportedPlayerCounts: [2],
+  hasAI: true,
+  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
+  estimatedDuration: 120,
+  difficulty: 'easy' as const,
+  controls: 'Tap rock, paper or scissors to throw. On desktop press R, P or S.',
+  rules: [
+    'Rock beats scissors, scissors beat paper, paper beats rock.',
+    'Throwing the same shape as your opponent is a draw — nobody scores.',
+    'Both players throw at the same time; your choice is locked the moment you tap it.',
+    'Your opponent\u2019s throw stays hidden until both are locked or the round timer runs out.',
+    'Fail to throw before the timer ends and you forfeit that round.',
+    'First to win 3 rounds takes the match.',
+  ],
+  scoring: 'One point per round won. Draws score nothing for either player.',
+  winCondition: 'First player to win 3 rounds. Level after the round cap, it is a draw.',
+  tags: ['casual', 'classic', 'reaction', 'quick', '2 players'],
+  featured: true,
+  hasRounds: true,
+  defaultRounds: 3,
+  howToPlay: {
+    turnSystem:
+      'Simultaneous — there are no turns. Every round both players throw at the same time behind a 3-2-1-GO countdown, and the server keeps each throw secret until both are locked or the 8 second timer expires.',
+    objective: 'Win more rounds than your opponent — first to 3 round wins takes the match.',
+    steps: [
+      'Watch the countdown: 3, 2, 1, GO.',
+      'Tap rock, paper or scissors before the round timer runs out.',
+      'Your throw locks immediately and cannot be changed, so commit to it.',
+      'The server reveals both throws at the same time and scores the round.',
+      'The next round starts automatically until someone has 3 wins.',
+    ],
+    controls: {
+      mobile: 'Tap one of the three large shape buttons to throw.',
+      desktop: 'Press R for rock, P for paper or S for scissors.',
+    },
+    scoring: 'Each round win scores 1 point. A draw scores nothing, and a forfeited round goes to your opponent.',
+    winCondition:
+      'First to 3 round wins. If the round cap is reached with the score level, the match is a draw.',
+    timeLimit:
+      '3 second countdown, then 8 seconds to throw each round, with a 2.5 second reveal. Roughly two minutes for a full match.',
+    specialRules: [
+      'Rock beats scissors, scissors beat paper, paper beats rock — same shape is a draw.',
+      'Choices are locked on submission: you cannot change your mind or throw twice in a round.',
+      'If you do not throw in time the round is forfeited, so a match can never stall.',
+      'Only the server decides the outcome; the client just sends the shape you tapped.',
+      'The opponent\u2019s throw is never sent to you before the reveal.',
+    ],
+    playerCount: '2 players',
+  },
+  version: '1.0.0',
+} satisfies GameMetadata;
+
 export const ALL_GAME_METADATA: readonly GameMetadata[] = [
   REACTION_RACE_METADATA,
   MEMORY_MATCH_METADATA,
@@ -1908,4 +1971,5 @@ export const ALL_GAME_METADATA: readonly GameMetadata[] = [
   MIRROR_GRID_METADATA,
   FUSE_METADATA,
   DOMINO_MIND_METADATA,
+  ROCK_PAPER_SCISSORS_METADATA,
 ] as const;

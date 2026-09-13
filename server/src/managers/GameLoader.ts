@@ -38,6 +38,7 @@ import { coupleMemoryGame } from '../games/couple-memory';
 import { ludoGame } from '../games/ludo';
 import { arrowPuzzleGame } from '../games/arrow-puzzle';
 import { blackBlastGame } from '../games/black-blast';
+import { rockPaperScissorsGame } from '../games/rock-paper-scissors';
 import { createLogger } from '../utils/logger';
 import type { GameModule } from '../games/GameModule';
 
@@ -93,6 +94,7 @@ export class GameLoader {
       mirrorGridGame,
       fuseGame,
       dominoMindGame,
+      rockPaperScissorsGame,
     ];
 
     for (const game of games) {

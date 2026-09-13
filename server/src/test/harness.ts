@@ -55,6 +55,7 @@ import { coupleMemoryGame } from '../games/couple-memory';
 import { ludoGame } from '../games/ludo';
 import { arrowPuzzleGame } from '../games/arrow-puzzle';
 import { blackBlastGame } from '../games/black-blast';
+import { rockPaperScissorsGame } from '../games/rock-paper-scissors';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -210,6 +211,7 @@ export function createTestPlatform(
       mirrorGridGame,
       fuseGame,
       dominoMindGame,
+      rockPaperScissorsGame,
     ]) {
       platform.registry.register(game);
     }

@@ -217,6 +217,7 @@ describe('room lifecycle over sockets', () => {
       'paddle-duel',
       'pattern-memory-battle',
       'reaction-race',
+      'rock-paper-scissors',
       'secret-role',
       'shape-match-battle',
       'shop-rush-battle',

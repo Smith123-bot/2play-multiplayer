@@ -165,7 +165,7 @@ const STORAGE_PREFIX = '2play:howtoplay:';
  * locally, so it never costs a server round trip.
  *
  * Auto-open is owned by exactly one place: `RoomScreen` calls this with
- * `enabled = true` before a match starts, which covers all 39 games. Individual
+ * `enabled = true` before a match starts, which covers all 40 games. Individual
  * game components therefore pass `enabled = false` and use the returned
  * `show`/`close` purely as an in-board Help button. Passing `true` in a game
  * component would stack a second popup over the platform one — do not do it.

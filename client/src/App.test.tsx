@@ -114,12 +114,12 @@ describe('routing', () => {
   it('resolves /games and lists the whole catalogue', async () => {
     renderAt('/games');
     expect(await screen.findByRole('heading', { name: 'Games' })).toBeInTheDocument();
-    await screen.findByText(/39 games · 0 favorites/);
+    await screen.findByText(/40 games · 0 favorites/);
     // Scope to the All Games rail: New Games repeats six of the same games.
     const section = screen.getByRole('heading', { name: /All Games/i }).closest('section')!;
     expect(
       within(section as HTMLElement).getAllByRole('button', { name: /^Expand / }),
-    ).toHaveLength(39);
+    ).toHaveLength(40);
   });
 
   it('resolves a direct deep link to a game', async () => {

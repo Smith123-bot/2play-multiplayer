@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { BarChart3, Heart, Menu, Settings, Users, X } from 'lucide-react';
+import { BarChart3, Gamepad2, Heart, Menu, Settings, X } from 'lucide-react';
 import { Logo } from './Logo';
 import { Avatar } from '../ui/Avatar';
 import { Badge } from '../ui/Badge';
@@ -9,7 +9,7 @@ import { useConnectionStore } from '../../stores/connectionStore';
 import { cn } from '../../utils/cn';
 
 const NAV_ITEMS = [
-  { to: '/games', label: 'Games', icon: Users },
+  { to: '/games', label: 'Games', icon: Gamepad2 },
   { to: '/favorites', label: 'Favorites', icon: Heart },
   { to: '/stats', label: 'Stats', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },

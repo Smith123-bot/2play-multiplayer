@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { RoomState } from '@2play/shared';
-import { createClient, emitAck, once, waitForRoom, type TestClient } from '../helpers/client';
+import { createClient, emitAck, once, watchRoom, waitForRoom, type TestClient } from '../helpers/client';
 import { startTestServer, type TestServer } from '../helpers/server';
 
 let server: TestServer;
@@ -400,6 +400,21 @@ const CASES: GameCase[] = [
       Boolean(state.players),
     action: { type: 'push' },
   },
+  {
+    id: 'rock-paper-scissors',
+    maxPlayers: 2,
+    // The public state a client receives mid-round must carry the countdown or
+    // the throw window, the win target, and NOTHING about the opponent's shape.
+    expect: (state) =>
+      (state.phase === 'countdown' || state.phase === 'choose') &&
+      typeof state.winsNeeded === 'number' &&
+      Array.isArray(state.seatOrder) &&
+      state.myChoice === null &&
+      Object.values(state.opponents as Record<string, { choice: unknown }>).every(
+        (opponent) => opponent.choice === null,
+      ),
+    action: { type: 'throw', payload: { choice: 'rock' } },
+  },
 ];
 
 /** Finds the first undrawn line on the board (used to play a full match). */
@@ -562,6 +577,174 @@ describe('every shipped game is playable', () => {
       expect(vote.ok).toBe(true);
     } finally {
       host.socket.off('room:updated', onUpdate);
+      host.close();
+      guest.close();
+    }
+  }, 200_000);
+
+  it('plays a full two-player Rock Paper Scissors match without leaking a throw', async () => {
+    const host = await createClient(server.url, 'RpsHost');
+    const guest = await createClient(server.url, 'RpsGuest');
+    const hostRoom = watchRoom(host.socket);
+    const guestRoom = watchRoom(guest.socket);
+
+    /** The per-viewer projection the server sends for this game. */
+    type RpsView = {
+      phase: string;
+      round: number;
+      winsNeeded: number;
+      myChoice: string | null;
+      me: { score: number; draws: number; forfeits: number; disconnected: boolean } | null;
+      opponents: Record<string, { hasThrown: boolean; choice: string | null; score: number }>;
+      roundResult: {
+        choices: Record<string, string | null>;
+        outcomes: Record<string, string>;
+        forfeits: string[];
+      } | null;
+    };
+    const viewOf = (room: RoomState | null): RpsView => room?.gameState as RpsView;
+    const opponentOf = (room: RoomState | null, otherId: string) =>
+      viewOf(room).opponents[otherId]!;
+
+    try {
+      const created = await emitAck<{ room: RoomState }>(host.socket, 'room:create', {
+        gameId: 'rock-paper-scissors',
+        maxPlayers: 2,
+        isPrivate: false,
+        settings: { rounds: 2 },
+      });
+      expect(created.ok).toBe(true);
+      const roomId = created.data!.room.id;
+
+      await emitAck(guest.socket, 'room:join', { roomId });
+      await emitAck(host.socket, 'lobby:ready', { isReady: true });
+      await emitAck(guest.socket, 'lobby:ready', { isReady: true });
+      await emitAck(host.socket, 'game:start', {});
+      await once(host.socket, 'game:started', 25_000);
+
+      /* ---- round 1: the host throws first ---- */
+      await hostRoom.waitFor((room) => viewOf(room).phase === 'choose');
+      await guestRoom.waitFor((room) => viewOf(room).phase === 'choose');
+      expect(viewOf(hostRoom.current()).winsNeeded).toBe(2);
+
+      const thrown = await emitAck<{ accepted: boolean }>(host.socket, 'game:action', {
+        action: { type: 'throw', payload: { choice: 'rock' } },
+      });
+      expect(thrown.ok).toBe(true);
+      expect(thrown.data!.accepted).toBe(true);
+
+      const hostLocked = await hostRoom.waitFor((room) => viewOf(room).myChoice === 'rock');
+      expect(opponentOf(hostLocked, guest.playerId).hasThrown).toBe(false);
+
+      /* ---- THE SECURITY INVARIANT ----
+       * The guest is told that a throw happened, but never what it was. This is
+       * asserted on the wire, over a real socket, from the server's own
+       * projection — a leak here would be a cheat vector, not a UI nit. */
+      const guestTold = await guestRoom.waitFor((room) =>
+        opponentOf(room, host.playerId).hasThrown,
+      );
+      expect(opponentOf(guestTold, host.playerId).choice).toBeNull();
+      expect(viewOf(guestTold).myChoice).toBeNull();
+      expect(viewOf(guestTold).roundResult).toBeNull();
+      expect(JSON.stringify(guestTold.gameState)).not.toContain('"rock"');
+
+      // Locked means locked: a second throw from the same seat is refused.
+      // `ok` only reports that the handler ran — the verdict is `accepted`.
+      const duplicate = await emitAck<{ accepted: boolean }>(host.socket, 'game:action', {
+        action: { type: 'throw', payload: { choice: 'paper' } },
+      });
+      expect(duplicate.ok).toBe(true);
+      expect(duplicate.data!.accepted).toBe(false);
+      // The refusal changed nothing.
+      expect(viewOf(hostRoom.current()).myChoice).toBe('rock');
+
+      // The client may not assert its own outcome either.
+      const hostile = await emitAck<{ accepted: boolean }>(host.socket, 'game:action', {
+        action: { type: 'score', payload: { score: 99 } },
+      });
+      expect(hostile.data!.accepted).toBe(false);
+
+      /* ---- the guest throws the losing shape; both are revealed ---- */
+      await emitAck(guest.socket, 'game:action', {
+        action: { type: 'throw', payload: { choice: 'scissors' } },
+      });
+
+      const hostReveal = await hostRoom.waitFor((room) => viewOf(room).phase === 'reveal');
+      const guestReveal = await guestRoom.waitFor((room) => viewOf(room).phase === 'reveal');
+
+      // Both viewers now see both shapes, and agree on the server's verdict.
+      expect(viewOf(hostReveal).roundResult!.choices[host.playerId]).toBe('rock');
+      expect(viewOf(hostReveal).roundResult!.choices[guest.playerId]).toBe('scissors');
+      expect(opponentOf(hostReveal, guest.playerId).choice).toBe('scissors');
+      expect(opponentOf(guestReveal, host.playerId).choice).toBe('rock');
+      expect(viewOf(hostReveal).roundResult!.outcomes[host.playerId]).toBe('win');
+      expect(viewOf(guestReveal).roundResult!.outcomes[guest.playerId]).toBe('loss');
+      // From the guest's seat the host is the opponent, and the host just won
+      // the round — so the guest is shown 1 for them and 0 for itself.
+      expect(opponentOf(guestReveal, host.playerId).score).toBe(1);
+      expect(viewOf(guestReveal).me!.score).toBe(0);
+      expect(viewOf(guestReveal).myChoice).toBe('scissors');
+
+      /* ---- play the match out: rock beats scissors every round ---- */
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline) {
+        const current = hostRoom.current();
+        if (!current || current.status !== 'PLAYING') break;
+        if (viewOf(current).phase === 'choose' && viewOf(current).myChoice === null) {
+          await emitAck(host.socket, 'game:action', {
+            action: { type: 'throw', payload: { choice: 'rock' } },
+          });
+          await emitAck(guest.socket, 'game:action', {
+            action: { type: 'throw', payload: { choice: 'scissors' } },
+          });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+
+      /* ---- the finish line ---- */
+      const finished = await hostRoom.waitFor(
+        (room) => ['RESULT', 'REMATCH_WAITING'].includes(room.status),
+        30_000,
+      );
+      expect(finished.id).toBe(roomId);
+      expect(finished.players).toHaveLength(2);
+      expect(finished.players.every((player) => player.isConnected)).toBe(true);
+
+      const result = finished.gameResult!;
+      expect(result.gameId).toBe('rock-paper-scissors');
+      expect(result.winners).toEqual([host.playerId]);
+      expect(result.isDraw).toBe(false);
+      expect(result.rankings).toHaveLength(2);
+      expect(result.rankings[0]!.playerId).toBe(host.playerId);
+      expect(result.rankings[0]!.rank).toBe(1);
+      expect(result.rankings[0]!.stats.roundsWon).toBe(2);
+      expect(result.rankings[1]!.playerId).toBe(guest.playerId);
+
+      // The guest sees exactly the same verdict — one server, one truth.
+      const guestFinished = await guestRoom.waitFor(
+        (room) => ['RESULT', 'REMATCH_WAITING'].includes(room.status),
+        30_000,
+      );
+      expect(guestFinished.gameResult!.winners).toEqual([host.playerId]);
+      expect(guestFinished.gameResult!.rankings[0]!.playerId).toBe(host.playerId);
+
+      // Nothing is playable after the match is over.
+      const afterFinish = await emitAck<{ accepted: boolean }>(host.socket, 'game:action', {
+        action: { type: 'throw', payload: { choice: 'rock' } },
+      });
+      // Either the handler refuses outright (no live match to act on) or the
+      // module rejects it — what must never happen is an accepted throw.
+      const refused = afterFinish.ok === false || afterFinish.data?.accepted === false;
+      expect(refused, 'a throw was accepted after the match finished').toBe(true);
+
+      // Sockets and seats survive, so a rematch can start in the same room.
+      expect(host.socket.connected).toBe(true);
+      expect(guest.socket.connected).toBe(true);
+      const vote = await emitAck(host.socket, 'rematch:request', {});
+      expect(vote.ok).toBe(true);
+    } finally {
+      hostRoom.stop();
+      guestRoom.stop();
       host.close();
       guest.close();
     }

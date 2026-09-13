@@ -102,7 +102,9 @@ export function JoinRoomScreen() {
             maxLength={6}
             autoCapitalize="characters"
             autoComplete="off"
+            autoCorrect="off"
             spellCheck={false}
+            enterKeyHint="go"
             error={error}
             icon={<KeyRound className="h-4 w-4" />}
             className="font-mono text-2xl tracking-[0.35em]"

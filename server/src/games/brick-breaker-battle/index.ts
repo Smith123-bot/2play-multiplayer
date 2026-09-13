@@ -158,9 +158,24 @@ export function predictBallX(
   return foldRange(ball.x + ball.vx * t, radius, width - radius);
 }
 
-/** Distinct authoritative layouts: classic wall, reinforced diamond, then fortress. */
-export function brickDurabilityForLevel(level: number): number[] {
-  return Array.from({ length: TOTAL_BRICKS }, (_entry, index) => {
+/**
+ * Distinct authoritative layouts: classic wall, reinforced diamond, then fortress.
+ *
+ * The three templates ramp in difficulty, so their ORDER stays fixed — level 1
+ * must remain the easy opener. What varies is their *orientation*: when a random
+ * source is supplied the template is mirrored horizontally and rotated across
+ * the columns. Both are bijections over the grid, so the brick count and the
+ * durability distribution are preserved exactly and the difficulty is unchanged;
+ * only the shape the player faces differs between matches.
+ *
+ * Called without `random` (tests, and any pre-start placeholder) it returns the
+ * authored template unchanged.
+ *
+ * Note: level 1 is a uniform wall, so every bijection on it is the identity —
+ * it is intentionally the same classic wall every match.
+ */
+export function brickDurabilityForLevel(level: number, random?: () => number): number[] {
+  const base = Array.from({ length: TOTAL_BRICKS }, (_entry, index) => {
     const row = Math.floor(index / BRICK_COLS);
     const col = index % BRICK_COLS;
     if (level === 1) return 1;
@@ -173,10 +188,23 @@ export function brickDurabilityForLevel(level: number): number[] {
     if ((row === 2 || row === 3) && (col === 1 || col === 5)) return 0;
     return row === 0 || col === 0 || col === 6 ? 2 : 1;
   });
+
+  if (!random) return base;
+
+  const rotateBy = Math.floor(random() * BRICK_COLS) % BRICK_COLS;
+  const mirrored = random() < 0.5;
+  if (rotateBy === 0 && !mirrored) return base;
+
+  return base.map((_hp, index) => {
+    const row = Math.floor(index / BRICK_COLS);
+    const col = index % BRICK_COLS;
+    const flipped = mirrored ? BRICK_COLS - 1 - col : col;
+    return base[row * BRICK_COLS + ((flipped + rotateBy) % BRICK_COLS)] as number;
+  });
 }
 
-function installLevel(arena: BrickArena, level: number): void {
-  const durability = brickDurabilityForLevel(level);
+function installLevel(arena: BrickArena, level: number, random?: () => number): void {
+  const durability = brickDurabilityForLevel(level, random);
   arena.level = level;
   arena.brickHp = [...durability];
   arena.brickMaxHp = [...durability];
@@ -185,8 +213,8 @@ function installLevel(arena: BrickArena, level: number): void {
   arena.destroyed = 0;
 }
 
-function newArena(): BrickArena {
-  const durability = brickDurabilityForLevel(1);
+function newArena(random?: () => number): BrickArena {
+  const durability = brickDurabilityForLevel(1, random);
   return {
     paddleX: ARENA_W / 2,
     paddleDir: 0,
@@ -373,7 +401,7 @@ function stepArena(
         arena.score += state.clearBonus * arena.level;
         arena.levelsCleared += 1;
         if (arena.level < state.maxLevels) {
-          installLevel(arena, arena.level + 1);
+          installLevel(arena, arena.level + 1, ctx.random);
           arena.chain = 0;
           parkBall(arena, now);
           return `level:${playerId}:${arena.level}`;
@@ -576,7 +604,9 @@ export const brickBreakerGame: GameModule<BrickBreakerState> = {
 
   start(state, ctx): void {
     if (state.phase === 'playing') return;
-    state.arenas = Object.fromEntries(ctx.players.map((player) => [player.id, newArena()]));
+    // Each player gets their own orientation of the level templates, drawn from
+    // the platform PRNG so layouts differ between matches.
+    state.arenas = Object.fromEntries(ctx.players.map((player) => [player.id, newArena(ctx.random)]));
     state.phase = 'playing';
     state.accumulatorMs = 0;
     state.startedAt = ctx.now();

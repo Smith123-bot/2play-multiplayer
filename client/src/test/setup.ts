@@ -1,5 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 
+// A failed query prints the whole document. On the Games page that is 45 fully
+// rendered cards, and the dump alone took minutes and exhausted the worker, so
+// cap it at something still useful for debugging.
+process.env.DEBUG_PRINT_LIMIT = process.env.DEBUG_PRINT_LIMIT ?? '3000';
+
 // Minimal browser API stubs for jsdom.
 class MockAudioContext {
   public state = 'running';
@@ -41,6 +46,12 @@ class MockAudioContext {
 
 Object.defineProperty(window, 'AudioContext', { writable: true, value: MockAudioContext });
 Object.defineProperty(globalThis, 'AudioContext', { writable: true, value: MockAudioContext });
+
+// jsdom *defines* window.scrollTo but throws "Not implemented" when it is
+// called. framer-motion's keyframe resolver calls it for every animated
+// element on every frame, which floods the output and makes suites crawl, so
+// replace it outright rather than only filling a gap.
+window.scrollTo = (() => undefined) as unknown as typeof window.scrollTo;
 
 if (!window.matchMedia) {
   Object.defineProperty(window, 'matchMedia', {

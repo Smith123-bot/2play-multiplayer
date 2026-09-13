@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, BarChart3, Heart, Plus, Sparkles, Users, Zap } from 'lucide-react';
@@ -8,20 +8,25 @@ import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
+import { GamesLoadError } from '../components/game/GamesLoadError';
 import { useGameStore } from '../stores/gameStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useStatisticsStore } from '../stores/statisticsStore';
+import { usePopularityStore } from '../stores/popularityStore';
 import { useSessionStore } from '../stores/sessionStore';
 import { useRoomActions } from '../hooks/useRoomActions';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import type { RoomSummary } from '@2play/shared';
 import { APP_CONFIG } from '../core/config';
 import { useConnectionStore } from '../stores/connectionStore';
+import { formatCategory } from '../utils/format';
 
 export function HomeScreen() {
   const navigate = useNavigate();
   const gate = useIdentityGate();
   const games = useGameStore((store) => store.games);
+  const gamesLoading = useGameStore((store) => store.loading);
+  const gamesError = useGameStore((store) => store.error);
   const loadGames = useGameStore((store) => store.load);
   const favorites = useFavoritesStore((store) => store.favorites);
   const loadFavorites = useFavoritesStore((store) => store.load);
@@ -29,6 +34,8 @@ export function HomeScreen() {
   const recentlyPlayed = useSessionStore((store) => store.recentlyPlayed);
   const summary = useStatisticsStore((store) => store.summary);
   const loadStatistics = useStatisticsStore((store) => store.load);
+  const popularity = usePopularityStore((store) => store.popularity);
+  const loadPopularity = usePopularityStore((store) => store.load);
   const connection = useConnectionStore((store) => store.state);
   const { listRooms } = useRoomActions();
   const [publicRooms, setPublicRooms] = useState<RoomSummary[]>([]);
@@ -37,7 +44,8 @@ export function HomeScreen() {
     void loadGames();
     void loadFavorites();
     void loadStatistics();
-  }, [loadGames, loadFavorites, loadStatistics]);
+    void loadPopularity();
+  }, [loadGames, loadFavorites, loadStatistics, loadPopularity]);
 
   useEffect(() => {
     let active = true;
@@ -50,7 +58,29 @@ export function HomeScreen() {
   }, [listRooms]);
 
   const featured = games.filter((game) => game.featured);
-  const popular = games.slice().sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
+
+  /**
+   * "Popular right now" is backed by the platform's real completed-match counts
+   * (`/api/games/popularity`). Until the server has recorded any matches there
+   * is nothing honest to rank, so it falls back to the featured picks and says
+   * so — the numbers are never fabricated.
+   */
+  const popular = useMemo(() => {
+    const byId = new Map(popularity.map((entry) => [entry.gameId, entry]));
+    const ranked = games
+      .filter((game) => (byId.get(game.id)?.playCount ?? 0) > 0)
+      .sort((a, b) => (byId.get(b.id)?.playCount ?? 0) - (byId.get(a.id)?.playCount ?? 0))
+      .slice(0, 4);
+    if (ranked.length > 0) {
+      return { games: ranked, counts: byId, real: true };
+    }
+    return {
+      games: (featured.length > 0 ? featured : games).slice(0, 4),
+      counts: byId,
+      real: false,
+    };
+  }, [games, popularity, featured]);
+
   const recent = recentlyPlayed
     .map((gameId) => games.find((game) => game.id === gameId))
     .filter((game): game is NonNullable<typeof game> => Boolean(game));
@@ -121,6 +151,16 @@ export function HomeScreen() {
             </Card>
           ))}
         </section>
+      ) : null}
+
+      {gamesError && games.length === 0 ? (
+        // Without the catalogue every game rail below would silently vanish,
+        // so say what happened and offer a retry instead.
+        <GamesLoadError
+          message={gamesError}
+          busy={gamesLoading}
+          onRetry={() => void loadGames(true)}
+        />
       ) : null}
 
       {featured.length > 0 ? (
@@ -218,9 +258,14 @@ export function HomeScreen() {
 
       <section className="grid gap-4 sm:grid-cols-2">
         <Card>
-          <CardHeader title="Popular right now" subtitle="Hand-picked quick matches" />
+          <CardHeader
+            title="Popular right now"
+            subtitle={
+              popular.real ? 'Most played across 2PLAY' : 'Hand-picked quick matches'
+            }
+          />
           <ul className="space-y-2">
-            {popular.slice(0, 4).map((game) => (
+            {popular.games.map((game) => (
               <li key={game.id} className="flex items-center justify-between gap-3">
                 <Link to={`/games/${game.id}`} className="flex min-w-0 items-center gap-2">
                   <span className="text-xl" aria-hidden>
@@ -228,7 +273,13 @@ export function HomeScreen() {
                   </span>
                   <span className="truncate text-sm text-slate-200">{game.name}</span>
                 </Link>
-                <Badge>{game.category}</Badge>
+                {popular.real ? (
+                  <Badge tone="primary">
+                    {popular.counts.get(game.id)?.playCount ?? 0} played
+                  </Badge>
+                ) : (
+                  <Badge>{formatCategory(game.category)}</Badge>
+                )}
               </li>
             ))}
           </ul>

@@ -280,6 +280,68 @@ describe('RoomManager', () => {
     ).toThrow(AppError);
   });
 
+  it('keeps a live match running when a player leaves but enough seats remain', async () => {
+    // 3-seat math-rush room: 2 humans + 1 AI.
+    const host = await createPlayer(platform, 'DepHost');
+    const guest = await createPlayer(platform, 'DepGuest');
+    const room = platform.roomManager.createRoom({
+      gameId: 'math-rush',
+      maxPlayers: 3,
+      isPrivate: false,
+      host,
+    });
+    platform.roomManager.joinRoom({ roomId: room.id, player: guest });
+    platform.roomManager.addAI(room, host.playerId, 'hard');
+
+    for (const player of room.humanPlayers) {
+      platform.lobbyManager.setReady(room, player.id, true);
+    }
+    room.status = 'PLAYING';
+    room.gameStartedAt = Date.now();
+    platform.gameManager.createState(room);
+    platform.gameManager.start(room);
+    expect(room.players.size).toBe(3);
+
+    // The guest walks out mid-match. One human + one AI still satisfies the
+    // 2 seat minimum, so the match must continue rather than be abandoned.
+    platform.roomManager.leaveRoom(room, guest.playerId, 'leave');
+
+    expect(room.players.size).toBe(2);
+    expect(room.status).toBe('PLAYING');
+    expect(room.gameResult).toBeNull();
+    expect(room.aiPlayers).toHaveLength(1);
+  });
+
+  it('ends a live match once the remaining seats fall below the game minimum', async () => {
+    const host = await createPlayer(platform, 'AbnHost');
+    const guest = await createPlayer(platform, 'AbnGuest');
+    const room = platform.roomManager.createRoom({
+      gameId: 'math-rush',
+      maxPlayers: 2,
+      isPrivate: false,
+      host,
+    });
+    platform.roomManager.joinRoom({ roomId: room.id, player: guest });
+    for (const player of room.humanPlayers) {
+      platform.lobbyManager.setReady(room, player.id, true);
+    }
+    room.status = 'PLAYING';
+    room.gameStartedAt = Date.now();
+    platform.gameManager.createState(room);
+    platform.gameManager.start(room);
+
+    // No AI seats: one human left is below the 2 seat minimum, so the match
+    // cannot continue. (math-rush's own `playerLeft` hook may finish it first;
+    // either way the room must leave the playing state and end up in the lobby,
+    // because no rematch is possible with a single seat.)
+    platform.roomManager.leaveRoom(room, guest.playerId, 'leave');
+
+    expect(room.players.size).toBe(1);
+    expect(['PLAYING', 'COUNTDOWN', 'PAUSED']).not.toContain(room.status);
+    expect(room.status).toBe('LOBBY');
+    expect(platform.rematchManager.canRematch(room)).toBe(false);
+  });
+
   it('closes rooms that have been empty past the timeout', async () => {
     const shortHarness = createTestPlatform({ roomTimeoutMs: 10 });
     const host = await createPlayer(shortHarness.platform, 'SweepHost');
@@ -294,5 +356,85 @@ describe('RoomManager', () => {
     expect(result.closed).toBe(1);
     expect(shortHarness.platform.roomStore.size).toBe(0);
     shortHarness.destroy();
+  });
+  /**
+   * Host migration. Without it a room whose host walks out can never start
+   * again — `LobbyManager.canStart` needs a host — so the seat must move to a
+   * remaining human and everyone must be told.
+   */
+  it('promotes a remaining human to host when the host leaves, and announces it', async () => {
+    const host = await createPlayer(platform, 'MigrateHost');
+    const guest = await createPlayer(platform, 'MigrateGuest');
+    const room = platform.roomManager.createRoom({
+      gameId: 'reaction-race',
+      maxPlayers: 2,
+      isPrivate: false,
+      host,
+    });
+    platform.roomManager.joinRoom({ roomId: room.id, player: guest });
+    expect(room.hostPlayerId).toBe(host.playerId);
+
+    const announced: string[] = [];
+    platform.eventBus.on('room:host-changed', ({ room: changed, player }) => {
+      expect(changed.id).toBe(room.id);
+      announced.push(player.id);
+    });
+
+    platform.roomManager.leaveRoom(room, host.playerId, 'leave');
+
+    expect(announced).toEqual([guest.playerId]);
+    expect(room.hostPlayerId).toBe(guest.playerId);
+    expect(room.players.get(guest.playerId)?.isHost).toBe(true);
+    // Exactly one host flag survives — a second one would make ownership
+    // ambiguous for kick/start permissions.
+    expect([...room.players.values()].filter((player) => player.isHost)).toHaveLength(1);
+    // And the room is still startable by its new owner.
+    expect(room.status).toBe('LOBBY');
+  });
+
+  it('keeps exactly one host when a non-host leaves first', async () => {
+    const host = await createPlayer(platform, 'StayHost');
+    const guest = await createPlayer(platform, 'LeaveGuest');
+    const room = platform.roomManager.createRoom({
+      gameId: 'reaction-race',
+      maxPlayers: 3,
+      isPrivate: false,
+      host,
+    });
+    platform.roomManager.joinRoom({ roomId: room.id, player: guest });
+
+    let announced = 0;
+    platform.eventBus.on('room:host-changed', () => {
+      announced += 1;
+    });
+
+    platform.roomManager.leaveRoom(room, guest.playerId, 'leave');
+
+    expect(announced).toBe(0);
+    expect(room.hostPlayerId).toBe(host.playerId);
+    expect(room.players.get(host.playerId)?.isHost).toBe(true);
+  });
+
+  it('never promotes an AI seat to host, and closes the room when no human is left', async () => {
+    const host = await createPlayer(platform, 'SoloHost');
+    const room = platform.roomManager.createRoom({
+      gameId: 'reaction-race',
+      maxPlayers: 2,
+      isPrivate: false,
+      host,
+    });
+    const ai = platform.roomManager.addAI(room, host.playerId, 'medium');
+    expect(ai).not.toBeNull();
+
+    let announced = 0;
+    platform.eventBus.on('room:host-changed', () => {
+      announced += 1;
+    });
+
+    platform.roomManager.leaveRoom(room, host.playerId, 'leave');
+
+    // An AI cannot own a room: there would be nobody left to start or kick.
+    expect(announced).toBe(0);
+    expect(platform.roomStore.size).toBe(0);
   });
 });

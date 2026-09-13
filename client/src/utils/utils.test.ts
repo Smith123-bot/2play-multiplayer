@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cn } from './cn';
-import { formatDuration, formatPercent, ordinal, playerName } from './format';
+import { formatCategory, formatDuration, formatPercent, ordinal, playerName } from './format';
 import { readJson, readString, removeKey, writeJson, writeString } from './storage';
 
 describe('utils', () => {
@@ -8,6 +8,17 @@ describe('utils', () => {
     expect(cn('btn', 'btn-primary')).toBe('btn btn-primary');
     expect(cn('px-2', 'px-4')).toBe('px-4');
     expect(cn('text-sm', undefined, 'text-white')).toBe('text-sm text-white');
+  });
+
+  it('formats category ids as display words', () => {
+    expect(formatCategory('reflex')).toBe('Reflex');
+    expect(formatCategory('coop')).toBe('Coop');
+    expect(formatCategory('word')).toBe('Word');
+    // Hyphenated or multi-word ids stay readable, and the transform is stable
+    // so a card and the filter dropdown cannot disagree.
+    expect(formatCategory('sports-arcade')).toBe('Sports Arcade');
+    expect(formatCategory(formatCategory('reflex'))).toBe('Reflex');
+    expect(formatCategory('')).toBe('');
   });
 
   it('formats durations and percentages', () => {

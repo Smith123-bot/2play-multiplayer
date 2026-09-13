@@ -10,12 +10,14 @@ import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Badge } from '../components/ui/Badge';
 import { LoadingBlock } from '../components/ui/Spinner';
+import { GamesLoadError } from '../components/game/GamesLoadError';
 import { useGameStore } from '../stores/gameStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { usePopularityStore } from '../stores/popularityStore';
 import { useRoomActions } from '../hooks/useRoomActions';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import { cn } from '../utils/cn';
+import { formatCategory } from '../utils/format';
 
 type SortKey = 'featured' | 'name' | 'duration' | 'players';
 
@@ -24,21 +26,24 @@ type SortKey = 'featured' | 'name' | 'duration' | 'players';
  * behaves identically everywhere (spec: only one card expanded at a time).
  */
 function GameGrid({
+  section,
   games,
   favorites,
   onToggleFavorite,
-  expandedGameId,
+  expanded,
   onToggleExpand,
   onQuickPlay,
   onCreateRoom,
   onJoinRoom,
   quickPlayBusyId,
 }: {
+  /** Which rail this grid is, so a game shown in two rails expands in only one. */
+  section: string;
   games: GameMetadata[];
   favorites: string[];
   onToggleFavorite: (gameId: string) => void;
-  expandedGameId: string | null;
-  onToggleExpand: (gameId: string) => void;
+  expanded: { section: string; gameId: string } | null;
+  onToggleExpand: (section: string, gameId: string) => void;
   onQuickPlay: (gameId: string) => void;
   onCreateRoom: (gameId: string) => void;
   onJoinRoom: (gameId: string) => void;
@@ -46,21 +51,29 @@ function GameGrid({
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {games.map((game) => (
-        <GameCard
-          key={game.id}
-          game={game}
-          favorite={favorites.includes(game.id)}
-          onToggleFavorite={onToggleFavorite}
-          expanded={expandedGameId === game.id}
-          onToggleExpand={onToggleExpand}
-          onQuickPlay={onQuickPlay}
-          onCreateRoom={onCreateRoom}
-          onJoinRoom={onJoinRoom}
-          quickPlayBusy={quickPlayBusyId === game.id}
-          className={expandedGameId === game.id ? 'sm:col-span-2 lg:col-span-2' : undefined}
-        />
-      ))}
+      {games.map((game) => {
+        // A game can appear in several rails at once (Most Played, New Games,
+        // Favorites and All Games all overlap). Expanding by id alone used to
+        // open EVERY copy of that game at the same time, so one tap produced
+        // two or three expanded cards on screen. Match the rail too, which keeps
+        // the "exactly one card expanded" rule true.
+        const isOpen = expanded?.section === section && expanded.gameId === game.id;
+        return (
+          <GameCard
+            key={game.id}
+            game={game}
+            favorite={favorites.includes(game.id)}
+            onToggleFavorite={onToggleFavorite}
+            expanded={isOpen}
+            onToggleExpand={(gameId) => onToggleExpand(section, gameId)}
+            onQuickPlay={onQuickPlay}
+            onCreateRoom={onCreateRoom}
+            onJoinRoom={onJoinRoom}
+            quickPlayBusy={quickPlayBusyId === game.id}
+            className={isOpen ? 'sm:col-span-2 lg:col-span-2' : undefined}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -70,6 +83,7 @@ export function GameBrowserScreen() {
   const gate = useIdentityGate();
   const games = useGameStore((store) => store.games);
   const loading = useGameStore((store) => store.loading);
+  const gamesError = useGameStore((store) => store.error);
   const loadGames = useGameStore((store) => store.load);
   const favorites = useFavoritesStore((store) => store.favorites);
   const toggleFavorite = useFavoritesStore((store) => store.toggle);
@@ -87,7 +101,7 @@ export function GameBrowserScreen() {
 
   // Inline card expansion (spec: exactly one game expanded at a time, on the
   // same Games page — never navigate to a separate details/selection page).
-  const [expandedGameId, setExpandedGameId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<{ section: string; gameId: string } | null>(null);
   const [quickPlayBusyId, setQuickPlayBusyId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -96,8 +110,12 @@ export function GameBrowserScreen() {
     void loadPopularity();
   }, [loadGames, loadFavorites, loadPopularity]);
 
-  const toggleExpand = (gameId: string) => {
-    setExpandedGameId((current) => (current === gameId ? null : gameId));
+  const toggleExpand = (section: string, gameId: string) => {
+    setExpanded((current) =>
+      current && current.section === section && current.gameId === gameId
+        ? null
+        : { section, gameId },
+    );
   };
 
   const startQuickPlay = (gameId: string) => {
@@ -176,7 +194,7 @@ export function GameBrowserScreen() {
   const gridProps = {
     favorites,
     onToggleFavorite: (gameId: string) => void toggleFavorite(gameId),
-    expandedGameId,
+    expanded,
     onToggleExpand: toggleExpand,
     onQuickPlay: startQuickPlay,
     onCreateRoom: openCreateRoom,
@@ -198,10 +216,17 @@ export function GameBrowserScreen() {
       <section className="card space-y-3 p-4">
         <Input
           label="Search"
+          type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onClear={() => setQuery('')}
+          clearLabel="Clear search"
           placeholder="Search by name, id, category or tag…"
           icon={<Search className="h-4 w-4" />}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="search"
         />
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -214,7 +239,7 @@ export function GameBrowserScreen() {
               { value: 'all', label: 'All categories' },
               ...GAME_CATEGORIES.map((value) => ({
                 value,
-                label: value.charAt(0).toUpperCase() + value.slice(1),
+                label: formatCategory(value),
               })),
             ]}
           />
@@ -275,7 +300,13 @@ export function GameBrowserScreen() {
         </div>
       </section>
 
-      {loading && games.length === 0 ? (
+      {gamesError && games.length === 0 ? (
+        <GamesLoadError
+          message={gamesError}
+          busy={loading}
+          onRetry={() => void loadGames(true)}
+        />
+      ) : loading && games.length === 0 ? (
         <LoadingBlock message="Loading games…" />
       ) : searchActive ? (
         results.length === 0 ? (
@@ -290,7 +321,12 @@ export function GameBrowserScreen() {
             }
           />
         ) : (
-          <GameGrid games={results} {...gridProps} />
+          <>
+            <p className="sr-only" role="status" aria-live="polite">
+              {results.length} {results.length === 1 ? 'game' : 'games'} found
+            </p>
+            <GameGrid section="search" games={results} {...gridProps} />
+          </>
         )
       ) : (
         <div className="space-y-8">
@@ -299,16 +335,19 @@ export function GameBrowserScreen() {
               <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-white">
                 <Flame className="h-5 w-5 text-orange-400" /> Most Played
               </h2>
-              <GameGrid games={mostPlayed} {...gridProps} />
+              <GameGrid section="most-played" games={mostPlayed} {...gridProps} />
             </section>
           ) : null}
 
           {newGames.length > 0 ? (
             <section>
-              <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-white">
+              <h2 className="mb-1 flex items-center gap-2 text-xl font-bold text-white">
                 <Sparkles className="h-5 w-5 text-primary-300" /> New Games
               </h2>
-              <GameGrid games={newGames} {...gridProps} />
+              <p className="mb-4 text-xs text-slate-500">
+                The most recently added games in the 2PLAY catalogue.
+              </p>
+              <GameGrid section="new" games={newGames} {...gridProps} />
             </section>
           ) : null}
 
@@ -317,7 +356,7 @@ export function GameBrowserScreen() {
               <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-white">
                 <Heart className="h-5 w-5 text-accent" /> Favorites
               </h2>
-              <GameGrid games={favoriteGames} {...gridProps} />
+              <GameGrid section="favorites" games={favoriteGames} {...gridProps} />
             </section>
           ) : null}
 
@@ -328,7 +367,7 @@ export function GameBrowserScreen() {
             {games.length === 0 ? (
               <EmptyState icon="🎮" title="No games available" description="Check back soon." />
             ) : (
-              <GameGrid games={results} {...gridProps} />
+              <GameGrid section="all" games={results} {...gridProps} />
             )}
           </section>
         </div>

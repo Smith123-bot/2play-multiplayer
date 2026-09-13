@@ -3,23 +3,32 @@ import { Toaster } from 'react-hot-toast';
 import { AppShell } from './components/layout/AppShell';
 import { NicknamePrompt } from './components/NicknamePrompt';
 import { ReconnectOverlay } from './components/connection/ReconnectOverlay';
+import { LoadingBlock } from './components/ui/Spinner';
 import { useConnection } from './hooks/useConnection';
 import { useAudioUnlock } from './hooks/useAudioUnlock';
 import { useGameStore } from './stores/gameStore';
-import { useEffect } from 'react';
-import {
-  HomeScreen,
-  GameBrowserScreen,
-  GameDetailsScreen,
-  CreateRoomScreen,
-  JoinRoomScreen,
-  RoomScreen,
-  SettingsScreen,
-  StatisticsScreen,
-  FavoritesScreen,
-  NotFoundScreen,
-  ErrorScreen,
-} from './screens';
+import { lazy, Suspense, useEffect } from 'react';
+import { HomeScreen } from './screens/HomeScreen';
+
+/**
+ * Route-level code splitting.
+ *
+ * HomeScreen stays in the main chunk because it is the landing route and must
+ * paint immediately; every other screen is fetched on first navigation. The
+ * `./screens` barrel is deliberately NOT imported here — re-exporting all
+ * eleven screens from one module would pull them straight back into the initial
+ * bundle and undo the split.
+ */
+const GameBrowserScreen = lazy(() => import('./screens/GameBrowserScreen'));
+const GameDetailsScreen = lazy(() => import('./screens/GameDetailsScreen'));
+const CreateRoomScreen = lazy(() => import('./screens/CreateRoomScreen'));
+const JoinRoomScreen = lazy(() => import('./screens/JoinRoomScreen'));
+const RoomScreen = lazy(() => import('./screens/RoomScreen'));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen'));
+const StatisticsScreen = lazy(() => import('./screens/StatisticsScreen'));
+const FavoritesScreen = lazy(() => import('./screens/FavoritesScreen'));
+const NotFoundScreen = lazy(() => import('./screens/NotFoundScreen'));
+const ErrorScreen = lazy(() => import('./screens/ErrorScreen'));
 
 export function App() {
   // Single place where the socket is connected and bridged into the stores.
@@ -34,6 +43,7 @@ export function App() {
   return (
     <>
       <AppShell>
+        <Suspense fallback={<LoadingBlock message="Loading…" />}>
         <Routes>
           <Route path="/" element={<HomeScreen />} />
           <Route path="/games" element={<GameBrowserScreen />} />
@@ -48,6 +58,7 @@ export function App() {
           <Route path="/error" element={<ErrorScreen />} />
           <Route path="*" element={<NotFoundScreen />} />
         </Routes>
+        </Suspense>
       </AppShell>
 
       <NicknamePrompt />

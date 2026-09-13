@@ -175,8 +175,10 @@ function WordScrambleGame({
           disabled={!typing || iSolved}
           maxLength={24}
           autoComplete="off"
+          autoCorrect="off"
           autoCapitalize="characters"
           spellCheck={false}
+          enterKeyHint="send"
           placeholder={iSolved ? 'You solved it!' : typing ? 'Type the original word…' : 'Waiting…'}
           onChange={(event) => setValue(event.target.value)}
           className="input flex-1 uppercase tracking-widest"

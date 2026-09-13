@@ -39,11 +39,24 @@ export interface MemoryMatchState {
   aiMemory: Record<string, Record<number, string>>;
   lastEvent: string | null;
   resolveAt: number | null;
+  /**
+   * Seed the current layout was built from. Kept in state so `reset()` (a
+   * rematch) can advance it and deal a genuinely different board instead of
+   * replaying the previous match's layout.
+   */
+  seed: number;
 }
 
 
+/**
+ * Card faces. Deliberately larger than the biggest grid (6x6 = 18 pairs) so
+ * that even a full board draws a different *set* of symbols each match, not
+ * just a different ordering of the same 18.
+ */
 const SYMBOLS = [
-  '🍎','🍌','🍇','🍓','🍑','🍍','🥝','🥑','🍩','🍕','🍔','🌮','⚽','🏀','🎾','🚀','🌟','🎸',
+  '🍎','🍌','🍇','🍓','🍑','🍍','🥝','🥑','🍩','🍕','🍔','🌮',
+  '⚽','🏀','🎾','🚀','🌟','🎸','🐶','🐱','🐼','🦊','🐸','🐙',
+  '🌈','🌙','🔥','💎','🎈','🎁','🚗','✈️','🌻','🍀','🎲','🧩',
 ];
 
 const GRIDS: Record<string, { cols: number; rows: number }> = {
@@ -129,9 +142,9 @@ export const memoryMatchGame: GameModule<MemoryMatchState> = {
 
   createInitialState(players, config): MemoryMatchState {
     const { cols, rows } = gridFor(config.gridSize);
+    const seed = config.seed ?? 1;
     const pairCount = Math.floor((cols * rows) / 2);
-    const symbols = shuffle(SYMBOLS, createSeededRandom(config.seed ?? 1)).slice(0, pairCount);
-    const deck = shuffle([...symbols, ...symbols], createSeededRandom((config.seed ?? 1) + 7));
+    const deck = buildDeck(seed, pairCount);
 
     return {
       cols,
@@ -145,6 +158,7 @@ export const memoryMatchGame: GameModule<MemoryMatchState> = {
       attempts: Object.fromEntries(players.map((player) => [player.id, 0])),
       totalPairs: pairCount,
       matchedPairs: 0,
+      seed,
       aiMemory: {},
       lastEvent: null,
       resolveAt: null,
@@ -286,9 +300,18 @@ export const memoryMatchGame: GameModule<MemoryMatchState> = {
   },
 
   reset(state): MemoryMatchState {
+    // A rematch gets a freshly dealt board. Advancing the stored seed keeps the
+    // layout deterministic (reproducible in tests, identical for every client)
+    // while guaranteeing it is not the layout players just finished.
+    const seed = (Math.imul(state.seed ^ 0x9e3779b9, 0x85ebca6b) >>> 0) || 1;
     return {
       ...state,
-      cards: state.cards.map((card) => ({ ...card, matchedBy: null })),
+      seed,
+      cards: buildDeck(seed, state.cards.length / 2).map((symbol, index) => ({
+        id: index,
+        symbol,
+        matchedBy: null,
+      })),
       selection: [],
       phase: 'idle',
       pairs: Object.fromEntries(Object.keys(state.pairs).map((id) => [id, 0])),
@@ -389,6 +412,16 @@ function scheduleAIIfNeeded(state: MemoryMatchState, ctx: GameContext): void {
   if (current?.isAI && state.phase === 'playing') {
     ctx.requestAI(current.id, 700 + Math.floor(ctx.random() * 900));
   }
+}
+
+/**
+ * Deals a layout: pick `pairCount` distinct symbols, then shuffle the pairs.
+ * Two independent streams (seed and seed+7) so the symbol *selection* and the
+ * resulting *order* are not correlated.
+ */
+function buildDeck(seed: number, pairCount: number): string[] {
+  const symbols = shuffle(SYMBOLS, createSeededRandom(seed)).slice(0, pairCount);
+  return shuffle([...symbols, ...symbols], createSeededRandom((seed + 7) >>> 0));
 }
 
 function createSeededRandom(seed: number): () => number {

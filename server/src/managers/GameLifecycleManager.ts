@@ -148,7 +148,15 @@ export class GameLifecycleManager {
         onTick: () => {
           if (room.status !== 'PLAYING') return;
           this.platform.gameManager.update(room, GAME_TICK_MS);
-          this.platform.socketManager?.broadcastRoomState(room);
+          // Forced, not throttled: the throttle exists to coalesce *bursts* of
+          // player actions, and a tick is not a burst — ticks are already
+          // spaced GAME_TICK_MS apart, so this cannot exceed the broadcast
+          // volume the loop already produced. Without `force`, a tick landing
+          // inside the throttle window of a recent action had its snapshot
+          // deferred to the trailing timer, so eliminations, captures and hits
+          // resolved by the simulation reached players up to a throttle window
+          // late.
+          this.platform.socketManager?.broadcastRoomState(room, true);
         },
       });
     }

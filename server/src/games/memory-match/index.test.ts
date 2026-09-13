@@ -169,3 +169,69 @@ describe('Memory Match', () => {
     expect(Object.values(reset.pairs).every((value) => value === 0)).toBe(true);
   });
 });
+
+describe('Memory Match layout variety', () => {
+  let harness: TestPlatform;
+  let platform: Platform;
+
+  beforeEach(() => {
+    harness = createTestPlatform();
+    platform = harness.platform;
+  });
+  afterEach(() => harness.destroy());
+
+  const deckOf = (room: Room) =>
+    (room.gameState as MemoryMatchState).cards.map((card) => card.symbol).join('');
+
+  async function match(gridSize?: string) {
+    const fixture = await createGameFixture(platform, 'memory-match', {
+      ...(gridSize ? { settings: { gridSize } as never } : {}),
+    });
+    return fixture.room;
+  }
+
+  it('deals a different layout in every fresh match', async () => {
+    const decks = new Set<string>();
+    for (let i = 0; i < 8; i += 1) {
+      decks.add(deckOf(await match()));
+    }
+    // With config.seed unset this was one identical deck out of eight.
+    expect(decks.size).toBe(8);
+  });
+
+  it('deals a different layout on rematch instead of replaying the last board', async () => {
+    const room = await match();
+    const seen = [deckOf(room)];
+    for (let i = 0; i < 4; i += 1) {
+      platform.gameManager.resetState(room);
+      platform.gameManager.start(room);
+      seen.push(deckOf(room));
+    }
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+
+  it('draws a different symbol SET on the largest grid, not just a new order', async () => {
+    // A 6x6 board needs 18 pairs; the pool is larger than that, so the set of
+    // faces itself must vary between matches.
+    const sets = new Set<string>();
+    for (let i = 0; i < 8; i += 1) {
+      const room = await match('6x6');
+      const state = room.gameState as MemoryMatchState;
+      expect(state.cards).toHaveLength(36);
+      sets.add([...new Set(state.cards.map((card) => card.symbol))].sort().join(''));
+    }
+    expect(sets.size).toBeGreaterThan(4);
+  });
+
+  it('keeps every layout a valid set of pairs', async () => {
+    for (const gridSize of ['4x4', '6x4', '6x6']) {
+      const room = await match(gridSize);
+      const state = room.gameState as MemoryMatchState;
+      const counts = new Map<string, number>();
+      for (const card of state.cards) counts.set(card.symbol, (counts.get(card.symbol) ?? 0) + 1);
+      // Exactly two of each symbol, so the board is always completable.
+      expect([...counts.values()].every((n) => n === 2)).toBe(true);
+      expect(state.cards.length).toBe(state.totalPairs * 2);
+    }
+  });
+});

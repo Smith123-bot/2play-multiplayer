@@ -75,7 +75,47 @@ describe('Fake Door Battle', () => {
     expect(position.correctDoorId).toBe('door-3');
     const memory = buildDoorRound(rng, 4, 'gold');
     expect(memory.clueKind).toBe('memory');
-    expect(memory.correctDoorId).toBe('door-3');
+    // Colours are dealt fresh each round, so the clue must resolve to whichever
+    // door is actually wearing gold rather than to a hardcoded position.
+    const memoryDoor = memory.doors.find((door) => door.id === memory.correctDoorId);
+    expect(memoryDoor?.color).toBe('gold');
+
+    // With no previous colour the clue names crimson, so crimson must be the target.
+    const firstMemory = buildDoorRound(rng, 4, null);
+    expect(firstMemory.clue).toMatch(/crimson/i);
+    expect(firstMemory.doors.find((door) => door.id === firstMemory.correctDoorId)?.color).toBe(
+      'crimson',
+    );
+  });
+
+  it('deals a different colour and symbol arrangement between rounds', () => {
+    const arrangement = (seed: number) => {
+      let value = seed;
+      const rng = () => {
+        value = (value * 1103515245 + 12345) % 2147483648;
+        return value / 2147483648;
+      };
+      return buildDoorRound(rng, 0, null)
+        .doors.map((door) => `${door.color}/${door.symbol}`)
+        .join(' ');
+    };
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 60; seed += 1) seen.add(arrangement(seed));
+    // 4! x 4! = 576 possible arrangements; a real deal should surface many.
+    expect(seen.size).toBeGreaterThan(20);
+
+    // Every deal is still a permutation: all four colours and symbols present,
+    // and doors keep their identity by position.
+    let value = 7;
+    const rng = () => {
+      value = (value * 1103515245 + 12345) % 2147483648;
+      return value / 2147483648;
+    };
+    const { doors } = buildDoorRound(rng, 1, null);
+    expect(new Set(doors.map((door) => door.color)).size).toBe(4);
+    expect(new Set(doors.map((door) => door.symbol)).size).toBe(4);
+    expect(doors.map((door) => door.number)).toEqual([1, 2, 3, 4]);
+    expect(doors.map((door) => door.position)).toEqual([0, 1, 2, 3]);
   });
 
   it('starts a round with four doors and hides the correct id', () => {

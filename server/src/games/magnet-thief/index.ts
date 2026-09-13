@@ -1,4 +1,5 @@
 import type { GameAction, GameFinishReason } from '@2play/shared';
+import { createRandom } from '@2play/shared';
 import { MAGNET_THIEF_METADATA } from '@2play/shared';
 export { MAGNET_THIEF_METADATA };
 import type {
@@ -84,20 +85,66 @@ export function inSafeCorner(x: number, y: number): boolean {
   return SAFE_CORNERS.some((corner) => Math.hypot(x - corner.x, y - corner.y) <= 1.6);
 }
 
-export function spawnGems(count: number): MagnetGem[] {
+/**
+ * Obstacle clearance: a player cannot move within `radius + 0.38` of an obstacle
+ * centre, so a gem any closer than this could never be collected.
+ */
+const OBSTACLE_CLEARANCE = 0.6;
+
+function blockedByObstacle(x: number, y: number): boolean {
+  return MAGNET_OBSTACLES.some(
+    (obstacle) => Math.hypot(x - obstacle.x, y - obstacle.y) < obstacle.radius + OBSTACLE_CLEARANCE,
+  );
+}
+
+/** The legacy deterministic slot for `index`, used only as a guaranteed fallback. */
+function fallbackSlot(index: number): { x: number; y: number } {
+  return {
+    x: 3 + ((index * 3.1) % (MAGNET_W - 6)),
+    y: 2.5 + ((index * 2.4) % (MAGNET_H - 5)),
+  };
+}
+
+/**
+ * Places the gems for a match.
+ *
+ * With a `random` source the gems are scattered over the arena, so no two
+ * matches share a layout. Placement is constrained to keep the round fair:
+ * gems stay off the spawn corners, off the blocked zone around every obstacle
+ * (a gem there could never be reached), and off each other's cell.
+ *
+ * Positions that fail the constraints are retried, and any shortfall is topped
+ * up from the deterministic slot list — so the function always returns exactly
+ * `count` gems and can never produce an unreachable or overlapping layout.
+ * Gem values keep the 10/15/20 rotation so scoring is unchanged.
+ */
+export function spawnGems(count: number, random?: () => number): MagnetGem[] {
   const gems: MagnetGem[] = [];
   const used = new Set<string>();
-  let i = 0;
-  while (gems.length < count && i < 80) {
-    i += 1;
-    const x = 3 + ((gems.length * 3.1) % (MAGNET_W - 6));
-    const y = 2.5 + ((gems.length * 2.4) % (MAGNET_H - 5));
+
+  const accept = (x: number, y: number): boolean => {
     const key = `${Math.round(x)}:${Math.round(y)}`;
-    if (used.has(key) || inSafeCorner(x, y)) continue;
+    if (used.has(key) || inSafeCorner(x, y) || blockedByObstacle(x, y)) return false;
     used.add(key);
     gems.push({ id: `gem-${gems.length}`, x, y, ownerId: null, value: 10 + (gems.length % 3) * 5 });
+    return true;
+  };
+
+  if (random) {
+    let attempts = 0;
+    while (gems.length < count && attempts < count * 60) {
+      attempts += 1;
+      accept(2 + random() * (MAGNET_W - 4), 2 + random() * (MAGNET_H - 4));
+    }
   }
-  return gems;
+
+  // Deterministic top-up (also the whole layout when no random source is given).
+  for (let index = 0; gems.length < count && index < count * 4; index += 1) {
+    const slot = fallbackSlot(index);
+    accept(slot.x, slot.y);
+  }
+
+  return gems.slice(0, count);
 }
 
 function makePlayer(index: number): MagnetPlayer {
@@ -141,6 +188,75 @@ export function tryMagnetMove(
   player.x = x;
   player.y = y;
   return true;
+}
+
+/**
+ * Pure movement predicate: would this step land somewhere legal?
+ *
+ * Mirrors `tryMagnetMove` but never mutates the player, so the AI can probe
+ * several directions before committing. A step that is clamped against the
+ * arena boundary and therefore goes nowhere also counts as blocked — pushing
+ * into a wall is exactly the trap that used to freeze the AI.
+ */
+export function canMagnetMove(
+  player: MagnetPlayer,
+  dx: number,
+  dy: number,
+  obstacles: Array<{ x: number; y: number; radius: number }> = MAGNET_OBSTACLES,
+): boolean {
+  if (dx === 0 && dy === 0) return false;
+  const x = Math.max(0.4, Math.min(MAGNET_W - 0.4, player.x + dx * MOVE_STEP));
+  const y = Math.max(0.4, Math.min(MAGNET_H - 0.4, player.y + dy * MOVE_STEP));
+  if (x === player.x && y === player.y) return false;
+  return !obstacles.some(
+    (obstacle) => Math.hypot(x - obstacle.x, y - obstacle.y) < obstacle.radius + 0.38,
+  );
+}
+
+/** Diagonal steps are scaled so `hypot(dx, dy)` stays inside the server's 1.1 cap. */
+const DIAGONAL = 0.75;
+
+/** All eight unit directions the server accepts as a `move` intent. */
+const MOVE_DIRECTIONS: Array<{ dx: number; dy: number }> = [
+  { dx: 1, dy: 0 },
+  { dx: -1, dy: 0 },
+  { dx: 0, dy: 1 },
+  { dx: 0, dy: -1 },
+  { dx: DIAGONAL, dy: DIAGONAL },
+  { dx: DIAGONAL, dy: -DIAGONAL },
+  { dx: -DIAGONAL, dy: DIAGONAL },
+  { dx: -DIAGONAL, dy: -DIAGONAL },
+];
+
+/**
+ * Picks a step that actually makes progress toward `target`.
+ *
+ * Directions are ranked by how close the resulting position lands to the
+ * target, then the first one the server would accept is used. That keeps the
+ * historic feel (straight along the dominant axis wins when the route is clear)
+ * while sliding *around* an obstacle instead of backing away from it.
+ *
+ * Previously the AI always answered with the dominant axis, so whenever an
+ * obstacle sat between it and the gem it re-sent the same blocked intent for
+ * the rest of the match and visibly froze in place.
+ */
+export function pickPassableStep(
+  player: MagnetPlayer,
+  target: { x: number; y: number },
+  obstacles: Array<{ x: number; y: number; radius: number }> = MAGNET_OBSTACLES,
+): { dx: number; dy: number } {
+  const ranked = MOVE_DIRECTIONS.map((direction) => {
+    const x = Math.max(0.4, Math.min(MAGNET_W - 0.4, player.x + direction.dx * MOVE_STEP));
+    const y = Math.max(0.4, Math.min(MAGNET_H - 0.4, player.y + direction.dy * MOVE_STEP));
+    return { direction, distance: Math.hypot(target.x - x, target.y - y) };
+  }).sort((a, b) => a.distance - b.distance);
+
+  for (const { direction } of ranked) {
+    if (canMagnetMove(player, direction.dx, direction.dy, obstacles)) return direction;
+  }
+  // Fully boxed in: holding position is legal, and the next gem respawn or
+  // magnet pull will open a route again.
+  return { dx: 0, dy: 0 };
 }
 
 export function activateMagnet(
@@ -235,10 +351,10 @@ export const magnetThiefGame: GameModule<MagnetState> = {
     // Stateless module.
   },
 
-  createInitialState(players): MagnetState {
+  createInitialState(players, config): MagnetState {
     return {
       phase: 'idle',
-      gems: spawnGems(8),
+      gems: spawnGems(8, createRandom(config?.seed ?? 1)),
       players: Object.fromEntries(players.map((player, index) => [player.id, makePlayer(index)])),
       startedAt: null,
       endsAt: null,
@@ -287,7 +403,9 @@ export const magnetThiefGame: GameModule<MagnetState> = {
     ctx.players.forEach((player, index) => {
       state.players[player.id] = makePlayer(index);
     });
-    state.gems = spawnGems(8);
+    // Gems are scattered from the platform PRNG, so every match — including a
+    // rematch, which re-enters start() — gets a different layout.
+    state.gems = spawnGems(8, ctx.random);
     state.phase = 'playing';
     state.startedAt = ctx.now();
     state.endsAt = ctx.now() + MATCH_MS;
@@ -545,11 +663,9 @@ export const magnetThiefGame: GameModule<MagnetState> = {
       }
       return { type: 'pull', payload: {} };
     }
-    const dx = target.x - player.x;
-    const dy = target.y - player.y;
-    return Math.abs(dx) >= Math.abs(dy)
-      ? { type: 'move', payload: { dx: Math.sign(dx), dy: 0 } }
-      : { type: 'move', payload: { dx: 0, dy: Math.sign(dy) } };
+    // Steer around obstacles instead of repeating a blocked direction.
+    const step = pickPassableStep(player, target, state.obstacles);
+    return { type: 'move', payload: { dx: step.dx, dy: step.dy } };
   },
 
   needsUpdateLoop: true,

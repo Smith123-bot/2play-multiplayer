@@ -4,6 +4,7 @@ import { Heart } from 'lucide-react';
 import { GameCard } from '../components/game/GameCard';
 import { EmptyState } from '../components/ui/EmptyState';
 import { LoadingBlock } from '../components/ui/Spinner';
+import { GamesLoadError } from '../components/game/GamesLoadError';
 import { useGameStore } from '../stores/gameStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useSessionStore } from '../stores/sessionStore';
@@ -11,6 +12,7 @@ import { useSessionStore } from '../stores/sessionStore';
 export function FavoritesScreen() {
   const games = useGameStore((store) => store.games);
   const loading = useGameStore((store) => store.loading);
+  const gamesError = useGameStore((store) => store.error);
   const loadGames = useGameStore((store) => store.load);
   const favorites = useFavoritesStore((store) => store.favorites);
   const loadFavorites = useFavoritesStore((store) => store.load);
@@ -44,6 +46,13 @@ export function FavoritesScreen() {
               Back home
             </Link>
           }
+        />
+      ) : gamesError && games.length === 0 ? (
+        // A failed catalogue load is not the same as "no favorites yet".
+        <GamesLoadError
+          message={gamesError}
+          busy={loading}
+          onRetry={() => void loadGames(true)}
         />
       ) : loading || favoritesLoading ? (
         <LoadingBlock message="Loading favorites…" />

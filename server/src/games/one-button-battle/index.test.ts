@@ -12,6 +12,8 @@ import {
   type OneButtonState,
 } from './index';
 import type { Room } from '../../rooms/Room';
+import { buildSequence, EVENT_COUNT, GAP_MS, LEAD_MS, MATCH_MS, WINDOW_MS } from './index';
+import { createRandom } from '@2play/shared';
 
 describe('One Button Battle', () => {
   let harness: TestPlatform;
@@ -154,5 +156,56 @@ describe('One Button Battle', () => {
       expect(state().phase).toBe('playing');
       expect(state().events[0]!.resolved[players[0]!.id]).toBe('pending');
     }
+  });
+});
+
+describe('One Button Battle cue variety', () => {
+  const ids = ['p1', 'p2'];
+
+  it('deals a different cue chart for every match', () => {
+    const charts = new Set<string>();
+    for (let seed = 1; seed <= 60; seed += 1) {
+      const ev = buildSequence(ids, EVENT_COUNT, createRandom(seed * 7717));
+      charts.add(ev.map((e) => `${e.context}@${e.appearAt}`).join('|'));
+    }
+    // The chart used to be a fixed round-robin at fixed 2400ms spacing.
+    expect(charts.size).toBeGreaterThan(50);
+  });
+
+  it('keeps every context in rotation without consecutive repeats', () => {
+    const frequency = new Map<string, number>();
+    for (let seed = 1; seed <= 120; seed += 1) {
+      const ev = buildSequence(ids, EVENT_COUNT, createRandom(seed * 6151));
+      for (let i = 0; i < ev.length; i += 1) {
+        frequency.set(ev[i]!.context, (frequency.get(ev[i]!.context) ?? 0) + 1);
+        if (i > 0) expect(ev[i]!.context).not.toBe(ev[i - 1]!.context);
+      }
+    }
+    // The shuffled bag preserves the even spread the round-robin guaranteed.
+    expect(frequency.size).toBe(CONTEXTS.length);
+    const counts = [...frequency.values()];
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThan(counts[0]! * 0.25);
+  });
+
+  it('never overlaps hit windows and always fits inside the match', () => {
+    for (let seed = 1; seed <= 200; seed += 1) {
+      const ev = buildSequence(ids, EVENT_COUNT, createRandom(seed * 5297));
+      expect(ev).toHaveLength(EVENT_COUNT);
+      for (let i = 1; i < ev.length; i += 1) {
+        // A cue must not appear before the previous window has closed.
+        expect(ev[i]!.appearAt).toBeGreaterThanOrEqual(ev[i - 1]!.windowEnd);
+        expect(ev[i]!.appearAt - ev[i - 1]!.appearAt).toBeGreaterThanOrEqual(LEAD_MS + WINDOW_MS);
+      }
+      // sequenceMs is the last window plus 800ms; it must fit MATCH_MS.
+      expect(ev[ev.length - 1]!.windowEnd + 800).toBeLessThanOrEqual(MATCH_MS);
+    }
+  });
+
+  it('keeps the original deterministic chart when no random source is given', () => {
+    const det = buildSequence(ids);
+    expect(det.map((e) => e.context)).toEqual(
+      Array.from({ length: EVENT_COUNT }, (_v, i) => CONTEXTS[i % CONTEXTS.length]),
+    );
+    expect(det[1]!.appearAt - det[0]!.appearAt).toBe(GAP_MS);
   });
 });

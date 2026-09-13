@@ -35,6 +35,10 @@ export const useFavoritesStore = create<FavoritesStoreState>((set, get) => ({
   toggle: async (gameId) => {
     const session = useSessionStore.getState().session;
     if (!session) return;
+    // A second tap while the first request is still in flight used to fire a
+    // duplicate add and prepend the same id twice, so the Favorites rail could
+    // show one game two times until the next reload.
+    if (get().pending[gameId]) return;
     const isFavorite = get().favorites.includes(gameId);
     set({ pending: { ...get().pending, [gameId]: true } });
 
@@ -45,11 +49,10 @@ export const useFavoritesStore = create<FavoritesStoreState>((set, get) => ({
     set({ pending: { ...get().pending, [gameId]: false } });
 
     if (!result.ok) return;
-    set({
-      favorites: isFavorite
-        ? get().favorites.filter((id) => id !== gameId)
-        : [gameId, ...get().favorites],
-    });
+    // Re-read and de-duplicate at resolve time: state may have moved while the
+    // request was in flight.
+    const current = get().favorites.filter((id) => id !== gameId);
+    set({ favorites: isFavorite ? current : [gameId, ...current] });
   },
 
   clear: () => set({ favorites: [], pending: {} }),

@@ -1,5 +1,5 @@
 import type { GameAction, GameFinishReason } from '@2play/shared';
-import { ONE_BUTTON_METADATA } from '@2play/shared';
+import { ONE_BUTTON_METADATA, shuffle } from '@2play/shared';
 export { ONE_BUTTON_METADATA };
 import type {
   ActionResult,
@@ -60,22 +60,58 @@ export const HIT_BASE = 20;
 export const HIT_STREAK = 5;
 export const EVENT_COUNT = 16;
 
-export function buildSequence(playerIds: string[], count = EVENT_COUNT): CueEvent[] {
+/** Smallest gap that keeps one cue's hit window from overlapping the next. */
+const MIN_GAP_MS = GAP_MS - 200;
+/** Largest gap that still fits the whole chart inside MATCH_MS. */
+const MAX_GAP_MS = GAP_MS + 300;
+
+/**
+ * Builds the cue chart for a match.
+ *
+ * Without a `random` source this is the original deterministic round-robin,
+ * which keeps tests and pre-start placeholders stable. With one — the path the
+ * live match takes — two things vary between matches:
+ *
+ *  * the ORDER of contexts, drawn from a shuffled bag so every context still
+ *    appears with the same even frequency the round-robin guaranteed, but the
+ *    chart is not the same fixed jump/dash/dodge/... loop every game, and the
+ *    same context is never cued twice in a row;
+ *  * the SPACING, jittered within [MIN_GAP_MS, MAX_GAP_MS] so the rhythm is not
+ *    metronomic.
+ *
+ * Both bounds are chosen to preserve fairness and the match contract: the
+ * minimum keeps consecutive hit windows from overlapping (LEAD_MS + WINDOW_MS),
+ * and the maximum keeps the final window inside MATCH_MS even in the worst case.
+ */
+export function buildSequence(playerIds: string[], count = EVENT_COUNT, random?: () => number): CueEvent[] {
   const events: CueEvent[] = [];
+  let bag: ButtonContext[] = [];
+  let appearAt = 800;
+
   for (let i = 0; i < count; i += 1) {
-    const appearAt = 800 + i * GAP_MS;
+    if (i > 0) {
+      appearAt += random ? MIN_GAP_MS + Math.floor(random() * (MAX_GAP_MS - MIN_GAP_MS + 1)) : GAP_MS;
+    }
     const windowStart = appearAt + LEAD_MS;
     const windowEnd = windowStart + WINDOW_MS;
+
+    let context: ButtonContext;
+    if (random) {
+      if (bag.length === 0) bag = shuffle(CONTEXTS, random);
+      context = bag.pop() as ButtonContext;
+      // Avoid cueing the same context twice in a row across a bag boundary.
+      if (context === events[i - 1]?.context && bag.length > 0) {
+        const other = bag.pop() as ButtonContext;
+        bag.push(context);
+        context = other;
+      }
+    } else {
+      context = CONTEXTS[i % CONTEXTS.length]!;
+    }
+
     const resolved: Record<string, 'hit' | 'miss' | 'pending'> = {};
     for (const id of playerIds) resolved[id] = 'pending';
-    events.push({
-      id: i,
-      context: CONTEXTS[i % CONTEXTS.length]!,
-      appearAt,
-      windowStart,
-      windowEnd,
-      resolved,
-    });
+    events.push({ id: i, context, appearAt, windowStart, windowEnd, resolved });
   }
   return events;
 }
@@ -209,7 +245,9 @@ export const oneButtonGame: GameModule<OneButtonState> = {
     ctx.players.forEach((player) => {
       state.players[player.id] = makePlayer();
     });
-    state.events = buildSequence(ids);
+    // The live chart is dealt from the platform PRNG, so no two matches play
+    // the same cue sequence or the same rhythm.
+    state.events = buildSequence(ids, EVENT_COUNT, ctx.random);
     state.currentIndex = 0;
     state.phase = 'playing';
     state.startedAt = ctx.now();

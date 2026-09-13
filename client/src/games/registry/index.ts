@@ -1,105 +1,91 @@
-import type { GameMetadata } from '@2play/shared';
 import type { ClientGameModule } from './types';
-import { reactionRaceClient } from '../reaction-race';
-import { memoryMatchClient } from '../memory-match';
-import { wordRaceClient } from '../word-race';
-import { dotsAndBoxesClient } from '../dots-and-boxes';
-import { mathRushClient } from '../math-rush';
-import { battle2048Client } from '../2048-battle';
-import { mazeRaceClient } from '../maze-race-2d';
-import { wordScrambleClient } from '../word-scramble-battle';
-import { shapeMatchClient } from '../shape-match-battle';
-import { snakeBattleClient } from '../snake-battle';
-import { targetRushClient } from '../target-rush';
-import { paddleDuelClient } from '../paddle-duel';
-import { brickBreakerClient } from '../brick-breaker-battle';
-import { patternMemoryClient } from '../pattern-memory-battle';
-import { drawGuessClient } from '../draw-guess-battle';
-import { secretRoleClient } from '../secret-role';
-import { colorClashClient } from '../color-clash';
-import { territoryRushClient } from '../territory-rush';
-import { coinHuntersClient } from '../coin-hunters-arena';
-import { shopRushClient } from '../shop-rush-battle';
-import { fakeDoorClient } from '../fake-door-battle';
-import { magnetThiefClient } from '../magnet-thief';
-import { chainReactionClient } from '../chain-reaction-battle';
-import { oneButtonClient } from '../one-button-battle';
-import { splitWorldClient } from '../split-world';
-import { connectFourClient } from '../connect-four';
-import { hangmanClient } from '../hangman';
-import { sosGameClient } from '../sos-game';
-import { chessClient } from '../chess';
-import { unoClient } from '../uno';
-import { simClient } from '../sim';
-import { mirrorGridClient } from '../mirror-grid';
-import { fuseClient } from '../fuse';
-import { dominoMindClient } from '../domino-mind';
-import { coupleSyncClient } from '../couple-sync';
-import { coupleMemoryClient } from '../couple-memory';
-import { ludoClient } from '../ludo';
-import { arrowPuzzleClient } from '../arrow-puzzle';
-import { blackBlastClient } from '../black-blast';
 
 /**
- * Client game registry.
+ * Client game registry — lazily loaded, one Vite chunk per game.
+ *
+ * All 40 games used to be imported eagerly, which put every game's renderer
+ * (including the chess engine, ludo board and canvas games) into the initial
+ * bundle and made the Home page download ~850 KB of JavaScript before showing a
+ * single card. Each game is now a dynamic import, so its chunk is fetched only
+ * when a room actually renders it, and the discovery screens ship without any
+ * game code at all.
  *
  * Adding a game = add `client/src/games/<id>/index.tsx` exporting a
- * `ClientGameModule` and register it here (see docs/adding-a-game.md).
+ * `ClientGameModule` and register one loader line below (see
+ * docs/adding-a-game.md). The key MUST equal `metadata.id`; the registry test
+ * asserts this for every entry.
  */
-const modules: ClientGameModule[] = [
-  reactionRaceClient,
-  memoryMatchClient,
-  wordRaceClient,
-  dotsAndBoxesClient,
-  mathRushClient,
-  battle2048Client,
-  mazeRaceClient,
-  wordScrambleClient,
-  shapeMatchClient,
-  snakeBattleClient,
-  targetRushClient,
-  paddleDuelClient,
-  brickBreakerClient,
-  patternMemoryClient,
-  drawGuessClient,
-  secretRoleClient,
-  colorClashClient,
-  territoryRushClient,
-  coinHuntersClient,
-  shopRushClient,
-  fakeDoorClient,
-  magnetThiefClient,
-  chainReactionClient,
-  oneButtonClient,
-  splitWorldClient,
-  ludoClient,
-  arrowPuzzleClient,
-  blackBlastClient,
-  coupleSyncClient,
-  coupleMemoryClient,
-  connectFourClient,
-  hangmanClient,
-  sosGameClient,
-  chessClient,
-  unoClient,
-  simClient,
-  mirrorGridClient,
-  fuseClient,
-  dominoMindClient,
-];
+type GameLoader = () => Promise<ClientGameModule>;
 
-const registry = new Map<string, ClientGameModule>(modules.map((module) => [module.metadata.id, module]));
+const loaders: Record<string, GameLoader> = {
+  '2048-battle': () => import('../2048-battle').then((m) => m.battle2048Client),
+  'arrow-puzzle': () => import('../arrow-puzzle').then((m) => m.arrowPuzzleClient),
+  'black-blast': () => import('../black-blast').then((m) => m.blackBlastClient),
+  'brick-breaker-battle': () => import('../brick-breaker-battle').then((m) => m.brickBreakerClient),
+  'chain-reaction-battle': () => import('../chain-reaction-battle').then((m) => m.chainReactionClient),
+  'chess': () => import('../chess').then((m) => m.chessClient),
+  'coin-hunters-arena': () => import('../coin-hunters-arena').then((m) => m.coinHuntersClient),
+  'color-clash': () => import('../color-clash').then((m) => m.colorClashClient),
+  'connect-four': () => import('../connect-four').then((m) => m.connectFourClient),
+  'couple-memory': () => import('../couple-memory').then((m) => m.coupleMemoryClient),
+  'couple-sync': () => import('../couple-sync').then((m) => m.coupleSyncClient),
+  'domino-mind': () => import('../domino-mind').then((m) => m.dominoMindClient),
+  'dots-and-boxes': () => import('../dots-and-boxes').then((m) => m.dotsAndBoxesClient),
+  'draw-guess-battle': () => import('../draw-guess-battle').then((m) => m.drawGuessClient),
+  'fake-door-battle': () => import('../fake-door-battle').then((m) => m.fakeDoorClient),
+  'fuse': () => import('../fuse').then((m) => m.fuseClient),
+  'hangman': () => import('../hangman').then((m) => m.hangmanClient),
+  'ludo': () => import('../ludo').then((m) => m.ludoClient),
+  'magnet-thief': () => import('../magnet-thief').then((m) => m.magnetThiefClient),
+  'math-rush': () => import('../math-rush').then((m) => m.mathRushClient),
+  'maze-race-2d': () => import('../maze-race-2d').then((m) => m.mazeRaceClient),
+  'memory-match': () => import('../memory-match').then((m) => m.memoryMatchClient),
+  'mirror-grid': () => import('../mirror-grid').then((m) => m.mirrorGridClient),
+  'one-button-battle': () => import('../one-button-battle').then((m) => m.oneButtonClient),
+  'paddle-duel': () => import('../paddle-duel').then((m) => m.paddleDuelClient),
+  'pattern-memory-battle': () => import('../pattern-memory-battle').then((m) => m.patternMemoryClient),
+  'reaction-race': () => import('../reaction-race').then((m) => m.reactionRaceClient),
+  'rock-paper-scissors': () => import('../rock-paper-scissors').then((m) => m.rockPaperScissorsClient),
+  'secret-role': () => import('../secret-role').then((m) => m.secretRoleClient),
+  'shape-match-battle': () => import('../shape-match-battle').then((m) => m.shapeMatchClient),
+  'shop-rush-battle': () => import('../shop-rush-battle').then((m) => m.shopRushClient),
+  'sim': () => import('../sim').then((m) => m.simClient),
+  'snake-battle': () => import('../snake-battle').then((m) => m.snakeBattleClient),
+  'sos-game': () => import('../sos-game').then((m) => m.sosGameClient),
+  'split-world': () => import('../split-world').then((m) => m.splitWorldClient),
+  'target-rush': () => import('../target-rush').then((m) => m.targetRushClient),
+  'territory-rush': () => import('../territory-rush').then((m) => m.territoryRushClient),
+  'uno': () => import('../uno').then((m) => m.unoClient),
+  'word-race': () => import('../word-race').then((m) => m.wordRaceClient),
+  'word-scramble-battle': () => import('../word-scramble-battle').then((m) => m.wordScrambleClient),
+};
 
-export function getGameComponent(gameId: string): ClientGameModule | undefined {
-  return registry.get(gameId);
-}
+/** Resolved modules, so re-entering a room never re-fetches the chunk. */
+const resolved = new Map<string, ClientGameModule>();
 
-export function listClientGames(): GameMetadata[] {
-  return modules.map((module) => module.metadata);
-}
-
+/** True when this client knows how to render `gameId`. Needs no network. */
 export function hasClientGame(gameId: string): boolean {
-  return registry.has(gameId);
+  return Object.prototype.hasOwnProperty.call(loaders, gameId);
+}
+
+/** Every game id this client can render, in registration order. */
+export function listClientGameIds(): string[] {
+  return Object.keys(loaders);
+}
+
+/**
+ * Resolves a game's client module, fetching its chunk on first use.
+ * Returns `undefined` for an unknown id so the caller can show its
+ * "game not available" state instead of throwing.
+ */
+export async function loadGameModule(gameId: string): Promise<ClientGameModule | undefined> {
+  const cached = resolved.get(gameId);
+  if (cached) return cached;
+  const load = loaders[gameId];
+  if (!load) return undefined;
+  const gameModule = await load();
+  resolved.set(gameId, gameModule);
+  return gameModule;
 }
 
 export type { ClientGameModule, GameComponentProps } from './types';

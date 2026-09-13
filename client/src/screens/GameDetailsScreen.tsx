@@ -6,18 +6,20 @@ import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { LoadingBlock } from '../components/ui/Spinner';
+import { GamesLoadError } from '../components/game/GamesLoadError';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useGameStore } from '../stores/gameStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import { useRoomActions } from '../hooks/useRoomActions';
-import { formatDuration } from '../utils/format';
+import { formatCategory, formatDuration } from '../utils/format';
 
 export function GameDetailsScreen() {
   const { gameId = '' } = useParams();
   const navigate = useNavigate();
   const gate = useIdentityGate();
   const games = useGameStore((store) => store.games);
+  const gamesError = useGameStore((store) => store.error);
   const load = useGameStore((store) => store.load);
   const favorites = useFavoritesStore((store) => store.favorites);
   const toggleFavorite = useFavoritesStore((store) => store.toggle);
@@ -32,6 +34,14 @@ export function GameDetailsScreen() {
   const game = games.find((entry) => entry.id === gameId);
 
   if (loading) return <LoadingBlock message="Loading game…" />;
+
+  // Distinguish "that id does not exist" from "the catalogue never arrived",
+  // otherwise a network failure reads as a broken deep link.
+  if (!game && gamesError) {
+    return (
+      <GamesLoadError message={gamesError} onRetry={() => void load(true)} />
+    );
+  }
 
   if (!game) {
     return (
@@ -75,7 +85,7 @@ export function GameDetailsScreen() {
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-3xl font-black text-white">{game.name}</h1>
-              <Badge tone="primary">{game.category}</Badge>
+              <Badge tone="primary">{formatCategory(game.category)}</Badge>
               {game.featured ? <Badge tone="accent">Featured</Badge> : null}
             </div>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">{game.description}</p>
@@ -108,7 +118,7 @@ export function GameDetailsScreen() {
               icon={<Zap className="h-5 w-5" />}
               className="text-base font-bold shadow-primary-500/40 sm:w-auto"
             >
-              ⚡ Play with AI
+              Play with AI
             </Button>
           ) : (
             <div
@@ -127,7 +137,7 @@ export function GameDetailsScreen() {
               onClick={() => gate(() => navigate(`/create?game=${game.id}`))}
               icon={<Users className="h-4 w-4" />}
             >
-              🏠 Create room
+              Create room
             </Button>
             <Button
               size="lg"
@@ -135,7 +145,7 @@ export function GameDetailsScreen() {
               onClick={() => gate(() => navigate(`/join?game=${game.id}`))}
               icon={<KeyRound className="h-4 w-4" />}
             >
-              🔗 Join room
+              Join room
             </Button>
             <Button
               size="lg"
@@ -155,7 +165,10 @@ export function GameDetailsScreen() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="How to play" subtitle={game.controls} />
+          <CardHeader
+            title="How to play"
+            subtitle={game.howToPlay?.objective ?? game.controls}
+          />
           <ol className="space-y-2 text-sm text-slate-300">
             {game.rules.map((rule, index) => (
               <li key={rule} className="flex gap-3">
@@ -169,6 +182,23 @@ export function GameDetailsScreen() {
         </Card>
 
         <div className="space-y-4">
+          <Card>
+            <CardHeader title="Controls" icon={<Gamepad2 className="h-4 w-4" />} />
+            <dl className="space-y-2.5 text-sm">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Mobile / touch
+                </dt>
+                <dd className="text-slate-300">{game.howToPlay?.controls?.mobile ?? game.controls}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Desktop
+                </dt>
+                <dd className="text-slate-300">{game.howToPlay?.controls?.desktop ?? game.controls}</dd>
+              </div>
+            </dl>
+          </Card>
           <Card>
             <CardHeader title="Scoring" />
             <p className="text-sm text-slate-300">{game.scoring}</p>
@@ -208,7 +238,7 @@ export function GameDetailsScreen() {
 
       {similar.length > 0 ? (
         <section>
-          <h2 className="mb-4 text-xl font-bold text-white">More {game.category} games</h2>
+          <h2 className="mb-4 text-xl font-bold text-white">More {formatCategory(game.category)} games</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {similar.map((entry) => (
               <GameCard

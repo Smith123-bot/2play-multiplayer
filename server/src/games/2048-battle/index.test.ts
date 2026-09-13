@@ -268,9 +268,22 @@ describe('2048 Battle', () => {
     ];
     state().boards[a]!.locked = true;
 
+    // Board B is randomly seeded, so a hardcoded direction is a no-op for some
+    // seeds (both tiles already on the top row makes 'up' illegal). Probe for a
+    // move that actually changes the board, exactly like the move test above.
+    const boardB = state().boards[b]!;
+    let direction: MoveDirection | null = null;
+    for (const candidate of ['left', 'up', 'right', 'down'] as MoveDirection[]) {
+      if (applyMove({ ...boardB, tiles: [...boardB.tiles] }, candidate).moved) {
+        direction = candidate;
+        break;
+      }
+    }
+    expect(direction, 'seeded board B has no legal move').not.toBeNull();
+
     const result = platform.gameManager.handleAction(room, b, {
       type: 'move',
-      payload: { direction: 'up' },
+      payload: { direction: direction! },
     });
     expect(result.accepted).toBe(true);
     expect(state().phase).toBe('playing'); // B may continue

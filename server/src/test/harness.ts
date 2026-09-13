@@ -55,6 +55,7 @@ import { coupleMemoryGame } from '../games/couple-memory';
 import { ludoGame } from '../games/ludo';
 import { arrowPuzzleGame } from '../games/arrow-puzzle';
 import { blackBlastGame } from '../games/black-blast';
+import { rockPaperScissorsGame } from '../games/rock-paper-scissors';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { DatabaseLike } from '../database/client';
 import type { Room } from '../rooms/Room';
@@ -153,6 +154,18 @@ export function createTestPlatform(
     broadcastRoomState: () => {
       emissions.push({ event: 'broadcast', payload: null });
     },
+    /**
+     * Faithful stand-in for the immediate single-viewer snapshot: it builds the
+     * same per-viewer public projection the real one does, so tests can assert
+     * that the low-latency path leaks no hidden information either.
+     */
+    deliverRoomStateToPlayer: (targetRoom: Room, playerId: string) => {
+      const gameState = platform.gameManager.getPublicState(targetRoom, playerId);
+      emissions.push({
+        event: `${playerId}:room:updated`,
+        payload: { room: targetRoom.toState(playerId, gameState) },
+      });
+    },
     clearRoom: () => undefined,
     connectionCount: 0,
   } as unknown as SocketManager;
@@ -198,6 +211,7 @@ export function createTestPlatform(
       mirrorGridGame,
       fuseGame,
       dominoMindGame,
+      rockPaperScissorsGame,
     ]) {
       platform.registry.register(game);
     }

@@ -17,7 +17,6 @@ interface BoardTile {
   y: number;
   direction: Direction;
   cleared: boolean;
-  firable: boolean;
 }
 
 export interface ArrowPublicState {
@@ -193,14 +192,15 @@ function ArrowPuzzleGame({
               whileTap={{ scale: 0.88 }}
               disabled={!playing}
               onClick={() => fire(tile.id)}
-              aria-label={`Arrow pointing ${tile.direction}${tile.firable ? ', clear path' : ', blocked'}`}
+              aria-label={`Arrow pointing ${tile.direction}`}
               className={cn(
+                // Every arrow is styled identically: the server no longer says
+                // which ones are firable, so nothing here can reveal the solve.
+                // The only highlight is the amber ring from a purchased hint.
                 'grid aspect-square place-items-center rounded-lg border transition',
-                tile.firable
-                  ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200'
-                  : 'border-white/10 bg-white/5 text-slate-400',
+                'border-white/10 bg-white/5 text-slate-200',
                 hinted && 'ring-2 ring-amber-300',
-                playing && 'active:scale-95',
+                playing && 'hover:border-white/25 hover:bg-white/10 active:scale-95',
               )}
             >
               <Icon className="h-5 w-5" aria-hidden />

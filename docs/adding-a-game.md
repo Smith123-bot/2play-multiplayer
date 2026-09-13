@@ -99,10 +99,18 @@ locally. Use `useServerDeadline()` to mirror server deadlines for UI only.
 import { rocketsGame } from '../games/rockets';
 const games: GameModule[] = [ …, rocketsGame ];
 
-// client/src/games/registry/index.ts
-import { rocketsClient } from '../rockets';
-const modules: ClientGameModule[] = [ …, rocketsClient ];
+// client/src/games/registry/index.ts — one lazy loader line.
+// The key MUST equal the game id: the registry is code-split, so each game is
+// its own chunk fetched only when a room renders it.
+const loaders: Record<string, GameLoader> = {
+  …,
+  'rockets': () => import('../rockets').then((m) => m.rocketsClient),
+};
 ```
+
+`client/src/games/registry/registry.test.ts` resolves every loader and asserts
+its `metadata.id` matches the key, so a typo fails the build instead of showing
+a blank "Game not available" panel mid-match.
 
 ## 5. Tests
 

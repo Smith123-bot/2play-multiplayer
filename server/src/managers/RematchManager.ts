@@ -22,15 +22,28 @@ export class RematchManager {
     return this.platform.config?.rematchTimeoutMs ?? REMATCH_TIMEOUT_MS;
   }
 
+  /**
+   * Whether another match can be played in this room.
+   *
+   * Mirrors `LobbyManager.canStart`: the seat count that matters includes AI
+   * opponents, and at least one connected human must be present to vote.
+   * Comparing the *human voter* count against the game's `minPlayers` (which
+   * counts AI seats) used to send every human-vs-AI match — Quick Play included
+   * — straight back to the lobby at the finish line, wiping the result before
+   * the player ever saw it.
+   */
+  canRematch(room: Room): boolean {
+    const metadata = this.platform.registry.find(room.gameId)?.metadata;
+    const minPlayers = metadata?.minPlayers ?? 2;
+    if (room.players.size < minPlayers) return false;
+    return room.rematchVoters.length > 0;
+  }
+
   /** RESULT → REMATCH_WAITING and start the vote window (60s by default). */
   openVoting(room: Room): void {
     if (!['RESULT', 'GAME_FINISHED', 'REMATCH_WAITING'].includes(room.status)) return;
 
-    const metadata = this.platform.registry.find(room.gameId)?.metadata;
-    const minPlayers = metadata?.minPlayers ?? 2;
-    const voters = room.rematchVoters;
-
-    if (voters.length < minPlayers) {
+    if (!this.canRematch(room)) {
       this.platform.lifecycleManager.returnToLobby(room, 'Not enough players for a rematch.');
       return;
     }
@@ -72,7 +85,11 @@ export class RematchManager {
     });
 
     this.refreshStatus(room);
-    this.logger.debug('rematch voting opened', { roomId: room.id, voters: voters.length });
+    this.logger.debug('rematch voting opened', {
+      roomId: room.id,
+      voters: room.rematchVoters.length,
+      seats: room.players.size,
+    });
   }
 
   /** Broadcasts the current vote tally. */
@@ -135,9 +152,7 @@ export class RematchManager {
   /** Starts a new match in the same room (idempotent). */
   startRematch(room: Room): void {
     if (room.rematchStarting) return;
-    const metadata = this.platform.registry.find(room.gameId)?.metadata;
-    const minPlayers = metadata?.minPlayers ?? 2;
-    if (room.rematchVoters.length < minPlayers) {
+    if (!this.canRematch(room)) {
       this.cancel(room, undefined, 'Not enough players for a rematch.');
       return;
     }

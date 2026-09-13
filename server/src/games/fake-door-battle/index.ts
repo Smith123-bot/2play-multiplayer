@@ -1,5 +1,5 @@
 import type { GameAction, GameFinishReason } from '@2play/shared';
-import { FAKE_DOOR_METADATA } from '@2play/shared';
+import { FAKE_DOOR_METADATA, shuffle } from '@2play/shared';
 export { FAKE_DOOR_METADATA };
 import type {
   ActionResult,
@@ -68,8 +68,13 @@ export function buildDoorRound(
   lastCorrectColor: string | null,
 ): { doors: DoorFace[]; clue: string; clueKind: DoorClueKind; correctDoorId: string } {
   const kind = KINDS[round % KINDS.length]!;
-  const colors = [...DOOR_COLORS];
-  const symbols = [...DOOR_SYMBOLS];
+  // The four doors keep their identity by position (number and place in the row
+  // are what the 'number' and 'position' clues refer to), but their colours and
+  // symbols are dealt fresh each round. Without this the same crimson-star sat
+  // far-left in every round of every match, so the board looked identical even
+  // when the safe door changed.
+  const colors = shuffle([...DOOR_COLORS], rng);
+  const symbols = shuffle([...DOOR_SYMBOLS], rng);
   const doors: DoorFace[] = [0, 1, 2, 3].map((position) => ({
     id: `door-${position}`,
     color: colors[position]!,
@@ -94,8 +99,10 @@ export function buildDoorRound(
     const target = doors[3]!;
     return { doors, clue: 'The far-right door is safe.', clueKind: kind, correctDoorId: target.id };
   }
-  const match = lastCorrectColor ? doors.find((door) => door.color === lastCorrectColor) : doors[0]!;
-  const target = match ?? doors[0]!;
+  // Colours are now dealt per round, so the crimson door is no longer always
+  // doors[0] — resolve the clue against the actual door wearing that colour.
+  const crimson = doors.find((door) => door.color === 'crimson') ?? doors[0]!;
+  const target = (lastCorrectColor ? doors.find((door) => door.color === lastCorrectColor) : crimson) ?? crimson;
   return {
     doors,
     clue: lastCorrectColor ? 'The same colour as last round is safe.' : 'Start with the crimson door.',

@@ -79,7 +79,7 @@ const RESULT_LABEL: Record<string, string> = {
 
 function ChessGame({ state, players, myPlayerId, sendAction, play, vibrate }: GameComponentProps<ChessPublicState>) {
   const previousEvent = useRef<string | null>(null);
-  const rules = useHowToPlay(CHESS_METADATA.id);
+  const rules = useHowToPlay(CHESS_METADATA.id, false);
   const [selected, setSelected] = useState<number | null>(null);
   const [promotion, setPromotion] = useState<{ from: number; to: number } | null>(null);
   /** Local clock tick so the countdown is smooth between server updates. */

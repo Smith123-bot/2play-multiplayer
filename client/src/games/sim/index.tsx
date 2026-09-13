@@ -48,7 +48,7 @@ function nodePoint(index: number, total: number): { x: number; y: number } {
 
 function SimGame({ state, players, myPlayerId, sendAction, play, vibrate }: GameComponentProps<SimPublicState>) {
   const previousEvent = useRef<string | null>(null);
-  const rules = useHowToPlay(SIM_METADATA.id);
+  const rules = useHowToPlay(SIM_METADATA.id, false);
 
   const phase = state?.phase ?? 'idle';
   const canPlay = phase === 'playing' && Boolean(state?.isMyTurn);

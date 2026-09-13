@@ -70,6 +70,26 @@ export function createApp(platform: Platform): Express {
   // Production: serve the built SPA (same origin => relative API/socket URLs).
   const clientDist = path.resolve(__dirname, '../../client/dist');
   if (fs.existsSync(clientDist)) {
+    /**
+     * Vite writes content-hashed filenames under /assets (for example
+     * `index-D0zM6eCT.js`), so the bytes behind a given URL can never change —
+     * new content always means a new URL. Cache them for a year and mark them
+     * immutable, which removes the ~550 KB re-download on every repeat visit.
+     *
+     * index.html is intentionally NOT covered: it is the document that points at
+     * those hashes, and it is served below with `max-age=0` so it revalidates.
+     * serve-static 1.16 has no `immutable` option, hence the explicit header.
+     */
+    app.use(
+      '/assets',
+      express.static(path.join(clientDist, 'assets'), {
+        maxAge: '1y',
+        index: false,
+        setHeaders: (res) => {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        },
+      }),
+    );
     app.use(express.static(clientDist, { maxAge: '1h', index: false }));
     app.get('*', (_req: Request, res: Response, next: NextFunction) => {
       const indexFile = path.join(clientDist, 'index.html');

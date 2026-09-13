@@ -35,6 +35,20 @@ export const COUNTDOWN_MS = 3_000;
 export const CHOOSE_MS = 8_000;
 export const REVEAL_MS = 2_500;
 export const DEFAULT_WINS_NEEDED = 3;
+
+/**
+ * Timer keys are CONSTANT per role, not per round.
+ *
+ * `ctx.schedule` cancels whatever is already pending under the same key, which
+ * is what stops a previous round's timeout from surviving into the next one.
+ * Keying them per round (`choose-3`, `choose-4`, ...) defeats that: a round
+ * resolved early leaves its 8s timeout armed, and it later fires inside the
+ * NEXT round's throw window, cutting that round short and forfeiting a player
+ * who was still deciding.
+ */
+export const COUNTDOWN_KEY = 'rps-countdown';
+export const CHOOSE_KEY = 'rps-round-timeout';
+export const REVEAL_KEY = 'rps-reveal';
 export const MIN_WINS_NEEDED = 1;
 export const MAX_WINS_NEEDED = 7;
 
@@ -233,7 +247,18 @@ export function beginCountdown(state: RpsState, ctx: GameContext): void {
   state.chooseUntil = null;
   state.lastEvent = `countdown:${state.round}`;
   ctx.markStateChanged();
-  ctx.schedule(COUNTDOWN_MS, () => beginChoose(state, ctx), 'turn', `countdown-${state.round}`);
+
+  // The captured round makes a stale callback inert even if it somehow survives.
+  const round = state.round;
+  ctx.schedule(
+    COUNTDOWN_MS,
+    () => {
+      if (state.round !== round || state.phase !== 'countdown') return;
+      beginChoose(state, ctx);
+    },
+    'turn',
+    COUNTDOWN_KEY,
+  );
 }
 
 /** Opens the throw window and asks the bots to throw. */
@@ -245,8 +270,19 @@ export function beginChoose(state: RpsState, ctx: GameContext): void {
   state.lastEvent = `go:${state.round}`;
   ctx.markStateChanged();
 
-  // Resolving on the timer is what guarantees the round cannot stall.
-  ctx.schedule(CHOOSE_MS, () => resolveRound(state, ctx), 'turn', `choose-${state.round}`);
+  // Resolving on the timer is what guarantees the round cannot stall. The round
+  // check matters: without it a timeout left over from an earlier round would
+  // resolve THIS one the instant it fired, forfeiting whoever had not thrown.
+  const round = state.round;
+  ctx.schedule(
+    CHOOSE_MS,
+    () => {
+      if (state.round !== round || state.phase !== 'choose') return;
+      resolveRound(state, ctx);
+    },
+    'turn',
+    CHOOSE_KEY,
+  );
 
   for (const player of ctx.players) {
     if (player.isAI && !state.players[player.id]?.left) {
@@ -297,14 +333,15 @@ export function resolveRound(state: RpsState, ctx: GameContext): void {
   state.lastEvent = `reveal:${state.round}`;
   ctx.markStateChanged();
 
+  const round = state.round;
   ctx.schedule(
     REVEAL_MS,
     () => {
-      if (state.phase !== 'reveal') return;
+      if (state.round !== round || state.phase !== 'reveal') return;
       advanceAfterReveal(state, ctx);
     },
     'turn',
-    `reveal-${state.round}`,
+    REVEAL_KEY,
   );
 }
 

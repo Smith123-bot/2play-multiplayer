@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGameFixture, createPlayer, createTestPlatform, type TestPlatform } from '../../test/harness';
 import type { Platform } from '../../core/Platform';
+import type { AIDifficulty } from '@2play/shared';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
   advanceAfterReveal,
@@ -601,6 +602,57 @@ describe('Rock Paper Scissors — match flow on the real platform', () => {
     }
   });
 
+  it('a round resolved early cannot be cut short by the previous round timer', async () => {
+    // REGRESSION: the round timeout used to be keyed per round (`choose-3`), so
+    // resolving a round early left its 8s timeout armed. It then fired inside
+    // the NEXT round's throw window and resolved that round prematurely,
+    // forfeiting a player who was still deciding. Timer keys are now constant
+    // per role and every callback checks the round it was scheduled for.
+    const { local, timed, a, b } = await timedMatch();
+    try {
+      const clocked = () => timed.gameState as RpsState;
+
+      // Round 0: both throw at once, so it resolves immediately — leaving the
+      // bulk of its 8s window unused and, previously, armed.
+      await vi.advanceTimersByTimeAsync(COUNTDOWN_MS + 10);
+      expect(clocked().phase).toBe('choose');
+      local.platform.gameManager.handleAction(timed, a, { type: 'throw', payload: { choice: 'rock' } });
+      local.platform.gameManager.handleAction(timed, b, { type: 'throw', payload: { choice: 'scissors' } });
+      expect(clocked().phase).toBe('reveal');
+      expect(clocked().history).toHaveLength(1);
+
+      // Reveal (2.5s) + countdown (3s) = 5.5s, so round 0's stale 8s timeout
+      // would land 2.5s into round 1's window.
+      await vi.advanceTimersByTimeAsync(REVEAL_MS + 10);
+      expect(clocked().phase).toBe('countdown');
+      expect(clocked().round).toBe(1);
+      await vi.advanceTimersByTimeAsync(COUNTDOWN_MS + 10);
+      expect(clocked().phase).toBe('choose');
+
+      // Only `a` throws this round; `b` is still deciding.
+      local.platform.gameManager.handleAction(timed, a, { type: 'throw', payload: { choice: 'paper' } });
+
+      // Past the moment round 0's leftover timeout would have fired: round 1
+      // must still be open, with `b` neither forfeited nor scored.
+      await vi.advanceTimersByTimeAsync(CHOOSE_MS - COUNTDOWN_MS);
+      expect(clocked().phase, 'a stale timer resolved the round early').toBe('choose');
+      expect(clocked().history).toHaveLength(1);
+      expect(clocked().players[b]!.forfeits).toBe(0);
+      expect(clocked().players[a]!.score).toBe(1);
+
+      // Round 1 then resolves on ITS OWN deadline, with `b` fairly forfeiting.
+      await vi.advanceTimersByTimeAsync(COUNTDOWN_MS + 20);
+      expect(clocked().phase).toBe('reveal');
+      expect(clocked().history).toHaveLength(2);
+      expect(clocked().history[1]!.forfeits).toEqual([b]);
+      expect(clocked().history[1]!.outcomes[a]).toBe('win');
+      expect(clocked().players[a]!.score).toBe(2);
+    } finally {
+      vi.useRealTimers();
+      local.destroy();
+    }
+  });
+
   it('plays a full match to a winner and produces a complete result', () => {
     // First wins three rounds in a row with rock vs scissors.
     for (let round = 0; round < DEFAULT_WINS_NEEDED; round += 1) {
@@ -808,6 +860,227 @@ describe('Rock Paper Scissors — match flow on the real platform', () => {
       local.destroy();
     }
   });
+});
+
+describe('Rock Paper Scissors — Play With AI (live matches)', () => {
+  /**
+   * Plays a REAL human-vs-AI match through the platform's own AI scheduler:
+   * ctx.requestAI -> TimerManager -> performAIAction -> getAIMove -> handleAction.
+   *
+   * Unit-testing getAIMove proves the bot can choose; only this proves the bot
+   * is actually allowed to move in a live room. A starved or mis-keyed AI timer
+   * shows up here as a forfeit every round, and never as a passing test.
+   *
+   * Fake timers are installed BEFORE start(), because TimerManager schedules
+   * with real setTimeout.
+   */
+  async function playAiMatch(
+    difficulty: AIDifficulty,
+    humanShapes: RpsChoice[],
+  ): Promise<{
+    local: TestPlatform;
+    room: Room;
+    humanId: string;
+    aiId: string;
+    aiThrows: Array<RpsChoice | null>;
+    humanThrows: Array<RpsChoice | null>;
+    rounds: RoundRecord[];
+    humanScore: number;
+    aiScore: number;
+  }> {
+    const local = createTestPlatform();
+    const host = await createPlayer(local.platform, `RpsAi${difficulty}`);
+    vi.useFakeTimers();
+
+    const room = local.platform.roomManager.createRoom({
+      gameId: 'rock-paper-scissors',
+      maxPlayers: 2,
+      isPrivate: true,
+      isQuickPlay: true,
+      host,
+    });
+    const ai = local.platform.roomManager.addAI(room, host.playerId, difficulty);
+    for (const player of room.players.values()) player.isReady = true;
+    room.status = 'PLAYING';
+    room.gameStartedAt = Date.now();
+    local.platform.gameManager.createState(room);
+    local.platform.gameManager.start(room);
+
+    const live = () => room.gameState as RpsState | null;
+    let thrown = 0;
+    let guard = 0;
+
+    // Step the server clock in small increments rather than jumping a whole
+    // phase at a time. A single 8s jump can span the reveal AND the next
+    // countdown, which drops the human into a round they never saw and makes
+    // them forfeit it — that is correct game behaviour, but it is not what this
+    // test is measuring. 200ms steps keep the human present for every round
+    // while still letting the bot's own scheduled throw land naturally.
+    while (guard < 2_000) {
+      guard += 1;
+      const state = live();
+      if (!state || state.phase === 'finished') break;
+
+      if (state.phase === 'choose' && state.players[host.playerId]?.choice === null) {
+        const shape = humanShapes[thrown % humanShapes.length] as RpsChoice;
+        thrown += 1;
+        const sent = local.platform.gameManager.handleAction(room, host.playerId, {
+          type: 'throw',
+          payload: { choice: shape },
+        });
+        expect(sent.accepted, 'the human throw must be accepted').toBe(true);
+      }
+      await vi.advanceTimersByTimeAsync(200);
+    }
+
+    const final = live();
+    expect(final, 'the server tore the state down mid-match').not.toBeNull();
+    expect(final!.phase, 'the match never reached a finish').toBe('finished');
+    const rounds = final ? [...final.history] : [];
+    return {
+      local,
+      room,
+      humanId: host.playerId,
+      aiId: ai.id,
+      rounds,
+      // Taken from the authoritative round log, so it cannot drift out of step
+      // with the number of rounds actually played.
+      aiThrows: rounds.map((round) => round.choices[ai.id] ?? null),
+      humanThrows: rounds.map((round) => round.choices[host.playerId] ?? null),
+      humanScore: final?.players[host.playerId]?.score ?? -1,
+      aiScore: final?.players[ai.id]?.score ?? -1,
+    };
+  }
+
+  /** Runs a match, then always tears the platform down and restores the clock. */
+  async function run(
+    difficulty: AIDifficulty,
+    humanShapes: RpsChoice[],
+    assert: (match: Awaited<ReturnType<typeof playAiMatch>>) => void,
+  ): Promise<void> {
+    let match: Awaited<ReturnType<typeof playAiMatch>> | null = null;
+    try {
+      match = await playAiMatch(difficulty, humanShapes);
+      assert(match);
+    } finally {
+      vi.useRealTimers();
+      match?.local.destroy();
+    }
+  }
+
+  for (const difficulty of ['easy', 'medium', 'hard'] as AIDifficulty[]) {
+    it(`${difficulty}: the AI really throws every round and the match finishes`, async () => {
+      await run(difficulty, ['rock'], (match) => {
+        // The bot moved in EVERY round — a starved AI timer would leave nulls,
+        // which is the regression this whole describe block exists to catch.
+        expect(match.aiThrows.length).toBe(match.rounds.length);
+        // First to 3 WINS, not 3 rounds: a split match runs longer, but it must
+        // stop the moment a seat reaches the target.
+        expect(match.rounds.length).toBeGreaterThanOrEqual(DEFAULT_WINS_NEEDED);
+        expect(Math.max(match.humanScore, match.aiScore)).toBe(DEFAULT_WINS_NEEDED);
+        for (const [index, shape] of match.aiThrows.entries()) {
+          expect(shape, `${difficulty} AI forfeited round ${index + 1}`).not.toBeNull();
+          expect(CHOICES).toContain(shape);
+        }
+        // Every AI throw went through the same validation gate as a human's.
+        expect(match.rounds.every((round) => round.forfeits.length === 0)).toBe(true);
+
+        // The match reached a real, complete result.
+        expect(match.room.status).toBe('REMATCH_WAITING');
+        const result = match.room.gameResult!;
+        expect(result).not.toBeNull();
+        expect(result.gameId).toBe('rock-paper-scissors');
+        expect(result.rankings).toHaveLength(2);
+        expect(result.rankings[0]!.score + result.rankings[1]!.score).toBeGreaterThan(0);
+        // Exactly one winner, or an honest draw — never both, never neither.
+        if (result.isDraw) {
+          expect(result.rankings.every((entry) => entry.isDraw)).toBe(true);
+        } else {
+          expect(result.winners).toHaveLength(1);
+          expect(result.rankings[0]!.isWinner).toBe(true);
+        }
+        // The result agrees with the state the match was actually played in.
+        expect(result.rankings[0]!.score + result.rankings[1]!.score).toBe(
+          match.humanScore + match.aiScore,
+        );
+      });
+    }, 60_000);
+  }
+
+  it('easy varies its shape in a live match instead of countering', async () => {
+    await run('easy', ['rock'], (match) => {
+      const distinct = new Set(match.aiThrows);
+      // A random bot facing a predictable human must NOT converge on one answer.
+      expect(distinct.size, `easy threw only ${[...distinct].join(',')}`).toBeGreaterThan(1);
+    });
+  }, 60_000);
+
+  it('hard learns a predictable human in a live match', async () => {
+    // The human throws rock every round. From round 2 on, hard has a habit to
+    // read, so paper (the counter) must dominate — but NOT every round: hard
+    // deliberately randomises ~22% of the time, which is what keeps it beatable
+    // and also makes a perfect-sweep assertion both wrong and seed-dependent.
+    await run('hard', ['rock'], (match) => {
+      const afterLearning = match.aiThrows.slice(1).filter((shape): shape is RpsChoice => shape !== null);
+      expect(afterLearning.length).toBeGreaterThan(0);
+
+      const counts: Record<string, number> = {};
+      for (const shape of afterLearning) counts[shape] = (counts[shape] ?? 0) + 1;
+      const modal = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]!;
+      expect(modal[0], `hard did not converge on paper: ${JSON.stringify(counts)}`).toBe('paper');
+      expect(modal[1] / afterLearning.length).toBeGreaterThan(0.5);
+
+      // It is competing, not merely surviving: hard takes rounds off a human
+      // that never varies.
+      expect(match.aiScore).toBeGreaterThan(0);
+    });
+  }, 60_000);
+
+  it('hard is BEATABLE in live matches against a varied human', async () => {
+    // A human cycling rock -> paper -> scissors gives the bot no stable habit to
+    // exploit. One match is too noisy to prove anything (hard can legitimately
+    // take the first three rounds), so aggregate several and assert what
+    // "not unbeatable" actually means: hard never sweeps every round, and the
+    // human takes rounds off it.
+    const matches = 3;
+    let totalRounds = 0;
+    let humanRoundWins = 0;
+    let hardRoundWins = 0;
+
+    for (let i = 0; i < matches; i += 1) {
+      await run('hard', ['rock', 'paper', 'scissors'], (match) => {
+        totalRounds += match.rounds.length;
+        for (const round of match.rounds) {
+          if (round.outcomes[match.humanId] === 'win') humanRoundWins += 1;
+          if (round.outcomes[match.aiId] === 'win') hardRoundWins += 1;
+        }
+        // The bot really played every round of every match.
+        expect(match.aiThrows.every((shape) => shape !== null)).toBe(true);
+      });
+    }
+
+    expect(totalRounds).toBeGreaterThanOrEqual(matches * DEFAULT_WINS_NEEDED);
+    // The defining property: hard does NOT win every round it plays.
+    expect(hardRoundWins).toBeLessThan(totalRounds);
+    // And a varied human genuinely takes rounds off it.
+    expect(humanRoundWins).toBeGreaterThan(0);
+    // Strong, but not a rout: hard should not take essentially every round.
+    expect(hardRoundWins / totalRounds).toBeLessThan(0.95);
+  }, 120_000);
+
+  it('the AI never throws after the match is over', async () => {
+    await run('easy', ['rock'], (match) => {
+      const { room, aiId } = match;
+      expect(room.gameResult).not.toBeNull();
+      const after = room.gameState as RpsState;
+      expect(after.phase).toBe('finished');
+      const before = after.players[aiId]?.score ?? 0;
+      // Driving more time must not let a queued AI timer score again.
+      vi.advanceTimersByTime(CHOOSE_MS * 3);
+      expect((room.gameState as RpsState).players[aiId]?.score ?? 0).toBe(before);
+      expect((room.gameState as RpsState).phase).toBe('finished');
+    });
+  }, 60_000);
 });
 
 describe('Rock Paper Scissors — module surface', () => {

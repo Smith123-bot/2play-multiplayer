@@ -473,7 +473,17 @@ export const arrowPuzzleGame: GameModule<ArrowState> = {
       lastEvent: state.lastEvent,
       finishReason: state.finishReason,
       serverTime: ctx.now(),
-      // The viewer's own board, including which arrows are currently firable.
+      /**
+       * The viewer's own board — arrows and positions only.
+       *
+       * Which arrows are currently firable is deliberately NOT sent. That
+       * boolean *is* the solution: broadcasting it let the client paint every
+       * correct move in a different colour, so the puzzle could be played
+       * without ever reasoning about it (and made the paid hint pointless).
+       * Legality stays server-authoritative — `handlePlayerAction` re-derives it
+       * with `canFire` from the server's own board copy — and the only way to
+       * learn a correct move is the opt-in `hint` action, which costs points.
+       */
       board: me
         ? me.tiles.map((tile) => ({
             id: tile.id,
@@ -481,7 +491,6 @@ export const arrowPuzzleGame: GameModule<ArrowState> = {
             y: tile.y,
             direction: tile.direction,
             cleared: tile.cleared,
-            firable: !tile.cleared && canFire(boardFor(state, me), tile.id),
           }))
         : [],
       me: me

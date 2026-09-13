@@ -11,7 +11,7 @@ import type {
   ValidationResult,
 } from '../GameModule';
 import { actionAccepted, actionRejected } from '../GameModule';
-import { HANGMAN_WORDS, type HangmanCategory } from './words';
+import { HANGMAN_WORD_COUNT, pickHangmanWord, tierForRound, type HangmanCategory } from './words';
 
 export * from './words';
 
@@ -50,6 +50,12 @@ export interface HangmanState {
   hint: string;
   /** Letters guessed this round, in order. */
   guessed: string[];
+  /**
+   * Words already dealt in this match. Used to exclude repeats so a match never
+   * serves the same word twice, and so consecutive games differ. Cleared when
+   * the dictionary is exhausted (a match longer than the pool) and on rematch.
+   */
+  usedWords: string[];
   wrongLetters: string[];
   attemptsLeft: number;
   maxAttempts: number;
@@ -150,14 +156,19 @@ export function finishHangman(state: HangmanState, ctx: GameContext, reason: Gam
 /** Picks a fresh secret word and opens the round. */
 export function beginRound(state: HangmanState, ctx: GameContext): void {
   if (state.phase === 'finished') return;
-  const categories = Object.keys(HANGMAN_WORDS) as HangmanCategory[];
-  const category = categories[Math.floor(ctx.random() * categories.length)] as HangmanCategory;
-  const entries = HANGMAN_WORDS[category];
-  const entry = entries[Math.floor(ctx.random() * entries.length)];
 
-  state.secret = (entry?.word ?? 'PUZZLE').toUpperCase();
-  state.category = category;
-  state.hint = entry?.hint ?? '';
+  // state.round is 0-based here (start() sets it to 0 before the first deal).
+  const tier = tierForRound(state.round + 1, state.totalRounds);
+  const entry = pickHangmanWord(state.usedWords, ctx.random, tier);
+
+  state.usedWords.push(entry.word);
+  // Once the dictionary is exhausted, start a fresh bag rather than allowing
+  // immediate repeats; the current word is retained so it is not re-dealt next.
+  if (state.usedWords.length >= HANGMAN_WORD_COUNT) state.usedWords = [entry.word];
+
+  state.secret = entry.word.toUpperCase();
+  state.category = entry.category;
+  state.hint = entry.hint;
   state.guessed = [];
   state.wrongLetters = [];
   state.attemptsLeft = state.maxAttempts;
@@ -277,6 +288,7 @@ export const hangmanGame: GameModule<HangmanState> = {
       category: '',
       hint: '',
       guessed: [],
+      usedWords: [],
       wrongLetters: [],
       attemptsLeft: MAX_ATTEMPTS,
       maxAttempts: MAX_ATTEMPTS,
@@ -331,6 +343,7 @@ export const hangmanGame: GameModule<HangmanState> = {
     state.turnOrder = ctx.players.map((player) => player.id);
     for (const player of ctx.players) state.players[player.id] = makeSlot();
     state.round = 0;
+    state.usedWords = [];
     state.finishReason = null;
     beginRound(state, ctx);
   },
@@ -485,6 +498,7 @@ export const hangmanGame: GameModule<HangmanState> = {
       category: '',
       hint: '',
       guessed: [],
+      usedWords: [],
       wrongLetters: [],
       attemptsLeft: state.maxAttempts,
       players: Object.fromEntries(ids.map((id) => [id, makeSlot()])),

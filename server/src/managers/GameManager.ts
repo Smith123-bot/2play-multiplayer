@@ -62,15 +62,25 @@ export class GameManager {
   /* Configuration                                                     */
   /* ---------------------------------------------------------------- */
 
-  buildConfig(room: Room): GameConfig {
+  /**
+   * Builds the per-match config handed to a game module.
+   *
+   * `seed` is the room's freshly generated runtime seed. Modules that derive
+   * their opening layout from `config.seed` (for example memory-match's deck)
+   * must see a value that actually changes per match: without it they fall back
+   * to their own default and replay an identical layout in every game, forever.
+   */
+  buildConfig(room: Room, seed?: number): GameConfig {
     const metadata = this.module(room).metadata;
     const humans = room.humanPlayers.length;
     const ai = room.aiPlayers.length;
+    const effectiveSeed = seed ?? this.runtimeFor(room).seed;
     return {
       playerCount: Math.max(room.settings.playerCount, humans + ai, metadata.minPlayers),
       humanCount: humans,
       aiOpponents: ai,
       aiDifficulty: room.settings.aiDifficulty,
+      seed: effectiveSeed,
       ...(room.settings.gridSize ? { gridSize: room.settings.gridSize } : {}),
       ...(room.settings.rounds ? { rounds: room.settings.rounds } : {}),
     };
@@ -108,7 +118,7 @@ export class GameManager {
       roomId: room.id,
       gameId: room.gameId,
       matchNumber: room.matchNumber,
-      config: this.buildConfig(room),
+      config: this.buildConfig(room, runtime.seed),
       players: this.playerViews(room),
       seed: runtime.seed,
       logger: createLogger(`Game:${room.gameId}`),
@@ -149,7 +159,7 @@ export class GameManager {
       players: GamePlayerView[];
     };
     context.matchNumber = room.matchNumber;
-    context.config = this.buildConfig(room);
+    context.config = this.buildConfig(room, runtime.seed);
     context.players = this.playerViews(room);
     return runtime.context;
   }
@@ -184,17 +194,21 @@ export class GameManager {
   resetState(room: Room): unknown {
     const game = this.module(room);
     const current = room.gameState;
+    // Reseed FIRST. The new state is built from the room's seed, so reseeding
+    // afterwards would hand a rematch the previous match's seed and replay its
+    // opening layout — exactly the repetition this is meant to prevent.
+    this.reseed(room);
+    const config = this.buildConfig(room);
     let next: unknown;
     try {
-      next = current === null || current === undefined ? game.createInitialState(this.playerViews(room), this.buildConfig(room)) : game.reset(current);
+      next = current === null || current === undefined ? game.createInitialState(this.playerViews(room), config) : game.reset(current);
     } catch (error) {
       this.logger.warn('reset failed — recreating state', {
         roomId: room.id,
         message: error instanceof Error ? error.message : String(error),
       });
-      next = game.createInitialState(this.playerViews(room), this.buildConfig(room));
+      next = game.createInitialState(this.playerViews(room), config);
     }
-    this.reseed(room);
     room.gameState = next;
     this.logger.debug('game state reset', { roomId: room.id, matchNumber: room.matchNumber });
     return next;

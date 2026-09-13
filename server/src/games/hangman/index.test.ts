@@ -4,6 +4,7 @@ import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
   ALPHABET,
+  beginRound,
   CORRECT_LETTER_SCORE,
   DEFAULT_ROUNDS,
   endRound,
@@ -18,7 +19,15 @@ import {
   WRONG_LETTER_PENALTY,
   type HangmanState,
 } from './index';
+import {
+  allHangmanEntries,
+  hangmanTierCounts,
+  pickHangmanWord,
+  tierForRound,
+} from './words';
 import type { Room } from '../../rooms/Room';
+import { createRandom } from '@2play/shared';
+import { allHangmanEntries } from './words';
 
 describe('Hangman', () => {
   let harness: TestPlatform;
@@ -55,10 +64,49 @@ describe('Hangman', () => {
     for (const entries of Object.values(HANGMAN_WORDS)) {
       for (const entry of entries) {
         expect(entry.word).toMatch(/^[A-Z]+$/);
-        expect(entry.word.length).toBeGreaterThanOrEqual(6);
+        expect(entry.word.length).toBeGreaterThanOrEqual(3);
         expect(entry.hint.length).toBeGreaterThan(0);
+        expect(['easy', 'medium', 'hard']).toContain(entry.tier);
+        // A hint must never name the answer as a whole word, or it gives the
+        // round away. Matched on word boundaries so a hint like "You hear with
+        // it" is still fine for EAR.
+        const namesAnswer = new RegExp(`\\b${entry.word}\\b`, 'i').test(entry.hint);
+        expect(namesAnswer).toBe(false);
       }
     }
+  });
+
+  it('has no duplicate words across categories', () => {
+    const words = allHangmanEntries().map((entry) => entry.word);
+    expect(new Set(words).size).toBe(words.length);
+    expect(words.length).toBe(HANGMAN_WORD_COUNT);
+  });
+
+  it('keeps the easy tier genuinely easy and large enough to avoid repeats', () => {
+    const counts = hangmanTierCounts();
+    // A casual player faces mostly short, everyday words early in a match.
+    expect(counts.easy).toBeGreaterThan(100);
+    expect(counts.easy).toBeGreaterThan(counts.medium);
+    expect(counts.medium).toBeGreaterThan(counts.hard);
+
+    const easy = allHangmanEntries().filter((entry) => entry.tier === 'easy');
+    const avg = easy.reduce((total, entry) => total + entry.word.length, 0) / easy.length;
+    expect(avg).toBeLessThan(6);
+    expect(easy.every((entry) => entry.word.length <= 10)).toBe(true);
+
+    const hard = allHangmanEntries().filter((entry) => entry.tier === 'hard');
+    const hardAvg = hard.reduce((total, entry) => total + entry.word.length, 0) / hard.length;
+    expect(hardAvg).toBeGreaterThan(avg);
+  });
+
+  it('escalates difficulty across a match', () => {
+    expect(tierForRound(1, 5)).toBe('easy');
+    expect(tierForRound(2, 5)).toBe('easy');
+    expect(tierForRound(3, 5)).toBe('medium');
+    expect(tierForRound(4, 5)).toBe('medium');
+    expect(tierForRound(5, 5)).toBe('hard');
+    // A single-round match stays easy rather than punishing.
+    expect(tierForRound(1, 1)).toBe('easy');
   });
 
   it('picks a real secret word when a round starts', () => {
@@ -343,5 +391,111 @@ describe('Hangman', () => {
     // Either the word was solved or the attempts ran out.
     expect(['reveal', 'finished', 'playing']).toContain(state().phase);
     expect(state().guessed.length).toBeGreaterThan(0);
+  });
+});
+
+describe('Hangman word variety and anti-repeat', () => {
+  let harness: TestPlatform;
+  let platform: Platform;
+  let room: Room;
+
+  beforeEach(async () => {
+    harness = createTestPlatform();
+    platform = harness.platform;
+    const fixture = await createGameFixture(platform, 'hangman');
+    room = fixture.room;
+  });
+  afterEach(() => harness.destroy());
+
+  const state = () => room.gameState as HangmanState;
+  const context = () => platform.gameManager.getContext(room);
+
+  it('never repeats a word within a match', () => {
+    const dealt: string[] = [];
+    for (let round = 0; round < 25; round += 1) {
+      state().round = round;
+      beginRound(state(), context());
+      const word = state().secret;
+      expect(word).toMatch(/^[A-Z]+$/);
+      expect(dealt).not.toContain(word);
+      dealt.push(word);
+    }
+    expect(state().usedWords.length).toBeGreaterThan(0);
+  });
+
+  it('escalates from genuinely easy words to harder ones across a match', () => {
+    const lengthOf = (round: number) => {
+      state().round = round;
+      state().totalRounds = 5;
+      beginRound(state(), context());
+      return state().secret.length;
+    };
+    const early = [lengthOf(0), lengthOf(1)];
+    const late = [lengthOf(4)];
+    // Round 1-2 draw from the easy tier (avg ~4.6 letters), the final round
+    // from the hard tier (avg ~8 letters).
+    expect(Math.max(...early)).toBeLessThanOrEqual(10);
+    expect(late.every((n) => n >= 5)).toBe(true);
+  });
+
+  it('deals different opening words across matches', async () => {
+    const openings = new Set<string>();
+    for (let i = 0; i < 12; i += 1) {
+      const local = createTestPlatform();
+      const fixture = await createGameFixture(local.platform, 'hangman');
+      openings.add((fixture.room.gameState as HangmanState).secret);
+      local.destroy();
+    }
+    // A 131-word easy tier should not funnel every match into the same opener.
+    expect(openings.size).toBeGreaterThan(6);
+  });
+
+  it('restarts the bag on a rematch so the next match is not a replay', () => {
+    // start() already dealt the opening word, so the bag is non-empty.
+    expect(state().usedWords.length).toBeGreaterThan(0);
+
+    state().round = 1;
+    beginRound(state(), context());
+    const before = state().usedWords.length;
+    expect(before).toBeGreaterThan(1);
+
+    const reset = hangmanGame.reset!(state());
+    expect(reset.usedWords).toEqual([]);
+    expect(reset.secret).toBe('');
+  });
+
+  it('only draws from the requested tier until that tier is used up', () => {
+    for (const tier of ['easy', 'medium', 'hard'] as const) {
+      const size = hangmanTierCounts()[tier];
+      const used: string[] = [];
+      for (let i = 0; i < size; i += 1) {
+        const entry = pickHangmanWord(used, createRandom(i * 7919 + 13), tier);
+        expect(entry.tier).toBe(tier);
+        // The anti-repeat bag must exclude everything already dealt.
+        expect(used).not.toContain(entry.word);
+        used.push(entry.word);
+      }
+      expect(used.length).toBe(size);
+    }
+  });
+
+  it('falls back instead of stalling once a tier is exhausted', () => {
+    const everyEasy = allHangmanEntries()
+      .filter((entry) => entry.tier === 'easy')
+      .map((entry) => entry.word);
+    // All easy words already dealt: a legal word must still be returned.
+    const entry = pickHangmanWord(everyEasy, createRandom(99), 'easy');
+    expect(entry.word).toMatch(/^[A-Z]+$/);
+    expect(everyEasy).toContain(entry.word);
+  });
+
+  it('falls back safely when the dictionary is exhausted', () => {
+    // A match longer than the pool must still deal a legal word rather than
+    // stalling or serving an empty secret.
+    state().usedWords = allHangmanEntries().map((entry) => entry.word);
+    state().round = 0;
+    beginRound(state(), context());
+    expect(state().secret).toMatch(/^[A-Z]+$/);
+    expect(state().usedWords.length).toBeLessThanOrEqual(allHangmanEntries().length);
   });
 });

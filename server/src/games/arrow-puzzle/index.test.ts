@@ -304,15 +304,49 @@ describe('Arrow Puzzle', () => {
     expect((view.players[a] as unknown as { tiles?: unknown }).tiles).toBeUndefined();
   });
 
-  it('marks firable arrows for the viewer so the UI can highlight them', () => {
+  it('never tells the viewer which arrows are firable', () => {
     const playerId = players[0]!.id;
     const view = platform.gameManager.getPublicState(room, playerId) as {
-      board: Array<{ id: string; firable: boolean; cleared: boolean }>;
+      board: Array<Record<string, unknown>>;
     };
-    const expected = new Set(firableTiles(boardOf(playerId)).map((tile) => tile.id));
-    const reported = new Set(view.board.filter((tile) => tile.firable).map((tile) => tile.id));
-    expect(reported).toEqual(expected);
-    expect(reported.size).toBeGreaterThan(0);
+
+    // The board is real and populated — the puzzle is being served.
+    expect(view.board.length).toBeGreaterThan(0);
+
+    // But no per-tile legality flag: that boolean *is* the solution, and
+    // broadcasting it let the client paint every correct move.
+    for (const tile of view.board) {
+      expect(Object.keys(tile).sort()).toEqual(['cleared', 'direction', 'id', 'x', 'y']);
+      expect(tile).not.toHaveProperty('firable');
+    }
+
+    // Nor is the generator's solution order leaked anywhere in the projection.
+    const wire = JSON.stringify(view);
+    expect(wire).not.toContain('solution');
+    expect(wire).not.toContain('firable');
+
+    // Sanity: the server still knows the answer internally (it must, to judge
+    // moves) — there genuinely is something being withheld.
+    expect(firableTiles(boardOf(playerId)).length).toBeGreaterThan(0);
+  });
+
+  it('reveals a single correct tile only through the paid hint action', () => {
+    const playerId = players[0]!.id;
+    const before = state().players[playerId]!;
+    const scoreBefore = before.score;
+
+    act(playerId, { type: 'hint' });
+
+    const after = state().players[playerId]!;
+    expect(after.hintsUsed).toBe(1);
+    expect(after.score).toBe(Math.max(0, scoreBefore - HINT_PENALTY));
+
+    // The hint names exactly one tile, and it really is a legal move.
+    const event = state().lastEvent ?? '';
+    expect(event).toMatch(new RegExp(`^hint:${playerId}:`));
+    const hintedId = event.split(':')[2]!;
+    const legal = firableTiles(boardOf(playerId)).map((tile) => tile.id);
+    expect(legal).toContain(hintedId);
   });
 
   /* ---------------- lifecycle ---------------- */

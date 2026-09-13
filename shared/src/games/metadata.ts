@@ -1173,7 +1173,7 @@ export const ARROW_PUZZLE_METADATA = {
   aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
   estimatedDuration: 240,
   difficulty: 'medium' as const,
-  controls: 'Tap or click an arrow to fire it. Highlighted arrows have a clear path.',
+  controls: 'Tap or click an arrow to fire it. Nothing is highlighted — work out which arrows have a clear path yourself, or spend points on the Hint button.',
   rules: [
     'An arrow can only be fired when every cell between it and the board edge is empty.',
     'Firing an arrow removes it, which opens the path for the arrows behind it.',

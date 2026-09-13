@@ -22,6 +22,8 @@ import {
   type MagnetState,
 } from './index';
 import type { Room } from '../../rooms/Room';
+import { MAGNET_OBSTACLES, spawnGems } from './index';
+import { createRandom } from '@2play/shared';
 
 describe('Magnet Thief', () => {
   let harness: TestPlatform;
@@ -303,5 +305,61 @@ describe('Magnet Thief', () => {
     state().nextStageAt = context().now() - 1;
     magnetThiefGame.update(state(), 16, context());
     expect(state().stage).toBe(2);
+  });
+});
+
+describe('Magnet Thief content variety', () => {
+  /** Deterministic PRNG per case so a failure is reproducible. */
+  const rng = (seed: number) => createRandom(seed);
+  const blocked = (x: number, y: number) =>
+    MAGNET_OBSTACLES.some((o) => Math.hypot(x - o.x, y - o.y) < o.radius + 0.38);
+
+  it('scatters gems differently on every match', () => {
+    const layouts = new Set<string>();
+    for (let seed = 1; seed <= 60; seed += 1) {
+      layouts.add(spawnGems(8, rng(seed * 7919)).map((g) => `${g.x.toFixed(3)},${g.y.toFixed(3)}`).sort().join('|'));
+    }
+    // Before randomization this was a single fixed layout derived from the index.
+    expect(layouts.size).toBeGreaterThan(50);
+  });
+
+  it('always returns exactly 8 collectable, non-overlapping gems', () => {
+    for (let seed = 1; seed <= 200; seed += 1) {
+      const gems = spawnGems(8, rng(seed));
+      expect(gems).toHaveLength(8);
+
+      const cells = new Set<string>();
+      for (const gem of gems) {
+        // A gem inside the blocked zone around an obstacle could never be
+        // reached, which would make the round unfairly unwinnable.
+        expect(blocked(gem.x, gem.y)).toBe(false);
+        expect(inSafeCorner(gem.x, gem.y)).toBe(false);
+        expect(gem.x).toBeGreaterThan(0.4);
+        expect(gem.y).toBeGreaterThan(0.4);
+        const key = `${Math.round(gem.x)}:${Math.round(gem.y)}`;
+        expect(cells.has(key)).toBe(false);
+        cells.add(key);
+      }
+      // Scoring is unchanged: the 10/15/20 rotation is positional.
+      expect(gems.map((g) => g.value)).toEqual([10, 15, 20, 10, 15, 20, 10, 15]);
+    }
+  });
+
+  it('still yields a full legal layout from a degenerate random source', () => {
+    // A pathological PRNG must not stall or short-change the round; the
+    // deterministic fallback tops the layout up.
+    for (const value of [0, 0.9999]) {
+      const gems = spawnGems(8, () => value);
+      expect(gems).toHaveLength(8);
+      expect(new Set(gems.map((g) => `${Math.round(g.x)}:${Math.round(g.y)}`)).size).toBe(8);
+      expect(gems.every((g) => !blocked(g.x, g.y))).toBe(true);
+    }
+  });
+
+  it('keeps the deterministic layout when no random source is supplied', () => {
+    expect(spawnGems(8)).toHaveLength(8);
+    expect(spawnGems(8).map((g) => `${g.x},${g.y}`).join('|')).toBe(
+      spawnGems(8).map((g) => `${g.x},${g.y}`).join('|'),
+    );
   });
 });

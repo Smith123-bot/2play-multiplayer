@@ -22,6 +22,7 @@ import {
   type BrickBreakerState,
 } from './index';
 import type { Room } from '../../rooms/Room';
+import { createRandom } from '@2play/shared';
 
 describe('Brick Breaker Battle', () => {
   let harness: TestPlatform;
@@ -484,5 +485,43 @@ describe('Brick Breaker Battle', () => {
       }).accepted,
     ).toBe(false);
     expect(arena(playerId).paddleDir).toBe(1);
+  });
+});
+
+describe('Brick Breaker layout variety', () => {
+  const stats = (d: number[]) => ({
+    bricks: d.filter((hp) => hp > 0).length,
+    tough: d.filter((hp) => hp === 2).length,
+  });
+
+  it('varies the orientation of the shaped levels between matches', () => {
+    for (const level of [2, 3]) {
+      const variants = new Set<string>();
+      for (let seed = 1; seed <= 200; seed += 1) {
+        variants.add(brickDurabilityForLevel(level, createRandom(seed * 104729)).join(','));
+      }
+      // 7 column rotations of the authored template; previously exactly 1.
+      expect(variants.size).toBeGreaterThan(1);
+    }
+  });
+
+  it('preserves difficulty exactly: brick count and toughness are unchanged', () => {
+    for (const level of [1, 2, 3]) {
+      const base = stats(brickDurabilityForLevel(level));
+      for (let seed = 1; seed <= 120; seed += 1) {
+        const varied = stats(brickDurabilityForLevel(level, createRandom(seed * 31337)));
+        expect(varied.bricks).toBe(base.bricks);
+        expect(varied.tough).toBe(base.tough);
+        expect(brickDurabilityForLevel(level, createRandom(seed)).length).toBe(
+          brickDurabilityForLevel(level).length,
+        );
+      }
+    }
+  });
+
+  it('leaves the authored template untouched when no random source is given', () => {
+    // Tests and pre-start placeholders rely on the deterministic form.
+    expect(brickDurabilityForLevel(1).every((hp) => hp === 1)).toBe(true);
+    expect(brickDurabilityForLevel(1)).toEqual(brickDurabilityForLevel(1));
   });
 });

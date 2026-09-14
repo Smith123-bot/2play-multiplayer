@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGameFixture, createTestPlatform, type TestPlatform } from '../../test/harness';
 import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
@@ -10,6 +10,7 @@ import {
   findTriangle,
   finishSim,
   freeEdges,
+  REVEAL_MS,
   simGame,
   SIM_NODES,
   wouldFormTriangle,
@@ -193,6 +194,10 @@ describe('Sim', () => {
     own('e45', b);
 
     expect(claim(a, 'e02').accepted).toBe(true);
+    // The match first enters the reveal phase (see the reveal tests below);
+    // finish it explicitly for the scoring assertions.
+    expect(state().phase).toBe('reveal');
+    finishSim(state(), context(), 'completed');
     expect(state().phase).toBe('finished');
     // The player who built the triangle is the LOSER.
     expect(state().loserId).toBe(a);
@@ -201,6 +206,63 @@ describe('Sim', () => {
     expect(simGame.checkWinCondition(state())).toEqual([b]);
     expect(simGame.calculateScore(b, state())).toBe(100);
     expect(simGame.calculateScore(a, state())).toBe(0);
+  });
+
+  /* ---------------- the reveal moment ---------------- */
+
+  it('freezes the board in a reveal phase with the EXACT losing triangle before finishing', async () => {
+    const [a, b] = players.map((player) => player.id);
+    state().currentPlayerId = a;
+    own('e01', a);
+    own('e12', a);
+    own('e34', b);
+
+    vi.useFakeTimers();
+    void b;
+    try {
+      expect(claim(a, 'e02').accepted).toBe(true);
+
+      // Reveal, not finished: the decisive moment gets its own screen time.
+      expect(state().phase).toBe('reveal');
+      expect(state().currentPlayerId).toBeNull(); // no turn runs during reveal
+      const before = state().edges.map((edge) => edge.owner);
+      expect(state().losingTriangle).toEqual(['e01', 'e12', 'e02']); // exact edges, exact order
+      expect(state().loserId).toBe(a);
+      expect(state().winnerId).toBe(b);
+
+      // Input is frozen during the reveal.
+      expect(claim(b, 'e45').accepted).toBe(false);
+      expect(simGame.validateAction(a, { type: 'claim', payload: { edgeId: 'e45' } }, state(), context()).valid).toBe(false);
+      expect(state().edges.map((edge) => edge.owner)).toEqual(before);
+
+      // The public state carries the same exact triangle to every client.
+      const publicState = simGame.getPublicState(state(), b, context()) as {
+        phase: string;
+        losingTriangle: string[];
+      };
+      expect(publicState.phase).toBe('reveal');
+      expect(publicState.losingTriangle).toEqual(['e01', 'e12', 'e02']);
+
+      // After the reveal window the match finishes on its own.
+      await vi.advanceTimersByTimeAsync(REVEAL_MS + 10);
+      expect(state().phase).toBe('finished');
+      expect(state().losingTriangle).toEqual(['e01', 'e12', 'e02']); // unchanged
+      expect(state().loserId).toBe(a);
+      expect(state().winnerId).toBe(b);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('finishSim from the reveal keeps the winner-specific event for clients', () => {
+    const [a] = players.map((player) => player.id);
+    state().currentPlayerId = a;
+    own('e01', a);
+    own('e12', a);
+    claim(a, 'e02');
+    expect(state().lastEvent).toBe(`triangle:${a}`);
+    finishSim(state(), context(), 'completed');
+    expect(state().lastEvent).toBe(`triangle:${a}`); // still the decisive event
   });
 
   it('reports the losing triangle and the causer in the result', () => {
@@ -252,6 +314,8 @@ describe('Sim', () => {
         if (!action) break;
         platform.gameManager.handleAction(room, mover, action);
       }
+      // The AI loop ends in the reveal phase; finish it for the assertions.
+      if (state().phase === 'reveal') finishSim(state(), context(), 'completed');
       expect(state().phase).toBe('finished');
       // Someone must have built a triangle; a draw is mathematically impossible.
       expect(state().loserId).not.toBeNull();

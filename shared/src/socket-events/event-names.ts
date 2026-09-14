@@ -76,7 +76,15 @@ export const SERVER_EVENTS = {
 
 export type ServerEventName = (typeof SERVER_EVENTS)[keyof typeof SERVER_EVENTS];
 
-export const TIMER_TYPES = ['countdown', 'gameDuration', 'turn', 'reconnect', 'rematch'] as const;
+export const TIMER_TYPES = [
+  'countdown',
+  'gameDuration',
+  'turn',
+  'reconnect',
+  'rematch',
+  /** Game-end reveal windows (e.g. Sim's losing-triangle highlight). */
+  'reveal',
+] as const;
 export type TimerType = (typeof TIMER_TYPES)[number];
 
 export const CONNECTION_STATES = ['CONNECTED', 'CONNECTING', 'DISCONNECTED', 'RECONNECTING'] as const;

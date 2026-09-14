@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, Users, Clock, Gauge, Zap, Home, Link2, ChevronDown } from 'lucide-react';
 import type { GameMetadata } from '@2play/shared';
@@ -30,7 +31,14 @@ const CARD_BASE =
 const CARD_IDLE =
   'border-white/10 bg-surface/80 hover:-translate-y-0.5 hover:border-primary-400/60 hover:shadow-lg hover:shadow-primary-500/10';
 
-export function GameCard({
+/**
+ * Memoized: the Games browser re-renders on every keystroke in the search box
+ * and on every room snapshot; with 40 cards in the grid, skipping unchanged
+ * cards keeps search typing and filter changes instant on mid-range phones.
+ * Callback props are stable at the call sites (useCallback), so the default
+ * shallow compare is effective.
+ */
+export const GameCard = memo(function GameCard({
   game,
   favorite = false,
   onToggleFavorite,
@@ -195,4 +203,4 @@ export function GameCard({
       ) : null}
     </div>
   );
-}
+});

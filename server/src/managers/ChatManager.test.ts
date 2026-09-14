@@ -110,17 +110,32 @@ describe('ChatManager', () => {
     }
   });
 
-  it('publishes system messages for room events', async () => {
+  it('never writes lifecycle/system events into the chat transcript', async () => {
+    // Chat carries only real player chat + explicit emotes. Lifecycle events
+    // (joins, leaves, match start/finish, rematch) are status UI, not chat.
     const room = await roomWithTwoPlayers(platform);
-    const systemEvents = room.chat
-      .filter((message) => message.type === 'system')
-      .map((message) => message.systemEvent);
 
-    expect(systemEvents).toContain('player_joined');
+    // Joins and a leave happened — none of them may appear as chat lines.
+    const lifecycle = platform.eventBus;
+    lifecycle.emit('game:started', { room, config: {} } as never);
+    lifecycle.emit('room:game-changed', { room, gameId: 'reaction-race' } as never);
+    lifecycle.emit(
+      'game:finished',
+      { room, result: { winners: [room.humanPlayers[0]!.id], isDraw: false, rankings: [] } } as never,
+    );
+    lifecycle.emit('rematch:started', { room } as never);
+    lifecycle.emit('rematch:cancelled', { room } as never);
 
     const guest = room.humanPlayers[1]!;
     platform.roomManager.leaveRoom(room, guest.id, 'leave');
-    expect(room.chat.some((message) => message.systemEvent === 'player_left')).toBe(true);
+
+    expect(room.chat.some((message) => message.type === 'system')).toBe(false);
+
+    // Real player chat still lands normally.
+    platform.chatManager.sendMessage(room, room.humanPlayers[0]!, 'gg well played');
+    const last = room.chat.at(-1);
+    expect(last?.type).toBe('message');
+    expect(last?.text).toBe('gg well played');
   });
 
   it('sends only allow-listed emotes', async () => {

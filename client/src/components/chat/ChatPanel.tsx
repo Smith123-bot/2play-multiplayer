@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
 import { CHAT_MAX_LENGTH, EMOTES, type ChatMessage } from '@2play/shared';
 import { ChatMessageRow } from './ChatMessageRow';
@@ -14,8 +14,26 @@ export interface ChatPanelProps {
   compact?: boolean;
 }
 
+/**
+ * The chat box shows ONLY what players actually said: text messages and
+ * explicitly sent emotes. System/lifecycle events ("Match finished…",
+ * "Rematch accepted…", "The match is starting…") are status information —
+ * they belong to the room's status banners and result screen, never to the
+ * chat transcript. The server no longer produces them; this filter is the
+ * defensive client-side guard (e.g. against stale snapshots from an older
+ * server build).
+ */
+function isChatContent(message: ChatMessage): boolean {
+  return message.type === 'message' || message.type === 'emote';
+}
+
 /** Chat works in the lobby, during the match and on the result screen. */
-export function ChatPanel({ messages, myPlayerId, className, compact = false }: ChatPanelProps) {
+/**
+ * Memoized: the room store now keeps the chat array identity stable between
+ * gameplay-only snapshots, so a realtime match no longer re-renders the whole
+ * chat transcript several times per second — only genuine chat changes do.
+ */
+export const ChatPanel = memo(function ChatPanel({ messages, myPlayerId, className, compact = false }: ChatPanelProps) {
   const { sendChat, sendEmote } = useRoomActions();
   const draft = useChatStore((store) => store.draft);
   const setDraft = useChatStore((store) => store.setDraft);
@@ -62,13 +80,15 @@ export function ChatPanel({ messages, myPlayerId, className, compact = false }: 
         className={cn('flex-1 overflow-y-auto px-3 py-2', compact ? 'max-h-52' : 'min-h-[160px] max-h-[320px]')}
         aria-live="polite"
       >
-        {messages.length === 0 ? (
-          <p className="py-6 text-center text-xs text-slate-500">No messages yet. Say hi! 👋</p>
-        ) : (
-          messages.map((message) => (
+        {(() => {
+          const chat = messages.filter(isChatContent);
+          if (chat.length === 0) {
+            return <p className="py-6 text-center text-xs text-slate-500">No messages yet. Say hi! 👋</p>;
+          }
+          return chat.map((message) => (
             <ChatMessageRow key={message.id} message={message} isMine={message.playerId === myPlayerId} />
-          ))
-        )}
+          ));
+        })()}
       </div>
 
       <div className="flex flex-wrap items-center gap-1 border-t border-white/5 px-2 py-1.5">
@@ -124,4 +144,4 @@ export function ChatPanel({ messages, myPlayerId, className, compact = false }: 
       </form>
     </section>
   );
-}
+});

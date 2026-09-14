@@ -15,10 +15,23 @@ export const LUDO_COLORS: LudoColor[] = ['red', 'green', 'yellow', 'blue'];
 
 /** Cells on the shared loop. */
 export const TRACK_LENGTH = 52;
-/** Private coloured lane each player walks before reaching home. */
+/**
+ * Shared-track cells a seat actually WALKS: it enters on its start square and
+ * turns into its home lane on `START_INDEX - 2` (the middle cell of its own
+ * arm), so the walk is 51 cells (progress 0..50). Progress 51 would be the
+ * OUTER corner cell past the lane entrance — that cell belongs to the next
+ * seat's approach and must never be stepped on by this seat.
+ */
+export const TRACK_WALK_LENGTH = TRACK_LENGTH - 1; // 51
+/** Private coloured lane each player walks before reaching home (5 cells). */
 export const HOME_STRETCH_LENGTH = 5;
 /** Tokens per player. */
 export const TOKENS_PER_PLAYER = 4;
+
+/** Progress buckets for one seat's journey. */
+export const LANE_START = TRACK_WALK_LENGTH; // 51: first lane cell
+export const LANE_END = TRACK_WALK_LENGTH + HOME_STRETCH_LENGTH - 1; // 55: last lane cell
+export const HOME_PROGRESS = TRACK_WALK_LENGTH + HOME_STRETCH_LENGTH; // 56: final home
 
 /**
  * Track index each seat enters the board on. The classic spacing is 13 cells
@@ -28,9 +41,18 @@ export const START_INDEX: Record<number, number> = { 0: 0, 1: 13, 2: 26, 3: 39 }
 
 /**
  * The last shared-track cell a seat stands on before turning into its own
- * home stretch (its start index minus one, wrapped).
+ * home lane: `START_INDEX - 2` wrapped. Geometrically this is the MIDDLE cell
+ * of the seat's arm (red {0,7}, green {7,0}, yellow {14,7}, blue {7,14}),
+ * directly adjacent to that seat's first lane cell. The old value (start - 1)
+ * pointed at the OUTER corner cell past the entrance, which is exactly the
+ * "token walks through an unrelated corner" bug.
  */
-export const HOME_ENTRY_INDEX: Record<number, number> = { 0: 51, 1: 12, 2: 25, 3: 38 };
+export const HOME_ENTRY_INDEX: Record<number, number> = Object.fromEntries(
+  [0, 1, 2, 3].map((seat) => [
+    seat,
+    (START_INDEX[seat]! + TRACK_WALK_LENGTH - 1) % TRACK_LENGTH,
+  ]),
+) as Record<number, number>;
 
 /**
  * Safe cells: the four coloured starting squares plus the four classic star
@@ -56,10 +78,13 @@ export function trackIndexFor(seatIndex: number, steps: number): number {
 }
 
 /**
- * Total distance a token must travel to go from its starting square all the
- * way into the final home cell: 52 shared cells + 5 lane cells + 1.
+ * Total distance a token must travel to go from its starting square to the
+ * final home cell: 51 walked track cells + 5 lane cells = 56. The journey is
+ * therefore: progress 0..50 track, 51..55 lane, 56 home. (The old value of 58
+ * produced a lane index of 5 for the final step — a cell that does not exist —
+ * which made freshly-arrived home tokens disappear on the client.)
  */
-export const FINISH_DISTANCE = TRACK_LENGTH + HOME_STRETCH_LENGTH + 1;
+export const FINISH_DISTANCE = TRACK_WALK_LENGTH + HOME_STRETCH_LENGTH;
 
 /* ------------------------------------------------------------------ */
 /* Pixel/grid layout for the client                                    */
@@ -116,3 +141,109 @@ export const YARD_CELLS: Record<number, Cell[]> = {
 
 export const BOARD_SIZE = 15;
 export const CENTER_CELL: Cell = { x: 7, y: 7 };
+
+/**
+ * Where a seat's finished tokens rest inside the central home area — one
+ * offset per token inside that seat's triangle, so a completed token keeps a
+ * stable, clearly-visible "home" position (fix for tokens vanishing at home).
+ */
+export const HOME_TRIANGLE_SPOTS: Record<number, Cell[]> = {
+  0: [
+    { x: 6, y: 7 },
+    { x: 6, y: 6.5 },
+    { x: 6, y: 7.5 },
+    { x: 6, y: 6 },
+  ],
+  1: [
+    { x: 7, y: 6 },
+    { x: 6.5, y: 6 },
+    { x: 7.5, y: 6 },
+    { x: 7, y: 6.5 },
+  ],
+  2: [
+    { x: 8, y: 7 },
+    { x: 8, y: 6.5 },
+    { x: 8, y: 7.5 },
+    { x: 8, y: 8 },
+  ],
+  3: [
+    { x: 7, y: 8 },
+    { x: 6.5, y: 8 },
+    { x: 7.5, y: 8 },
+    { x: 7, y: 8.5 },
+  ],
+};
+
+/** The kind of location a progress value represents for a seat. */
+export type ProgressKind = 'yard' | 'track' | 'lane' | 'home';
+
+export function progressKind(progress: number): ProgressKind {
+  if (progress < 0) return 'yard';
+  if (progress < LANE_START) return 'track';
+  if (progress <= LANE_END) return 'lane';
+  return 'home';
+}
+
+export function isOnTrack(progress: number): boolean {
+  return progress >= 0 && progress < LANE_START;
+}
+
+export function isInHomeLane(progress: number): boolean {
+  return progress >= LANE_START && progress <= LANE_END;
+}
+
+export function isHome(progress: number): boolean {
+  return progress >= HOME_PROGRESS;
+}
+
+/**
+ * Grid cell for a seat's progress — THE single source of truth for both the
+ * server and the client renderer, so the logical path and the drawn path can
+ * never diverge. Returns null only for out-of-range progress.
+ */
+export function cellForProgress(seatIndex: number, progress: number, tokenIndex: number): Cell | null {
+  const seat = ((seatIndex % 4) + 4) % 4;
+  if (progress < 0) return YARD_CELLS[seat]?.[tokenIndex] ?? null;
+  if (isOnTrack(progress)) {
+    return TRACK_CELLS[trackIndexFor(seat, progress)] ?? null;
+  }
+  if (isInHomeLane(progress)) return HOME_STRETCH_CELLS[seat]?.[progress - LANE_START] ?? null;
+  if (isHome(progress)) {
+    // Final home: the seat's triangle inside the centre. Tokens cluster at
+    // slightly different offsets inside their triangle so all four stay
+    // visible, but every home token of a seat lives in that seat's triangle.
+    const spots = HOME_TRIANGLE_SPOTS[seat];
+    return spots?.[Math.min(tokenIndex, spots.length - 1)] ?? CENTER_CELL;
+  }
+  return null;
+}
+
+/**
+ * Resolved grid cells for walking every step from one progress value to
+ * another along a seat's route (used for move animations). `from`/`to` are
+ * progress values on the same seat path.
+ */
+export function pathCellsFor(
+  seatIndex: number,
+  from: number,
+  to: number,
+  tokenIndex: number,
+): Cell[] {
+  const cells: Cell[] = [];
+  for (let progress = from; progress <= to; progress += 1) {
+    const cell = cellForProgress(seatIndex, progress, tokenIndex);
+    if (cell) cells.push(cell);
+  }
+  return cells;
+}
+
+/**
+ * Grid cells of a seat's FULL route: start square -> lane -> final home.
+ * Used by tests to assert the rendered path never passes an unrelated corner.
+ */
+export function routeCellsFor(seatIndex: number, tokenIndex = 0): Cell[] {
+  return pathCellsFor(seatIndex, 0, HOME_PROGRESS, tokenIndex);
+}
+
+
+

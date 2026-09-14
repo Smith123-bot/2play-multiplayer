@@ -25,15 +25,16 @@ describe('MultiplayerManager security boundary', () => {
     });
     expect(accepted.accepted).toBe(true);
 
-    const actionEvent = harness.emissions.find((entry) =>
-      entry.event.endsWith(':game:player-action'),
-    );
-    expect(actionEvent?.payload).toMatchObject({
-      playerId,
-      action: { type: 'flip' },
-      accepted: true,
-    });
-    expect(JSON.stringify(actionEvent?.payload)).not.toContain('cardId');
+    /**
+     * Actions produce NO per-action room broadcast at all: `game:player-action`
+     * was removed — nothing consumed it and it cost one message per action in
+     * every realtime game. Raw payloads (which can carry hidden coordinates,
+     * guesses or choices) must never reach the wire; observers learn about the
+     * move through the coalesced, authoritative room snapshot only.
+     */
+    expect(
+      harness.emissions.some((entry) => entry.event.endsWith(':game:player-action')),
+    ).toBe(false);
 
     harness.clearEmissions();
     const rejected = harness.platform.multiplayerManager.submitAction(room, playerId, {
@@ -41,9 +42,7 @@ describe('MultiplayerManager security boundary', () => {
       payload: { cardId: 999 },
     });
     expect(rejected.accepted).toBe(false);
-    expect(harness.emissions.some((entry) => entry.event.endsWith(':game:player-action'))).toBe(
-      false,
-    );
+    expect(harness.emissions.some((entry) => entry.event.endsWith(':room:updated'))).toBe(false);
   });
 
   /**

@@ -57,10 +57,19 @@ export class Room {
 
   public settings: RoomSettings;
   public stateVersion = 0;
+  /**
+   * Bumped ONLY when the chat transcript changes. Socket delivery uses it to
+   * send the (potentially large) chat array in a snapshot only when it actually
+   * changed for that viewer — chat is otherwise re-streamed on every gameplay
+   * broadcast, which measured at ~83% of every `room:updated` payload.
+   */
+  public chatVersion = 0;
   /** True for a "Quick Play vs AI" match: no room code UX, never publicly listed. */
   public readonly isQuickPlay: boolean;
 
   private aiCounter = 0;
+  /** Memoized seat-ordered players (≤4 entries); invalidated on membership change. */
+  private orderedCache: ServerPlayer[] | null = null;
 
   constructor(options: RoomOptions) {
     this.id = options.id;
@@ -84,6 +93,7 @@ export class Room {
 
   addPlayer(player: ServerPlayer): void {
     this.players.set(player.id, player);
+    this.orderedCache = null;
     this.emptyAt = null;
     this.touch();
   }
@@ -93,6 +103,7 @@ export class Room {
     if (!player) return undefined;
     this.players.delete(playerId);
     this.rematchVotes.delete(playerId);
+    this.orderedCache = null;
     this.touch();
     if (this.humanPlayers.length === 0) {
       this.emptyAt = Date.now();
@@ -118,9 +129,18 @@ export class Room {
     return undefined;
   }
 
-  /** Players ordered by seat so every client renders the same order. */
+  /**
+   * Players ordered by seat so every client renders the same order.
+   *
+   * Memoized: this getter sits on the broadcast hot path (once per viewer per
+   * snapshot, several times per second in realtime games). seatIndex never
+   * changes after a seat is taken, so membership is the only invalidation.
+   */
   get orderedPlayers(): ServerPlayer[] {
-    return [...this.players.values()].sort((a, b) => a.seatIndex - b.seatIndex);
+    if (this.orderedCache === null) {
+      this.orderedCache = [...this.players.values()].sort((a, b) => a.seatIndex - b.seatIndex);
+    }
+    return this.orderedCache;
   }
 
   get humanPlayers(): ServerPlayer[] {
@@ -202,6 +222,7 @@ export class Room {
     if (this.chat.length > CHAT_HISTORY_LIMIT) {
       this.chat.splice(0, this.chat.length - CHAT_HISTORY_LIMIT);
     }
+    this.chatVersion += 1;
     this.bumpVersion();
   }
 

@@ -30,7 +30,7 @@ export class MultiplayerManager {
 
     const limit = this.platform.rateLimiter.consume(
       `action:${room.id}:${playerId}`,
-      ACTION_RATE_LIMIT_PER_SEC,
+      this.platform.config.actionRateLimitPerSec || ACTION_RATE_LIMIT_PER_SEC,
       1000,
     );
     if (!limit.allowed) {
@@ -40,16 +40,14 @@ export class MultiplayerManager {
     const result = this.platform.gameManager.handleAction(room, playerId, action);
 
     if (result.accepted) {
-      // Broadcast only non-sensitive action metadata. The canonical per-viewer
-      // state carries the gameplay result; raw choices, guesses and coordinates
-      // can contain hidden information and needlessly inflate every action.
-      this.platform.socketManager?.emitToRoom(room.id, 'game:player-action', {
-        roomId: room.id,
-        playerId,
-        action: { type: action.type },
-        accepted: true,
-      });
-
+      // NOTE: there is deliberately no per-action `game:player-action` room
+      // broadcast anymore. No client ever consumed it, and in realtime games it
+      // added up to ~20 messages/second per acting player of pure overhead on
+      // top of the authoritative snapshots. Observers learn about the move
+      // through the coalesced room snapshot (all gameplay consequences travel
+      // there); the acting player additionally gets the immediate targeted
+      // snapshot below.
+      //
       // Give the acting player their authoritative snapshot immediately instead
       // of making them wait out the broadcast throttle for the consequence of
       // their own move. Opponents still receive the coalesced room broadcast.

@@ -28,9 +28,17 @@ import { actionAccepted, actionRejected } from '../GameModule';
  * the code still handles a full board defensively and reports a draw.
  */
 
-export type SimPhase = 'idle' | 'playing' | 'finished';
+export type SimPhase = 'idle' | 'playing' | 'reveal' | 'finished';
 
 export const SIM_NODES = 6;
+
+/**
+ * How long the losing triangle stays on screen (frozen board, highlighted
+ * edges, result message) before the match flips to the result screen. This is
+ * the game-end reveal: the decisive moment gets a beat of its own instead of
+ * vanishing into the result panel.
+ */
+export const REVEAL_MS = 2_000;
 
 /** An edge between two node indices, `a < b`. */
 export interface SimEdge {
@@ -232,13 +240,31 @@ export function applyClaim(state: SimState, ctx: GameContext, playerId: string, 
   // MISÈRE: building your own triangle loses the game.
   const triangle = findTriangle(state, playerId);
   if (triangle) {
+    // THE EXACT three edges that formed the triangle are frozen into state
+    // here — the client never re-derives or re-randomises them.
     state.losingTriangle = triangle;
     state.loserId = playerId;
     const opponent = activePlayers(state).find(([id]) => id !== playerId);
     state.winnerId = opponent?.[0] ?? null;
     state.isDraw = false;
     state.lastEvent = `triangle:${playerId}`;
-    finishSim(state, ctx, 'completed');
+    // Reveal phase: the board freezes with the losing triangle highlighted
+    // for REVEAL_MS before the result screen. Input is already blocked
+    // (validateAction only accepts actions while phase === 'playing') and no
+    // turn timer runs during the reveal.
+    state.phase = 'reveal';
+    state.currentPlayerId = null;
+    state.turnEndsAt = ctx.now() + REVEAL_MS;
+    ctx.markStateChanged();
+    ctx.schedule(
+      REVEAL_MS,
+      () => {
+        if (state.phase !== 'reveal') return;
+        finishSim(state, ctx, 'completed');
+      },
+      'reveal',
+      'reveal-finish',
+    );
     return true;
   }
 

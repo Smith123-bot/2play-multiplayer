@@ -250,7 +250,16 @@ const CASES: GameCase[] = [
       Array.isArray(state.trackCells) &&
       (state.trackCells as unknown[]).length === 52 &&
       typeof state.phase === 'string' &&
-      Array.isArray(state.turnOrder),
+      Array.isArray(state.turnOrder) &&
+      // Resolved-geometry contract: every token ships a grid cell + kind, the
+      // lane starts at 51 and the full journey is exactly 56 steps.
+      state.laneStart === 51 &&
+      state.finishDistance === 56 &&
+      Object.values(state.players as Record<string, { tokens: unknown[] }>).every((slot) =>
+        (slot.tokens as Array<{ gridCell: unknown; kind: string }>).every(
+          (token) => token.gridCell !== null && token.gridCell !== undefined && typeof token.kind === 'string',
+        ),
+      ),
     action: { type: 'roll' },
   },
   {
@@ -570,7 +579,18 @@ describe('every shipped game is playable', () => {
       // Sockets, players and chat all survive the finish line (spec §17/§66).
       expect(host.socket.connected).toBe(true);
       expect(guest.socket.connected).toBe(true);
-      expect((finished?.chat.length ?? 0)).toBeGreaterThan(0);
+      // Chat holds ONLY real player messages now — lifecycle events are status
+      // UI, so a finished match must not have written any chat lines.
+      expect((finished?.chat ?? []).every((message) => message.type !== 'system')).toBe(true);
+      // A real player message still reaches the whole room after the result.
+      const dotsChatAck = await emitAck(host.socket, 'chat:send', { text: 'gg, nice boxes' });
+      expect(dotsChatAck.ok).toBe(true);
+      const dotsChat = await waitForRoom(
+        host.socket,
+        (current) => (current.chat ?? []).some((message) => message.text === 'gg, nice boxes'),
+        10_000,
+      );
+      expect((dotsChat.chat ?? []).some((message) => message.text === 'gg, nice boxes')).toBe(true);
 
       // A rematch can be requested immediately after the result.
       const vote = await emitAck(host.socket, 'rematch:request', {});
@@ -792,7 +812,9 @@ describe('every shipped game is playable', () => {
       );
       expect(resultRoom.gameResult?.rankings).toHaveLength(2);
       expect(resultRoom.gameResult?.gameId).toBe('word-scramble-battle');
-      expect(resultRoom.chat.length).toBeGreaterThan(0); // chat survives the finish
+      // Chat survives the finish but carries no lifecycle/system lines — only
+      // what players actually said.
+      expect((resultRoom.chat ?? []).every((message) => message.type !== 'system')).toBe(true);
       expect(host.socket.connected).toBe(true);
       expect(guest.socket.connected).toBe(true);
 

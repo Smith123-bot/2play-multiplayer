@@ -5,6 +5,7 @@ import { database } from '../database/client';
 import { GameLoader } from '../managers/GameLoader';
 import { createApp } from '../app';
 import { EventBus } from './EventBus';
+import { createHealthSignals } from './Health';
 import type { Platform, PlatformConfig } from './Platform';
 import { RateLimiter } from './RateLimiter';
 import { TimerManager } from './TimerManager';
@@ -49,12 +50,14 @@ export class ApplicationManager {
       roomMaxLifetimeMs: env.ROOM_MAX_LIFETIME_MS,
       actionRateLimitPerSec: env.ACTION_RATE_LIMIT_PER_SEC,
       chatRateLimitPerSec: env.CHAT_RATE_LIMIT_PER_SEC,
+      authRateLimitPerMin: env.AUTH_RATE_LIMIT_PER_MIN,
     };
 
     this.platform.config = config;
     this.platform.eventBus = new EventBus();
     this.platform.timerManager = new TimerManager();
     this.platform.rateLimiter = new RateLimiter();
+    this.platform.healthSignals = createHealthSignals();
     this.platform.registry = new GameRegistry();
     this.platform.roomStore = new RoomStore();
     this.platform.database = database;

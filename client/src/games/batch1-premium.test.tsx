@@ -227,6 +227,8 @@ describe('Batch 1 premium game clients', () => {
       seatIndex: 0,
       progress: index === 0 ? 5 : -1,
       cell: index === 0 ? 5 : null,
+      gridCell: index === 0 ? grid[5] : { x: 2 + (index % 2), y: 2 + Math.floor(index / 2) },
+      kind: index === 0 ? 'track' : 'yard',
       finished: false,
     }));
     const state = {
@@ -241,6 +243,7 @@ describe('Batch 1 premium game clients', () => {
           capturesTokenId: null,
           entersBoard: false,
           reachesHome: false,
+          toCell: grid[8],
         },
       ],
       winnerIds: [],
@@ -255,7 +258,10 @@ describe('Batch 1 premium game clients', () => {
       lastEvent: 'capture:p1:red-0:green-0',
       finishReason: null,
       trackLength: 52,
-      finishDistance: 57,
+      laneStart: 51,
+      homeStretchLength: 5,
+      homeEntryIndex: { 0: 50, 1: 11, 2: 24, 3: 37 },
+      finishDistance: 56,
       tokensPerPlayer: 4,
       safeIndices: [0, 13, 26, 39],
       startIndex: [0, 13, 26, 39],
@@ -297,8 +303,10 @@ describe('Batch 1 premium game clients', () => {
         from: 2,
         to: 5,
         path: [3, 4, 5],
+        cells: [grid[3], grid[4], grid[5]],
         captured: 'green-0',
         capturedFrom: 44,
+        capturedFromCell: grid[44],
       },
       players: {
         p1: {

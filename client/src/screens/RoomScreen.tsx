@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, HelpCircle, LogOut, Play } from 'lucide-react';
 import type { RoomState } from '@2play/shared';
 import { RoomCodeCard } from '../components/room/RoomCodeCard';
@@ -21,10 +22,25 @@ import { useGameStore } from '../stores/gameStore';
 import { useRoomActions } from '../hooks/useRoomActions';
 import { useLeaveRoomOnBackNavigation } from '../hooks/useLeaveRoomOnBackNavigation';
 import { getLocalPlayerId } from '../stores/roomStore';
+import { useGameEndReveal } from '../hooks/useGameEndReveal';
 import { cn } from '../utils/cn';
 
 const LOBBY_STATUSES: RoomState['status'][] = ['WAITING', 'LOBBY', 'READY'];
 const RESULT_STATUSES: RoomState['status'][] = ['GAME_FINISHED', 'RESULT', 'REMATCH_WAITING'];
+
+function winnersText(
+  result: NonNullable<RoomState['gameResult']>,
+  room: RoomState,
+): string {
+  const ranked = result.rankings
+    .filter((entry) => result.winners.includes(entry.playerId))
+    .map((entry) => entry.nickname);
+  if (ranked.length > 0) return ranked.join(' & ');
+  const fallback = room.players
+    .filter((player) => result.winners.includes(player.id))
+    .map((player) => player.nickname);
+  return fallback.length > 0 ? fallback.join(' & ') : 'Nobody';
+}
 
 export function RoomScreen() {
   const { roomId = '' } = useParams<{ roomId: string }>();
@@ -139,6 +155,9 @@ export function RoomScreen() {
    * and the "seen" flag is per game, so returning players are not re-blocked.
    */
   const roomStatus = room?.status;
+  /** End-of-match reveal: keeps the final board on screen for ~1.8s. */
+  const revealHold = useGameEndReveal(roomStatus);
+
   const preMatchEnabled =
     Boolean(game) &&
     roomStatus !== undefined &&
@@ -306,7 +325,36 @@ export function RoomScreen() {
             </div>
           ) : null}
 
-          {inResult ? (
+          {/* GAME-END REVEAL: the authoritative final state stays mounted with
+              the server-declared outcome highlighted for ~1.8s before the
+              result panel. The client never invents the outcome — it renders
+              exactly what `gameResult` says. */}
+          {inResult && revealHold && room.gameState ? (
+            <div className="relative space-y-4">
+              <GameRenderer room={room} myPlayerId={myPlayerId} />
+              <AnimatePresence>
+                <motion.div
+                  key="reveal-banner"
+                  initial={{ opacity: 0, y: -10, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="pointer-events-none absolute inset-x-0 top-2 z-20 mx-auto w-fit rounded-full border border-emerald-300/40 bg-black/85 px-6 py-2.5 text-center shadow-2xl backdrop-blur"
+                  role="status"
+                >
+                  <p className="text-sm font-bold tracking-wide text-emerald-200">
+                    {room.gameResult
+                      ? room.gameResult.isDraw
+                        ? "🤝 It's a draw!"
+                        : `🏆 ${winnersText(room.gameResult, room)} wins!`
+                      : '⏱ Match finished'}
+                  </p>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          ) : null}
+
+          {inResult && !revealHold ? (
             <div className="space-y-4">
               {room.gameResult ? (
                 <ResultPanel result={room.gameResult} players={room.players} myPlayerId={myPlayerId} />

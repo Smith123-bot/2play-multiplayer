@@ -70,6 +70,15 @@ let sequence = 0;
 
 export class TimerManager {
   private readonly timers = new Map<string, InternalTimer>();
+  /**
+   * Lookup indexes so the hot paths (has / cancelByKey / getRemainingByKey on
+   * every action and broadcast, cancelByType / cancelAllForRoom on every
+   * lifecycle transition) never scan the whole timer set. With hundreds of
+   * rooms live, a full scan per lookup was O(rooms × timers-per-room) work on
+   * the action path; both indexes keep it proportional to the result size.
+   */
+  private readonly byKey = new Map<string, InternalTimer>();
+  private readonly byRoom = new Map<string, Set<InternalTimer>>();
   private readonly logger: Logger = createLogger('TimerManager');
 
   constructor(private readonly defaultTickEmit = false) {}
@@ -138,6 +147,13 @@ export class TimerManager {
     timer.handle.unref?.();
 
     this.timers.set(id, timer);
+    this.byKey.set(TimerManager.keyOf(roomId, type, key), timer);
+    let roomTimers = this.byRoom.get(roomId);
+    if (!roomTimers) {
+      roomTimers = new Set<InternalTimer>();
+      this.byRoom.set(roomId, roomTimers);
+    }
+    roomTimers.add(timer);
     this.logger.debug('timer created', {
       id,
       roomId,
@@ -175,6 +191,10 @@ export class TimerManager {
     this.complete(timer, false);
   }
 
+  private static keyOf(roomId: string, type: string, key: string): string {
+    return `${roomId}\u0000${type}\u0000${key}`;
+  }
+
   private complete(timer: InternalTimer, cancelled: boolean): void {
     if (timer.completed) return;
     timer.completed = true;
@@ -183,6 +203,12 @@ export class TimerManager {
       else clearTimeout(timer.handle);
     }
     this.timers.delete(timer.id);
+    this.byKey.delete(TimerManager.keyOf(timer.roomId, timer.type, timer.key));
+    const roomTimers = this.byRoom.get(timer.roomId);
+    if (roomTimers) {
+      roomTimers.delete(timer);
+      if (roomTimers.size === 0) this.byRoom.delete(timer.roomId);
+    }
     this.logger.debug('timer completed', {
       id: timer.id,
       roomId: timer.roomId,
@@ -211,20 +237,18 @@ export class TimerManager {
   }
 
   cancelByKey(roomId: string, type: TimerType, key = 'default'): boolean {
-    let cancelled = false;
-    for (const timer of [...this.timers.values()]) {
-      if (timer.roomId === roomId && timer.type === type && timer.key === key) {
-        this.complete(timer, true);
-        cancelled = true;
-      }
-    }
-    return cancelled;
+    const timer = this.byKey.get(TimerManager.keyOf(roomId, type, key));
+    if (!timer || timer.completed) return false;
+    this.complete(timer, true);
+    return true;
   }
 
   cancelByType(roomId: string, type: TimerType): number {
+    const roomTimers = this.byRoom.get(roomId);
+    if (!roomTimers) return 0;
     let count = 0;
-    for (const timer of [...this.timers.values()]) {
-      if (timer.roomId === roomId && timer.type === type) {
+    for (const timer of [...roomTimers]) {
+      if (timer.type === type && !timer.completed) {
         this.complete(timer, true);
         count += 1;
       }
@@ -233,12 +257,11 @@ export class TimerManager {
   }
 
   cancelAllForRoom(roomId: string): number {
-    let count = 0;
-    for (const timer of [...this.timers.values()]) {
-      if (timer.roomId === roomId) {
-        this.complete(timer, true);
-        count += 1;
-      }
+    const roomTimers = this.byRoom.get(roomId);
+    if (!roomTimers) return 0;
+    const count = roomTimers.size;
+    for (const timer of [...roomTimers]) {
+      this.complete(timer, true);
     }
     if (count > 0) {
       this.logger.debug('cancelled all timers for room', { roomId, count });
@@ -253,33 +276,26 @@ export class TimerManager {
   }
 
   has(roomId: string, type: TimerType, key = 'default'): boolean {
-    for (const timer of this.timers.values()) {
-      if (timer.roomId === roomId && timer.type === type && timer.key === key) return true;
-    }
-    return false;
+    const timer = this.byKey.get(TimerManager.keyOf(roomId, type, key));
+    return timer !== undefined && !timer.completed;
   }
 
   /** Reconnect deadlines / rematch countdowns expose their remaining time. */
   getRemainingByKey(roomId: string, type: TimerType, key = 'default'): number | null {
-    for (const timer of this.timers.values()) {
-      if (timer.roomId === roomId && timer.type === type && timer.key === key) {
-        return Math.max(0, timer.deadline - Date.now());
-      }
-    }
-    return null;
+    const timer = this.byKey.get(TimerManager.keyOf(roomId, type, key));
+    if (!timer || timer.completed) return null;
+    return Math.max(0, timer.deadline - Date.now());
   }
 
   timersForRoom(roomId: string): Array<{ id: string; type: TimerType; key: string; remainingMs: number }> {
     const result: Array<{ id: string; type: TimerType; key: string; remainingMs: number }> = [];
-    for (const timer of this.timers.values()) {
-      if (timer.roomId === roomId) {
-        result.push({
-          id: timer.id,
-          type: timer.type,
-          key: timer.key,
-          remainingMs: Math.max(0, timer.deadline - Date.now()),
-        });
-      }
+    for (const timer of this.byRoom.get(roomId) ?? []) {
+      result.push({
+        id: timer.id,
+        type: timer.type,
+        key: timer.key,
+        remainingMs: Math.max(0, timer.deadline - Date.now()),
+      });
     }
     return result;
   }

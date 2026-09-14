@@ -69,6 +69,32 @@ describe('stores', () => {
     expect(useRoomStore.getState().room?.status).toBe('PLAYING');
   });
 
+  /**
+   * Incremental chat delivery: the server omits `chat` from a snapshot when
+   * the transcript is unchanged for the viewer. The store must carry the
+   * previous array over — with the SAME reference, so memoized chat components
+   * can skip gameplay-only snapshots — and must never leak chat across rooms.
+   */
+  it('carries chat over incremental snapshots without chat', () => {
+    const store = useRoomStore.getState();
+    const transcript = [{ id: 'm1', roomId: 'ABC234', text: 'hi' } as never];
+    store.setRoom(baseRoom({ stateVersion: 10, chat: transcript }));
+    const withChat = useRoomStore.getState().room;
+    expect(withChat?.chat).toBe(transcript);
+
+    // Gameplay-only snapshot: no `chat` field at all.
+    const { chat: _omitted, ...withoutChat } = baseRoom({ stateVersion: 11, status: 'PLAYING' });
+    void _omitted;
+    store.updateRoom(withoutChat as RoomState);
+    const carried = useRoomStore.getState().room;
+    expect(carried?.chat).toBe(transcript);
+    expect(carried?.status).toBe('PLAYING');
+
+    // A different room without chat must NOT inherit the previous transcript.
+    store.setRoom(baseRoom({ id: 'XYZ789', stateVersion: 1 }));
+    expect(useRoomStore.getState().room?.chat).toEqual([]);
+  });
+
   it('tracks the local player and the last result', () => {
     setLocalPlayerId('p1');
     const store = useRoomStore.getState();

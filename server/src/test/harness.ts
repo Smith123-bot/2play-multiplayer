@@ -93,6 +93,7 @@ export function createTestPlatform(
     roomMaxLifetimeMs: 14_400_000,
     actionRateLimitPerSec: 20,
     chatRateLimitPerSec: 5,
+    authRateLimitPerMin: 60,
     ...overrides,
   };
 

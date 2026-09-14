@@ -24,6 +24,21 @@ export function createHealthRouter(platform: Platform): Router {
         // details. They remain server-side in production.
         ...(!isProduction && database.detail ? { detail: database.detail } : {}),
       },
+      // Process-level error counters: the server intentionally survives
+      // uncaught exceptions, so health must be able to say "degraded" rather
+      // than silently claiming a perfect bill of health.
+      ...(platform.healthSignals
+        ? {
+            degraded:
+              platform.healthSignals.uncaughtExceptions > 0 ||
+              platform.healthSignals.unhandledRejections > 0,
+            uncaughtExceptions: platform.healthSignals.uncaughtExceptions,
+            unhandledRejections: platform.healthSignals.unhandledRejections,
+            ...(platform.healthSignals.lastErrorAt !== null
+              ? { lastProcessErrorAt: platform.healthSignals.lastErrorAt }
+              : {}),
+          }
+        : {}),
       ...(!isProduction
         ? {
             platform: {

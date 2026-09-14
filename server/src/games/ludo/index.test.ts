@@ -13,14 +13,22 @@ import {
   beginTurn,
   CAPTURE_SCORE,
   captureAt,
+  cellForProgress,
   computeLegalMoves,
   FINISH_DISTANCE,
   finishLudo,
+  HOME_ENTRY_INDEX,
   HOME_SCORE,
+  HOME_STRETCH_CELLS,
   isBlockedFor,
+  LANE_END,
+  LANE_START,
   ludoGame,
   MAX_CONSECUTIVE_SIXES,
+  pathCellsFor,
   rollDie,
+  routeCellsFor,
+  isOnTrack,
   SAFE_INDICES,
   START_INDEX,
   TOKENS_PER_PLAYER,
@@ -238,6 +246,170 @@ describe('Ludo', () => {
     finishLudo(state(), context(), 'completed');
     expect(ludoGame.validateAction(first, { type: 'roll' }, state(), context()).valid).toBe(false);
     expect(act(first, { type: 'roll' }).accepted).toBe(false);
+  });
+
+
+  /* ---------------- board path model (BUG FIXES) ---------------- */
+
+  it('walks exactly 51 track cells and enters the lane at its own arm corner (all four seats)', () => {
+    const laneCorner = ['0,7', '7,0', '14,7', '7,14'];
+    for (let seat = 0; seat < 4; seat += 1) {
+      const route = routeCellsFor(seat);
+      // 0..50 track (51 cells), 51..55 lane, 56 home -> 57 positions.
+      expect(route).toHaveLength(FINISH_DISTANCE + 1);
+      const entry = route[LANE_START - 1]!; // last shared-track cell
+      const key = `${entry.x},${entry.y}`;
+      expect(key).toBe(laneCorner[seat]); // middle of its OWN arm
+      expect(HOME_ENTRY_INDEX[seat]).toBe((START_INDEX[seat]! + 50) % TRACK_LENGTH);
+      // The lane entrance is directly adjacent to that corner cell.
+      const firstLane = route[LANE_START]!;
+      expect(Math.abs(firstLane.x - entry.x) + Math.abs(firstLane.y - entry.y)).toBe(1);
+      // Every lane cell belongs to the seat's own private lane.
+      for (let p = LANE_START; p <= LANE_END; p += 1) {
+        const cell = cellForProgress(seat, p, 0);
+        expect(cell).toEqual(HOME_STRETCH_CELLS[seat]![p - LANE_START]);
+      }
+      // The route NEVER touches the outer corner cell past the entrance
+      // (start-1): that belongs to the next seat's approach.
+      const outerCorner = TRACK_CELLS[(START_INDEX[seat]! + 51) % TRACK_LENGTH]!;
+      expect(route.some((cell) => cell.x === outerCorner.x && cell.y === outerCorner.y)).toBe(false);
+      // And never touches another seat's lane.
+      for (let other = 0; other < 4; other += 1) {
+        if (other === seat) continue;
+        for (const laneCell of HOME_STRETCH_CELLS[other]!) {
+          expect(
+            route.some((cell) => cell.x === laneCell.x && cell.y === laneCell.y),
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('moves a token into its lane and to exact final home without leaving the lane', () => {
+    const playerId = players[0]!.id;
+    const slot = state().players[playerId]!;
+    const token = slot.tokens[0]!;
+    // One step before the lane entrance.
+    token.progress = LANE_START - 1;
+    setDice(playerId, 1);
+    const entry = computeLegalMoves(state(), playerId, 1);
+    expect(entry).toHaveLength(1);
+    expect(entry[0]!.to).toBe(LANE_START); // 51 = first lane cell
+    expect(entry[0]!.reachesHome).toBe(false);
+
+    // In-lane movement: 51 + 2 -> 53.
+    token.progress = LANE_START;
+    setDice(playerId, 2);
+    const inLane = computeLegalMoves(state(), playerId, 2);
+    expect(inLane[0]!.to).toBe(53);
+    expect(act(playerId, { type: 'move', payload: { tokenId: token.id } }).accepted).toBe(true);
+    expect(token.progress).toBe(53);
+    expect(isOnTrack(token)).toBe(false);
+
+    // Exact final position: 55 + 1 -> 56 home; overshoot rejected.
+    token.progress = LANE_END;
+    expect(computeLegalMoves(state(), playerId, 2)).toHaveLength(0); // 57 > 56 rejected
+    setDice(playerId, 1);
+    expect(act(playerId, { type: 'move', payload: { tokenId: token.id } }).accepted).toBe(true);
+    expect(token.progress).toBe(FINISH_DISTANCE);
+    expect(slot.finishedTokens).toBe(1);
+  });
+
+  it('never captures through the lane-entry step (the disappearing-corner bug)', () => {
+    // Red token one step from its lane; a green token sits on the outer
+    // corner cell (track index 51 = red start+51) that the OLD model used as
+    // red's "progress 51" landing — landing in the lane must NOT capture it.
+    const [redId, greenId] = players.map((player) => player.id);
+    const red = state().players[redId]!;
+    const green = state().players[greenId]!;
+    red.tokens[0]!.progress = LANE_START - 1;
+    green.tokens[0]!.progress = (51 - START_INDEX[1]! + TRACK_LENGTH) % TRACK_LENGTH;
+    expect(absoluteCell(green.tokens[0]!)).toBe(51);
+    setDice(redId, 1);
+    expect(act(redId, { type: 'move', payload: { tokenId: 'red-0' } }).accepted).toBe(true);
+    expect(red.tokens[0]!.progress).toBe(LANE_START);
+    expect(green.tokens[0]!.progress).toBe((51 - START_INDEX[1]! + TRACK_LENGTH) % TRACK_LENGTH); // untouched
+    expect(red.captures).toBe(0);
+  });
+
+  it('ships server-resolved cells so the rendered path equals the logical path', () => {
+    const playerId = players[0]!.id;
+    const slot = state().players[playerId]!;
+    const token = slot.tokens[0]!;
+    token.progress = 3;
+    setDice(playerId, 4);
+    expect(act(playerId, { type: 'move', payload: { tokenId: token.id } }).accepted).toBe(true);
+    const move = state().lastMove!;
+    expect(move.path).toEqual([4, 5, 6, 7]); // logical progress steps
+    const seat = slot.seatIndex;
+    const logical = pathCellsFor(seat, 4, 7, 0);
+    expect(move.cells).toEqual(logical); // rendered cells == logical cells
+    // Public state carries the same resolution per token.
+    const publicState = ludoGame.getPublicState(state(), playerId, context()) as {
+      players: Record<string, { tokens: Array<{ gridCell: unknown; kind: string }> }>;
+    };
+    const view = publicState.players[playerId]!.tokens[0]!;
+    expect(view.kind).toBe('track');
+    expect(view.gridCell).toEqual(cellForProgress(seat, 7, 0));
+  });
+
+  it('keeps finished tokens visible with a resolved home cell and immovable state', () => {
+    const playerId = players[0]!.id;
+    const slot = state().players[playerId]!;
+    for (const token of slot.tokens) {
+      token.progress = FINISH_DISTANCE; // all four home
+    }
+    const publicState = ludoGame.getPublicState(state(), playerId, context()) as {
+      players: Record<string, { tokens: Array<{ gridCell: unknown; kind: string; progress: number }> }>;
+    };
+    for (const token of publicState.players[playerId]!.tokens) {
+      expect(token.kind).toBe('home');
+      expect(token.gridCell).not.toBeNull(); // NEVER a missing cell
+    }
+    // Home tokens have no legal moves and cannot be captured.
+    setDice(playerId, 6);
+    const moves = computeLegalMoves(state(), playerId, 6).filter(
+      (move) => move.tokenId.startsWith('red'),
+    );
+    expect(moves.every((move) => !slot.tokens.some((t) => t.progress === FINISH_DISTANCE && move.tokenId === t.id))).toBe(true);
+  });
+
+  it('finishes immediately when the fourth token arrives: winner, no extra turn, no further input', () => {
+    const [winnerId] = players.map((player) => player.id);
+    const slot = state().players[winnerId]!;
+    slot.finishedTokens = TOKENS_PER_PLAYER - 1;
+    for (let i = 0; i < TOKENS_PER_PLAYER - 1; i += 1) slot.tokens[i]!.progress = FINISH_DISTANCE;
+    slot.tokens[3]!.progress = LANE_END; // one step away, would grant a bonus roll too
+
+    setDice(winnerId, 1);
+    expect(act(winnerId, { type: 'move', payload: { tokenId: 'red-3' } }).accepted).toBe(true);
+
+    expect(slot.finishedTokens).toBe(TOKENS_PER_PLAYER);
+    expect(state().phase).toBe('finished');
+    expect(state().currentPlayerId).toBeNull(); // no extra turn granted
+    expect(state().legalMoves).toHaveLength(0);
+    expect(state().dice).toBeNull();
+    expect(state().finishedOrder[0]).toBe(winnerId);
+    expect(state().lastEvent).toBe(`finished:${winnerId}`);
+
+    // Any further input from anyone is rejected.
+    for (const player of players) {
+      expect(ludoGame.validateAction(player.id, { type: 'roll' }, state(), context()).valid).toBe(false);
+      expect(
+        ludoGame.validateAction(
+          player.id,
+          { type: 'move', payload: { tokenId: 'red-0' } },
+          state(),
+          context(),
+        ).valid,
+      ).toBe(false);
+    }
+    const result = ludoGame.getResult(state(), context());
+    expect(result.winners).toEqual([winnerId]);
+  });
+
+  it('always requires all four tokens (room settings cannot shorten the race)', () => {
+    expect(state().tokensToWin).toBe(TOKENS_PER_PLAYER);
   });
 
   it('requires an exact roll to enter the final home cell', () => {

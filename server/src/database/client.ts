@@ -39,6 +39,13 @@ export class Database implements DatabaseLike {
   } | null = null;
   private healthInFlight: Promise<{ ok: boolean; mode: string; detail?: string }> | null = null;
   private static readonly HEALTH_CACHE_MS = 5_000;
+  /**
+   * A health probe must never outlive a monitoring timeout: without a ceiling,
+   * a hung database connection hangs /api/health itself, which load balancers
+   * and process managers then report as "server down" even though gameplay
+   * (in-memory rooms) is perfectly fine.
+   */
+  private static readonly HEALTH_PROBE_TIMEOUT_MS = 3_000;
 
   constructor(repository?: DatabaseRepository) {
     this.repository =
@@ -62,14 +69,27 @@ export class Database implements DatabaseLike {
     if (this.healthInFlight) return this.healthInFlight;
 
     this.healthInFlight = (async () => {
-      const health = await this.repository.health();
-      const value = {
-        ok: health.ok,
-        mode: this.repository.mode,
-        ...(health.detail ? { detail: health.detail } : {}),
-      };
-      this.healthCache = { expiresAt: Date.now() + Database.HEALTH_CACHE_MS, value };
-      return value;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const health = await Promise.race([
+          this.repository.health(),
+          new Promise<{ ok: false; detail: string }>((resolve) => {
+            timer = setTimeout(
+              () => resolve({ ok: false, detail: 'health probe timed out' }),
+              Database.HEALTH_PROBE_TIMEOUT_MS,
+            );
+          }),
+        ]);
+        const value = {
+          ok: health.ok,
+          mode: this.repository.mode,
+          ...(health.detail ? { detail: health.detail } : {}),
+        };
+        this.healthCache = { expiresAt: Date.now() + Database.HEALTH_CACHE_MS, value };
+        return value;
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
+      }
     })();
     try {
       return await this.healthInFlight;

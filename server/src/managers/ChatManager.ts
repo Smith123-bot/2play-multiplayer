@@ -1,4 +1,4 @@
-import type { ChatMessage, Emote, SystemEventType } from '@2play/shared';
+import type { ChatMessage, Emote } from '@2play/shared';
 import {
   CHAT_COOLDOWN_MS,
   CHAT_HISTORY_LIMIT,
@@ -7,7 +7,7 @@ import {
   CHAT_SPAM_REPEAT_THRESHOLD,
 } from '@2play/shared';
 import type { Platform } from '../core/Platform';
-import { CHAT_MESSAGE_TYPES, SYSTEM_EVENTS } from '@2play/shared';
+import { CHAT_MESSAGE_TYPES } from '@2play/shared';
 import { AppError } from '../utils/errors';
 import { createId } from '../utils/ids';
 import { createLogger } from '../utils/logger';
@@ -21,91 +21,27 @@ interface PlayerChatState {
   mutedUntil: number;
 }
 
-const SYSTEM_TEXT: Record<SystemEventType, (name: string) => string> = {
-  player_joined: (name) => `${name} joined the room.`,
-  player_left: (name) => `${name} left the room.`,
-  player_kicked: (name) => `${name} was removed by the host.`,
-  game_started: () => 'The match is starting!',
-  game_finished: (name) => `Match finished. ${name}`,
-  rematch_requested: (name) => `${name} wants a rematch.`,
-  rematch_started: () => 'Rematch accepted — new match starting!',
-  rematch_cancelled: () => 'Rematch cancelled — back to the lobby.',
-  player_disconnected: (name) => `${name} lost connection and can reconnect.`,
-  player_reconnected: (name) => `${name} reconnected.`,
-  host_changed: (name) => `${name} is the new host.`,
-  game_changed: (name) => `Game changed to ${name}.`,
-};
-
 /**
- * Chat + system messages.
+ * Player chat.
  *
- * Everything is validated, rate limited and spam filtered server-side. Clients
- * render text as plain text (React escaping) — HTML is never accepted.
+ * The transcript holds ONLY what players actually said: validated text
+ * messages and explicitly sent emotes. Room/match lifecycle events ("Match
+ * finished", "Rematch accepted", "The match is starting", joins/leaves …)
+ * are deliberately NOT written here — they are status information and are
+ * surfaced by the room UI (status banners, player list, result screen), not
+ * as fake chat lines. Everything is validated, rate limited and spam
+ * filtered server-side. Clients render text as plain text (React escaping) —
+ * HTML is never accepted.
  */
 export class ChatManager {
   private readonly states = new Map<string, PlayerChatState>();
   private readonly logger = createLogger('ChatManager');
 
   constructor(private readonly platform: Platform) {
-    this.registerSystemSubscribers();
+    // NOTE: no system/lifecycle subscribers any more. Lifecycle events never
+    // enter the chat transcript (removed deliberately — see class docs).
   }
 
-  private registerSystemSubscribers(): void {
-    const bus = this.platform.eventBus;
-
-    bus.on('room:player-joined', ({ room, player }) => {
-      this.system(room, 'player_joined', player.nickname);
-    });
-
-    bus.on('room:player-left', ({ room, player, reason }) => {
-      if (reason === 'kick') this.system(room, 'player_kicked', player.nickname);
-      else if (reason === 'timeout') this.system(room, 'player_left', `${player.nickname} (timed out)`);
-      else this.system(room, 'player_left', player.nickname);
-    });
-
-    bus.on('room:host-changed', ({ room, player }) => {
-      this.system(room, 'host_changed', player.nickname);
-    });
-
-    bus.on('room:game-changed', ({ room }) => {
-      this.system(room, 'game_changed', this.gameName(room.gameId));
-    });
-
-    bus.on('player:disconnected', ({ room, player }) => {
-      this.system(room, 'player_disconnected', player.nickname);
-    });
-
-    bus.on('player:reconnected', ({ room, player }) => {
-      this.system(room, 'player_reconnected', player.nickname);
-    });
-
-    bus.on('game:started', ({ room }) => {
-      this.system(room, 'game_started', '');
-    });
-
-    bus.on('game:finished', ({ room, result }) => {
-      const winner =
-        result.winners.length > 0
-          ? result.rankings
-              .filter((entry) => result.winners.includes(entry.playerId))
-              .map((entry) => entry.nickname)
-              .join(', ')
-          : 'No winner';
-      this.system(room, 'game_finished', result.isDraw ? 'It is a draw!' : `${winner} wins!`);
-    });
-
-    bus.on('rematch:started', ({ room }) => {
-      this.system(room, 'rematch_started', '');
-    });
-
-    bus.on('rematch:cancelled', ({ room }) => {
-      this.system(room, 'rematch_cancelled', '');
-    });
-  }
-
-  private gameName(gameId: string): string {
-    return this.platform.registry.find(gameId)?.metadata.name ?? gameId;
-  }
 
   private stateFor(playerId: string): PlayerChatState {
     let state = this.states.get(playerId);
@@ -144,7 +80,7 @@ export class ChatManager {
 
     const limit = this.platform.rateLimiter.consume(
       `chat:${room.id}:${player.id}`,
-      CHAT_RATE_LIMIT_PER_SEC,
+      this.platform.config.chatRateLimitPerSec || CHAT_RATE_LIMIT_PER_SEC,
       1000,
     );
     if (!limit.allowed) {
@@ -195,6 +131,7 @@ export class ChatManager {
       roomId: room.id,
       message,
     });
+    this.afterTranscriptChange(room);
     return message;
   }
 
@@ -209,7 +146,7 @@ export class ChatManager {
     }
     const limit = this.platform.rateLimiter.consume(
       `chat:${room.id}:${player.id}`,
-      CHAT_RATE_LIMIT_PER_SEC,
+      this.platform.config.chatRateLimitPerSec || CHAT_RATE_LIMIT_PER_SEC,
       1000,
     );
     if (!limit.allowed) throw AppError.rateLimited('Slow down a little.');
@@ -231,29 +168,22 @@ export class ChatManager {
     };
     room.addChatMessage(message);
     this.platform.socketManager?.emitToRoom(room.id, 'chat:emote', { roomId: room.id, message });
+    this.afterTranscriptChange(room);
     return message;
   }
 
-  system(room: Room, event: SystemEventType, subject: string): ChatMessage {
-    const message: ChatMessage = {
-      id: createId(),
-      roomId: room.id,
-      type: 'system',
-      playerId: null,
-      nickname: 'System',
-      avatar: '🎮',
-      text: SYSTEM_TEXT[event]?.(subject) ?? subject,
-      emote: null,
-      systemEvent: event,
-      createdAt: Date.now(),
-    };
-    room.addChatMessage(message);
-    this.platform.socketManager?.emitToRoom(room.id, 'chat:system', {
-      roomId: room.id,
-      message,
-      event,
-    });
-    return message;
+
+  /**
+   * Schedules the (throttled) room snapshot that carries the new transcript.
+   *
+   * Clients render chat from the authoritative room snapshot, so a transcript
+   * change must reach them even when nothing else in the room changed — in a
+   * quiet lobby a message used to stay invisible until the next unrelated
+   * state change. `broadcastRoomState` coalesces bursts, and the snapshot
+   * includes the chat array exactly once per change (see SocketManager).
+   */
+  private afterTranscriptChange(room: Room): void {
+    this.platform.socketManager?.broadcastRoomState(room);
   }
 
   clearPlayerState(playerId: string): void {
@@ -279,7 +209,4 @@ export class ChatManager {
     return CHAT_MESSAGE_TYPES;
   }
 
-  static get systemEvents(): readonly string[] {
-    return SYSTEM_EVENTS;
-  }
 }

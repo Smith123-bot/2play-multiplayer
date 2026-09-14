@@ -13,8 +13,6 @@ import type {
   RoomSettingsPayload,
 } from '@2play/shared';
 import {
-  ROOM_CREATE_RATE_LIMIT_PER_MIN,
-  ROOM_JOIN_RATE_LIMIT_PER_MIN,
   addAISchema,
   createRoomSchema,
   joinRoomSchema,
@@ -24,6 +22,7 @@ import {
   roomListSchema,
 } from '@2play/shared';
 import type { Platform } from '../../core/Platform';
+import { env } from '../../config/env';
 import { AppError } from '../../utils/errors';
 import { parseOrThrow } from '../../utils/validate';
 import { joinSocketRoom, requireSession, safeHandler, type HandlerContext } from './context';
@@ -58,7 +57,7 @@ const create = safeHandler<CreateRoomPayload, RoomCreatedPayload>(async function
   rateLimit(
     this.platform,
     `room-create:${this.socket.data.clientKey}`,
-    ROOM_CREATE_RATE_LIMIT_PER_MIN,
+    env.ROOM_CREATE_RATE_LIMIT_PER_MIN,
     'You are creating rooms too quickly. Try again shortly.',
   );
 
@@ -104,7 +103,7 @@ const quickPlay = safeHandler<QuickPlayPayload, RoomCreatedPayload>(async functi
   rateLimit(
     this.platform,
     `room-create:${this.socket.data.clientKey}`,
-    ROOM_CREATE_RATE_LIMIT_PER_MIN,
+    env.ROOM_CREATE_RATE_LIMIT_PER_MIN,
     'You are creating matches too quickly. Try again shortly.',
   );
 
@@ -144,7 +143,7 @@ const join = safeHandler<JoinRoomPayload, RoomJoinedPayload>(async function (
   rateLimit(
     this.platform,
     `room-join:${this.socket.data.clientKey}`,
-    ROOM_JOIN_RATE_LIMIT_PER_MIN,
+    env.ROOM_JOIN_RATE_LIMIT_PER_MIN,
     'You are joining rooms too quickly. Try again shortly.',
   );
 

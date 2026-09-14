@@ -64,7 +64,18 @@ export interface RoomState {
   /** Epoch ms deadline of the rematch vote window. */
   rematchDeadline: number | null;
   settings: RoomSettings;
-  chat: ChatMessage[];
+  /**
+   * Chat transcript as of this snapshot.
+   *
+   * OPTIONAL BY DESIGN: carrying the full history in every gameplay snapshot
+   * measured at ~83% of the `room:updated` payload, so the server omits the
+   * field when the transcript is unchanged for the receiving viewer. Absence
+   * means "no change since your last snapshot" — never "chat was cleared".
+   * Live chat updates always arrive through the `chat:*` events as well, and
+   * the first snapshot a viewer receives (join / reconnect / ack) always
+   * includes the full history.
+   */
+  chat?: ChatMessage[];
   createdAt: number;
   updatedAt: number;
   /** Monotonic counter used by clients to drop stale snapshots. */

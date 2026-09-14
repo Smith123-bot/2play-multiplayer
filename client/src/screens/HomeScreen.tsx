@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, BarChart3, Heart, Plus, Sparkles, Users, Zap } from 'lucide-react';
+import { ArrowRight, BarChart3, Heart, Plus, RefreshCw, Sparkles, Users, Zap } from 'lucide-react';
 import { GameCard } from '../components/game/GameCard';
 import { ActiveRoomPrompt } from '../components/room/ActiveRoomPrompt';
 import { Button } from '../components/ui/Button';
@@ -20,6 +20,7 @@ import type { RoomSummary } from '@2play/shared';
 import { APP_CONFIG } from '../core/config';
 import { useConnectionStore } from '../stores/connectionStore';
 import { formatCategory } from '../utils/format';
+import { cn } from '../utils/cn';
 
 export function HomeScreen() {
   const navigate = useNavigate();
@@ -39,6 +40,7 @@ export function HomeScreen() {
   const connection = useConnectionStore((store) => store.state);
   const { listRooms } = useRoomActions();
   const [publicRooms, setPublicRooms] = useState<RoomSummary[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
 
   useEffect(() => {
     void loadGames();
@@ -47,15 +49,23 @@ export function HomeScreen() {
     void loadPopularity();
   }, [loadGames, loadFavorites, loadStatistics, loadPopularity]);
 
-  useEffect(() => {
-    let active = true;
-    void listRooms().then((rooms) => {
-      if (active) setPublicRooms(rooms);
-    });
-    return () => {
-      active = false;
-    };
+  /** Public rooms are the social heartbeat of the home page — kept fresh. */
+  const refreshRooms = useCallback(async () => {
+    setRoomsLoading(true);
+    try {
+      const rooms = await listRooms();
+      setPublicRooms(rooms);
+    } finally {
+      setRoomsLoading(false);
+    }
   }, [listRooms]);
+
+  useEffect(() => {
+    void refreshRooms();
+    // Keep the list live so a friend's room never needs a page reload to join.
+    const timer = window.setInterval(() => void refreshRooms(), 15_000);
+    return () => window.clearInterval(timer);
+  }, [refreshRooms]);
 
   const featured = games.filter((game) => game.featured);
 
@@ -190,7 +200,78 @@ export function HomeScreen() {
         </section>
       ) : null}
 
-      {recent.length > 0 ? (
+      {/* PUBLIC ROOMS — the live lobby list sits directly under the featured
+          games: joining an open room is the fastest path into a match. */}
+      <section aria-label="Public rooms">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-xl font-bold text-white">
+            <Users className="h-5 w-5 text-primary-300" /> Public rooms
+            {publicRooms.length > 0 ? (
+              <span className="rounded-full bg-primary-500/20 px-2 py-0.5 text-xs font-bold text-primary-200">
+                {publicRooms.length}
+              </span>
+            ) : null}
+          </h2>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void refreshRooms()}
+            icon={<RefreshCw className={roomsLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />}
+          >
+            Refresh
+          </Button>
+        </div>
+        {publicRooms.length === 0 ? (
+          <Card className="text-center">
+            <EmptyState
+              icon="🚪"
+              title="No public rooms right now"
+              description="Create a room and it shows up here for everyone to join."
+              action={
+                <Button onClick={quickPlay} icon={<Plus className="h-4 w-4" />}>
+                  Create a room
+                </Button>
+              }
+            />
+          </Card>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {publicRooms.slice(0, 6).map((room) => (
+              <Card key={room.id} hoverable className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-white">{room.gameName}</p>
+                  <p className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
+                    <span className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[11px] tracking-wider text-slate-300">
+                      {room.id.slice(0, 6).toUpperCase()}
+                    </span>
+                    <span className="truncate">Host {room.hostNickname}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    <span
+                      className={cn(
+                        'font-semibold',
+                        room.playerCount >= room.maxPlayers ? 'text-amber-300' : 'text-emerald-300',
+                      )}
+                    >
+                      {room.playerCount}/{room.maxPlayers}
+                    </span>{' '}
+                    players
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => gate(() => navigate(`/join?code=${room.id}`))}
+                >
+                  Join
+                </Button>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+            {recent.length > 0 ? (
         <section>
           <h2 className="mb-4 text-xl font-bold text-white">Recently played</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -224,33 +305,6 @@ export function HomeScreen() {
                 favorite
                 onToggleFavorite={(gameId) => void toggleFavorite(gameId)}
               />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {publicRooms.length > 0 ? (
-        <section>
-          <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-white">
-            <Users className="h-5 w-5 text-primary-300" /> Public rooms
-          </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {publicRooms.slice(0, 6).map((room) => (
-              <Card key={room.id} hoverable className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-white">{room.gameName}</p>
-                  <p className="text-xs text-slate-400">
-                    Host {room.hostNickname} · {room.playerCount}/{room.maxPlayers}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => gate(() => navigate(`/join?code=${room.id}`))}
-                >
-                  Join
-                </Button>
-              </Card>
             ))}
           </div>
         </section>

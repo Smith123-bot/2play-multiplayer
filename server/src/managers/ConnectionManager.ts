@@ -45,7 +45,7 @@ export class ConnectionManager {
   ): Promise<{ session: SessionInfo; restored: boolean }> {
     const limit = this.platform.rateLimiter.consume(
       `auth:${input.clientKey}`,
-      AUTH_RATE_LIMIT_PER_MIN,
+      this.platform.config.authRateLimitPerMin || AUTH_RATE_LIMIT_PER_MIN,
       60_000,
     );
     if (!limit.allowed) {

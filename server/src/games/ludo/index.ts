@@ -13,12 +13,14 @@ import type {
 import { actionAccepted, actionRejected } from '../GameModule';
 import {
   BOARD_SIZE,
+  cellForProgress,
   colorForSeat,
   FINISH_DISTANCE,
   HOME_ENTRY_INDEX,
   HOME_STRETCH_CELLS,
   HOME_STRETCH_LENGTH,
   isSafeIndex,
+  LANE_START,
   LUDO_COLORS,
   SAFE_INDICES,
   START_INDEX,
@@ -27,7 +29,9 @@ import {
   TRACK_LENGTH,
   trackIndexFor,
   YARD_CELLS,
+  type Cell,
   type LudoColor,
+  type ProgressKind,
 } from './board';
 
 export * from './board';
@@ -49,9 +53,12 @@ export type LudoPhase = 'idle' | 'awaiting-roll' | 'awaiting-move' | 'finished';
 /**
  * A token is described by how far it has walked from its own starting square.
  *  - `progress === -1`     → still in the yard
- *  - `0..51`               → on the shared track
- *  - `52..56`              → in its private home stretch
- *  - `progress === 57`     → home (FINISH_DISTANCE)
+ *  - `0..50`               → on the shared track (51 walked cells; the token
+ *                            turns into its lane at HOME_ENTRY_INDEX = start-2)
+ *  - `51..55`              → in its private home lane (5 cells)
+ *  - `progress === 56`     → final home (FINISH_DISTANCE)
+ * The client never re-derives these boundaries: the server ships the resolved
+ * grid cell for every token, move and legal destination.
  */
 export interface LudoToken {
   id: string;
@@ -123,8 +130,12 @@ export interface LudoState {
     to: number;
     /** Every authoritative progress value crossed, used for visual step animation. */
     path: number[];
+    /** Server-resolved grid cells matching `path` 1:1 (client renders these). */
+    cells: (Cell | null)[];
     captured: string | null;
     capturedFrom: number | null;
+    /** Server-resolved grid cell a captured token was sent from. */
+    capturedFromCell: Cell | null;
   } | null;
   moveCounter: number;
   finishReason: GameFinishReason | null;
@@ -158,11 +169,11 @@ export function isHome(token: LudoToken): boolean {
 }
 
 export function isOnTrack(token: LudoToken): boolean {
-  return token.progress >= 0 && token.progress < TRACK_LENGTH;
+  return token.progress >= 0 && token.progress < LANE_START;
 }
 
 export function isInHomeStretch(token: LudoToken): boolean {
-  return token.progress >= TRACK_LENGTH && token.progress < FINISH_DISTANCE;
+  return token.progress >= LANE_START && token.progress < FINISH_DISTANCE;
 }
 
 /** Absolute shared-track cell a token occupies, or null when off-track. */
@@ -227,8 +238,8 @@ export function computeLegalMoves(
     // Exact roll required to enter the final home cell.
     if (target > FINISH_DISTANCE) continue;
 
-    // Path into / inside the home stretch is private and never blocked.
-    if (target >= TRACK_LENGTH) {
+    // Path into / inside the private home lane is never blocked or capturing.
+    if (target >= LANE_START) {
       moves.push({
         tokenId: token.id,
         from: token.progress,
@@ -290,7 +301,12 @@ export function finishLudo(state: LudoState, ctx: GameContext, reason: GameFinis
   state.dice = null;
   state.legalMoves = [];
   state.turnEndsAt = null;
-  state.lastEvent = reason === 'timeout' ? 'timeout' : 'finished';
+  // Keep a winner-specific event (`finished:<playerId>`) if one was just set —
+  // it is the reveal payload the clients use to show who actually won. Only
+  // fall back to a generic event when no winning moment was recorded.
+  if (!state.lastEvent?.startsWith('finished:')) {
+    state.lastEvent = reason === 'timeout' ? 'timeout' : 'finished';
+  }
   ctx.markStateChanged();
   ctx.finish(reason);
 }
@@ -391,9 +407,32 @@ function makeSlot(seatIndex: number): LudoPlayerSlot {
   };
 }
 
-function resolveTokensToWin(config: GameConfig): number {
-  const raw = typeof config.rounds === 'number' ? Math.round(config.rounds) : TOKENS_PER_PLAYER;
-  return Math.min(TOKENS_PER_PLAYER, Math.max(1, raw));
+/**
+ * Classic rule: a seat wins when ALL FOUR of its tokens are home. Room
+ * settings cannot shorten this — the metadata and the win test both promise
+ * "bring all four tokens home".
+ */
+/** Index of a token inside its seat's slot (for yard/triangle offsets). */
+function tokenIndexOf(tokens: LudoToken[], tokenId: string): number {
+  return Math.max(0, tokens.findIndex((token) => token.id === tokenId));
+}
+
+function findSlotOfToken(state: LudoState, tokenId: string) {
+  return Object.values(state.players).find((slot) =>
+    slot.tokens.some((token) => token.id === tokenId),
+  );
+}
+
+function victimSeat(state: LudoState, tokenId: string): number {
+  return findSlotOfToken(state, tokenId)?.seatIndex ?? 0;
+}
+
+function victimTokens(state: LudoState, tokenId: string): LudoToken[] {
+  return findSlotOfToken(state, tokenId)?.tokens ?? [];
+}
+
+function resolveTokensToWin(): number {
+  return TOKENS_PER_PLAYER;
 }
 
 /* ------------------------------------------------------------------ */
@@ -407,7 +446,7 @@ function rateMove(state: LudoState, move: LudoLegalMove, seatIndex: number): num
   if (move.capturesTokenId) value += 600;
   if (move.entersBoard) value += 300;
   // Prefer ending on a safe cell.
-  if (move.to < TRACK_LENGTH) {
+  if (move.to < LANE_START) {
     const cell = trackIndexFor(seatIndex, move.to);
     if (isSafeIndex(cell)) value += 120;
     // Penalise stopping right in front of an enemy token.
@@ -436,7 +475,7 @@ export const ludoGame: GameModule<LudoState> = {
     // Stateless module.
   },
 
-  createInitialState(players: readonly GamePlayerView[], config: GameConfig): LudoState {
+  createInitialState(players: readonly GamePlayerView[], _config: GameConfig): LudoState {
     const state: LudoState = {
       phase: 'idle',
       turnOrder: players.map((player) => player.id),
@@ -448,7 +487,7 @@ export const ludoGame: GameModule<LudoState> = {
       players: {},
       turnEndsAt: null,
       turnMs: TURN_MS,
-      tokensToWin: resolveTokensToWin(config),
+      tokensToWin: resolveTokensToWin(),
       finishedOrder: [],
       lastEvent: null,
       lastMove: null,
@@ -648,7 +687,11 @@ export const ludoGame: GameModule<LudoState> = {
     // Capture is recomputed from the authoritative board, not trusted from the move.
     let captured: string | null = null;
     let capturedFrom: number | null = null;
-    if (move.to < TRACK_LENGTH) {
+    // Only shared-track landings can capture. `move.to < TRACK_LENGTH` was a
+    // real bug: progress 51 (the lane-entry step) mapped to track cell
+    // start+51 — the OUTER corner beyond the lane entrance — and could capture
+    // a token standing there. The lane starts at LANE_START (51).
+    if (move.to < LANE_START) {
       const cell = trackIndexFor(slot.seatIndex, move.to);
       const victimId = captureAt(state, slot.seatIndex, cell);
       if (victimId) {
@@ -676,15 +719,33 @@ export const ludoGame: GameModule<LudoState> = {
       { length: Math.max(1, move.to - firstStep + 1) },
       (_entry, index) => firstStep + index,
     );
+    // Server-resolved animation path: the exact grid cells the token walks,
+    // computed with the SAME geometry the client renders. The client never
+    // re-derives board coordinates, so the drawn path can never diverge from
+    // the logical one.
+    const fromProgress = move.entersBoard ? 0 : move.from;
+    const cells: (Cell | null)[] = path.map((step) =>
+      cellForProgress(slot.seatIndex, step, tokenIndexOf(slot.tokens, tokenId)),
+    );
+    if (move.entersBoard) cells.unshift(YARD_CELLS[slot.seatIndex]?.[tokenIndexOf(slot.tokens, tokenId)] ?? null);
     state.lastMove = {
       id: state.moveCounter,
       playerId,
       tokenId,
-      from: move.from,
+      from: fromProgress,
       to: move.to,
       path,
+      cells,
       captured,
       capturedFrom,
+      capturedFromCell:
+        captured !== null && capturedFrom !== null
+          ? cellForProgress(
+              victimSeat(state, captured),
+              capturedFrom,
+              tokenIndexOf(victimTokens(state, captured), captured),
+            )
+          : null,
     };
     state.lastEvent = captured
       ? `capture:${playerId}`
@@ -837,6 +898,8 @@ export const ludoGame: GameModule<LudoState> = {
    */
   getPublicState(state, viewerId, ctx) {
     const isCurrent = Boolean(viewerId) && viewerId === state.currentPlayerId;
+    const tokenKind = (progress: number): ProgressKind =>
+      progress < 0 ? 'yard' : progress < LANE_START ? 'track' : progress < FINISH_DISTANCE ? 'lane' : 'home';
     return {
       phase: state.phase,
       currentPlayerId: state.currentPlayerId,
@@ -844,7 +907,23 @@ export const ludoGame: GameModule<LudoState> = {
       lastRoll: state.lastRoll ? { ...state.lastRoll } : null,
       consecutiveSixes: state.consecutiveSixes,
       // Only the active player receives the playable move list.
-      legalMoves: isCurrent ? state.legalMoves.map((move) => ({ ...move })) : [],
+      legalMoves: isCurrent
+        ? state.legalMoves.map((move) => {
+            const slot = state.players[
+              Object.keys(state.players).find(
+                (id) => state.players[id]!.tokens.some((token) => token.id === move.tokenId),
+              ) ?? ''
+            ];
+            const tokenIndex = slot
+              ? tokenIndexOf(slot.tokens, move.tokenId)
+              : 0;
+            return {
+              ...move,
+              // Resolved destination cell for the destination marker.
+              toCell: cellForProgress(slot?.seatIndex ?? 0, move.to, tokenIndex),
+            };
+          })
+        : [],
       turnOrder: [...state.turnOrder],
       turnEndsAt: state.turnEndsAt,
       tokensToWin: state.tokensToWin,
@@ -861,6 +940,7 @@ export const ludoGame: GameModule<LudoState> = {
       startIndex: START_INDEX,
       homeEntryIndex: HOME_ENTRY_INDEX,
       trackLength: TRACK_LENGTH,
+      laneStart: LANE_START,
       homeStretchLength: HOME_STRETCH_LENGTH,
       finishDistance: FINISH_DISTANCE,
       colors: LUDO_COLORS,
@@ -876,10 +956,14 @@ export const ludoGame: GameModule<LudoState> = {
             rank: slot.rank,
             disconnected: slot.disconnected,
             left: slot.left,
-            tokens: slot.tokens.map((token) => ({
+            tokens: slot.tokens.map((token, tokenIndex) => ({
               id: token.id,
               progress: token.progress,
               cell: absoluteCell(token),
+              // Resolved render cell + location kind: the client places the
+              // token straight from this — no client-side path math.
+              gridCell: cellForProgress(slot.seatIndex, token.progress, tokenIndex),
+              kind: tokenKind(token.progress),
               seatIndex: token.seatIndex,
             })),
           },

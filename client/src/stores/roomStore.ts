@@ -1,8 +1,27 @@
 import { create } from 'zustand';
 import type { ChatMessage, GameResult, Player, RoomState } from '@2play/shared';
 
+/**
+ * A room snapshot as the client keeps it: identical to the wire format, but
+ * with the chat transcript always materialised.
+ *
+ * The server omits `chat` from `room:updated` when the transcript has not
+ * changed for this viewer (it measured at ~83% of every snapshot payload).
+ * `normalizeRoom` carries the previous array over — keeping the SAME array
+ * reference, which also lets memoized chat components skip re-rendering on
+ * gameplay-only snapshots.
+ */
+export type LiveRoomState = RoomState & { chat: ChatMessage[] };
+
+export function normalizeRoom(next: RoomState, previous: LiveRoomState | null): LiveRoomState {
+  if (next.chat !== undefined || !previous || previous.id !== next.id) {
+    return { ...next, chat: next.chat ?? [] };
+  }
+  return { ...next, chat: previous.chat };
+}
+
 export interface RoomStoreState {
-  room: RoomState | null;
+  room: LiveRoomState | null;
   /** Snapshot of the last finished match (survives the return to the lobby). */
   lastResult: GameResult | null;
   kicked: boolean;
@@ -33,13 +52,13 @@ export const useRoomStore = create<RoomStoreState>((set, get) => ({
   kicked: false,
   roomClosedReason: null,
 
-  setRoom: (room) => set({ room, kicked: false, roomClosedReason: null }),
+  setRoom: (room) => set({ room: normalizeRoom(room, null), kicked: false, roomClosedReason: null }),
 
-  updateRoom: (room) => {
+  updateRoom: (incoming) => {
     const current = get().room;
     // Ignore stale snapshots (out-of-order delivery).
-    if (current && room.stateVersion < current.stateVersion && room.id === current.id) return;
-    set({ room });
+    if (current && incoming.stateVersion < current.stateVersion && incoming.id === current.id) return;
+    set({ room: normalizeRoom(incoming, current) });
   },
 
   setLastResult: (lastResult) => set({ lastResult }),
@@ -56,10 +75,10 @@ export const useRoomStore = create<RoomStoreState>((set, get) => ({
 }));
 
 /** Convenience selector helpers (kept outside the store to avoid re-renders). */
-export function selectPlayers(room: RoomState | null): Player[] {
+export function selectPlayers(room: LiveRoomState | null): Player[] {
   return room?.players ?? [];
 }
 
-export function selectChat(room: RoomState | null): ChatMessage[] {
+export function selectChat(room: LiveRoomState | null): ChatMessage[] {
   return room?.chat ?? [];
 }

@@ -1,5 +1,7 @@
 import type { Platform } from '../../core/Platform';
+import { env } from '../../config/env';
 import type { SocketManager } from '../SocketManager';
+import { socketClientKey } from '../../utils/clientIp';
 import { createLogger } from '../../utils/logger';
 import type { GameSocket, HandlerContext } from './context';
 import { registerChatHandlers } from './chat.handler';
@@ -23,7 +25,9 @@ export function registerSocketHandlers(
   socket: GameSocket,
   socketManager: SocketManager,
 ): void {
-  socket.data.clientKey = socket.handshake.address || socket.id;
+  // Proxy-aware limiter key (mirrors the connect middleware); the raw socket
+  // id remains the fallback when no address is known.
+  socket.data.clientKey = socketClientKey(socket.handshake, env.TRUST_PROXY, socket.id);
   socket.data.connectedAt = Date.now();
 
   const context: HandlerContext = { platform, socket };
@@ -38,6 +42,7 @@ export function registerSocketHandlers(
   socket.on('disconnect', (reason: string) => {
     try {
       platform.rateLimiter.reset(`socket-event:${socket.id}`);
+      socketManager.forgetSocket(socket.id);
       handleDisconnect(platform, socket, reason);
     } catch (error) {
       logger.error('disconnect handling failed', {
@@ -49,7 +54,6 @@ export function registerSocketHandlers(
   });
 
   logger.debug('handlers registered', { socketId: socket.id });
-  void socketManager; // keep the reference for future manager-level helpers
 }
 
 function handleDisconnect(platform: Platform, socket: GameSocket, reason: string): void {

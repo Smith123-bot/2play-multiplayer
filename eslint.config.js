@@ -17,6 +17,9 @@ export default tseslint.config(
       'client/tailwind.config.js',
       // Local QA scratch harness — gitignored, never shipped.
       '.qa/**',
+      // Performance benchmark harness: a developer tool that reports through
+      // console output by design; not part of the shipped app.
+      'benchmarks/**',
     ],
   },
   js.configs.recommended,

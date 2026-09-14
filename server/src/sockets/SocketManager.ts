@@ -1,6 +1,6 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
-import type { ClientToServerEvents, ServerToClientEvents } from '@2play/shared';
+import type { ClientToServerEvents, RoomState, ServerToClientEvents } from '@2play/shared';
 import {
   APP_VERSION,
   GAME_STATE_BROADCAST_THROTTLE_MS,
@@ -8,6 +8,8 @@ import {
   SOCKET_MAX_PAYLOAD_BYTES,
 } from '@2play/shared';
 import type { Platform } from '../core/Platform';
+import { env } from '../config/env';
+import { socketClientKey } from '../utils/clientIp';
 import type { Room } from '../rooms/Room';
 import { createLogger } from '../utils/logger';
 import { registerSocketHandlers } from './handlers';
@@ -26,6 +28,15 @@ export type GameServer = Server<ClientToServerEvents, ServerToClientEvents>;
 export class SocketManager {
   private io: GameServer | null = null;
   private readonly lastBroadcast = new Map<string, number>();
+  /**
+   * Last chat transcript version delivered to each socket. When a snapshot is
+   * due and the room's `chatVersion` is unchanged for this socket, the chat
+   * array is omitted entirely. Chat history is measured at ~83% of a snapshot
+   * payload, and realtime games broadcast 4 snapshots/second — re-streaming an
+   * (up to 100 message) transcript each time dominates mobile bandwidth.
+   * Entries are removed in `clearRoom` and `forgetSocket`.
+   */
+  private readonly lastChatVersion = new Map<string, number>();
   private readonly logger = createLogger('SocketManager');
 
   constructor(private readonly platform: Platform) {}
@@ -53,9 +64,22 @@ export class SocketManager {
 
     // Bound unauthenticated connection churn before allocating application
     // listeners/session work. This complements per-event and auth limits.
+    //
+    // The key is the PROXY-AWARE client address (see `socketClientKey`): behind
+    // a reverse proxy every player shares the proxy IP, and an address-keyed
+    // limiter then trips for the whole deployment at once — new connections
+    // bounced for a minute at a time is exactly the reported "server randomly
+    // disappears" symptom. Trust follows TRUST_PROXY hops only, and the default
+    // (0) keeps the raw socket address, so a direct deployment cannot be
+    // spoofed via X-Forwarded-For.
     this.io.use((socket, next) => {
-      const address = socket.handshake.address || 'unknown';
-      const limit = this.platform.rateLimiter.consume(`socket-connect:${address}`, 120, 60_000);
+      const clientKey = socketClientKey(socket.handshake, env.TRUST_PROXY);
+      socket.data.clientKey = clientKey;
+      const limit = this.platform.rateLimiter.consume(
+        `socket-connect:${clientKey}`,
+        env.SOCKET_CONNECT_RATE_LIMIT_PER_MIN,
+        60_000,
+      );
       if (!limit.allowed) {
         next(new Error('Connection rate limit exceeded.'));
         return;
@@ -148,11 +172,29 @@ export class SocketManager {
     this.lastBroadcast.set(room.id, Date.now());
     for (const player of room.players.values()) {
       if (player.isAI || !player.socketId) continue;
-      const gameState = this.platform.gameManager.getPublicState(room, player.id);
       this.io
         .to(player.socketId)
-        .emit(SERVER_EVENTS.ROOM_UPDATED, { room: room.toState(player.id, gameState) });
+        .emit(SERVER_EVENTS.ROOM_UPDATED, { room: this.snapshotFor(room, player.id, player.socketId) });
     }
+  }
+
+  /**
+   * Per-viewer room snapshot with incremental chat.
+   *
+   * The transcript is only serialised into the snapshot when it changed for
+   * this viewer since the previous one; otherwise the field is omitted and the
+   * client keeps the array it already has. Authoritative room/game state is
+   * ALWAYS complete — only the append-only chat history is incremental.
+   */
+  private snapshotFor(room: Room, playerId: string, socketId: string): RoomState {
+    const gameState = this.platform.gameManager.getPublicState(room, playerId);
+    const state = room.toState(playerId, gameState);
+    if (this.lastChatVersion.get(socketId) === room.chatVersion) {
+      delete state.chat;
+    } else {
+      this.lastChatVersion.set(socketId, room.chatVersion);
+    }
+    return state;
   }
 
   /**
@@ -177,10 +219,11 @@ export class SocketManager {
     if (!this.io) return;
     const player = room.getPlayer(playerId);
     if (!player || player.isAI || !player.socketId) return;
-    const gameState = this.platform.gameManager.getPublicState(room, playerId);
     this.io
       .to(player.socketId)
-      .emit(SERVER_EVENTS.ROOM_UPDATED, { room: room.toState(playerId, gameState) });
+      .emit(SERVER_EVENTS.ROOM_UPDATED, {
+        room: this.snapshotFor(room, playerId, player.socketId),
+      });
   }
 
   /** Removes all sockets from a socket.io room (used when a room is closed). */
@@ -190,8 +233,14 @@ export class SocketManager {
     const room = this.io.sockets.adapter.rooms.get(roomId);
     if (!room) return;
     for (const socketId of room) {
+      this.lastChatVersion.delete(socketId);
       this.io.sockets.sockets.get(socketId)?.leave(roomId);
     }
+  }
+
+  /** Called on socket disconnect so chat bookkeeping never outlives a socket. */
+  forgetSocket(socketId: string): void {
+    this.lastChatVersion.delete(socketId);
   }
 
   disconnectSocket(socketId: string, reason: string): void {

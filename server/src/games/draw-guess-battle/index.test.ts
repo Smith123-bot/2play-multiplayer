@@ -9,13 +9,15 @@ import type { Platform } from '../../core/Platform';
 import type { GameContext, GamePlayerView } from '../GameModule';
 import {
   beginNextDrawRound,
+  buildWordDeck,
   completeDrawRound,
   drawGuessGame,
+  drawWord,
   finishDrawMatch,
   openDrawing,
-  pickPrompt,
   type DrawGuessState,
 } from './index';
+import { ALL_WORDS } from './words';
 import type { Room } from '../../rooms/Room';
 
 describe('Draw & Guess Battle', () => {
@@ -49,13 +51,76 @@ describe('Draw & Guess Battle', () => {
       scores: Record<string, number>;
     };
 
-  it('picks a non-empty prompt from the bank', () => {
-    const used: string[] = [];
-    for (let i = 0; i < 20; i += 1) {
-      const prompt = pickPrompt(used, () => 0.3);
-      expect(prompt.word.length).toBeGreaterThan(1);
-      used.push(prompt.word);
+  it('the word bank holds at least 500 unique family-friendly prompts', () => {
+    expect(ALL_WORDS.length).toBeGreaterThanOrEqual(500);
+    const names = new Set(ALL_WORDS.map((entry) => entry.word));
+    expect(names.size).toBe(ALL_WORDS.length); // no duplicates
+    for (const entry of ALL_WORDS) {
+      expect(entry.word).toMatch(/^[a-z0-9 -]+$/); // plain, common, safe
+      expect(entry.word.length).toBeGreaterThan(1);
     }
+  });
+
+  it('never repeats a prompt before the whole deck is exhausted', () => {
+    const fresh: DrawGuessState = {
+      ...(state() as unknown as DrawGuessState),
+      wordDeck: buildWordDeck(context().random),
+      wordCycle: 1,
+      usedWords: [],
+    };
+    const drawn: string[] = [];
+    for (let i = 0; i < ALL_WORDS.length; i += 1) {
+      const word = drawWord(fresh, context().random);
+      expect(drawn).not.toContain(word); // STRICT no-repeat within a cycle
+      drawn.push(word);
+      expect(word.length).toBeGreaterThan(1);
+    }
+    expect(drawn).toHaveLength(ALL_WORDS.length);
+    // The full cycle drew every word exactly once.
+    expect(new Set(drawn).size).toBe(ALL_WORDS.length);
+  });
+
+  it('reshuffles only after full exhaustion and keeps every word valid', () => {
+    const fresh = {
+      ...(state() as unknown as DrawGuessState),
+      wordDeck: buildWordDeck(context().random),
+      wordCycle: 1,
+      usedWords: [],
+    };
+    expect(fresh.wordCycle).toBe(1);
+    const first = drawWord(fresh, context().random);
+    expect(ALL_WORDS.some((entry) => entry.word === first)).toBe(true);
+    expect(fresh.wordCycle).toBe(1); // deck still has words: no reshuffle
+    expect(fresh.wordDeck.length).toBe(ALL_WORDS.length - 1);
+    // Burn the rest of the deck.
+    while (fresh.wordDeck.length > 0) drawWord(fresh, context().random);
+    const last = drawWord(fresh, context().random); // this one forces the reshuffle
+    expect(fresh.wordCycle).toBe(2); // exactly one reshuffle, only on exhaustion
+    expect(fresh.wordDeck.length).toBe(ALL_WORDS.length - 1);
+    expect(ALL_WORDS.some((entry) => entry.word === last)).toBe(true);
+  });
+
+  it('uses every drawn word exactly once across a long session', () => {
+    // Simulate rounds + rematch resets: used words may not repeat inside a
+    // match; a rematch excludes the previous words for as long as possible.
+    const fresh = {
+      ...(state() as unknown as DrawGuessState),
+      wordDeck: buildWordDeck(context().random),
+      wordCycle: 1,
+      usedWords: [],
+    };
+    const seen = new Map<string, number>();
+    const rounds = 60;
+    for (let i = 0; i < rounds; i += 1) {
+      const word = drawWord(fresh, context().random);
+      seen.set(word, (seen.get(word) ?? 0) + 1);
+      fresh.usedWords.push(word);
+    }
+    expect(seen.size).toBe(rounds); // 60 distinct prompts in a row
+    // Rematch excludes prior words while the pool allows it.
+    const rebuilt = buildWordDeck(context().random, fresh.usedWords);
+    expect(rebuilt.length).toBe(ALL_WORDS.length - rounds);
+    expect(rebuilt.every((word) => !fresh.usedWords.includes(word))).toBe(true);
   });
 
   it('starts with a drawer and a hidden word for guessers', async () => {
@@ -248,10 +313,38 @@ describe('Draw & Guess Battle', () => {
     ).toBe(false);
   });
 
-  it('selects genuinely harder prompt pools as rounds progress', () => {
-    for (let index = 0; index < 30; index += 1) {
-      expect(pickPrompt([], context().random, 'easy').word.length).toBeLessThanOrEqual(5);
-      expect(pickPrompt([], context().random, 'hard').word.length).toBeGreaterThan(5);
+  it('never leaks the deck, the cycle counter or future words through public state', () => {
+    // begin a round so state.current exists
+    beginNextDrawRound(state(), context());
+    const publicState = drawGuessGame.getPublicState(state(), players[1]!.id, context()) as Record<
+      string,
+      unknown
+    >;
+    expect(publicState).not.toHaveProperty('wordDeck');
+    expect(publicState).not.toHaveProperty('usedWords');
+    expect(publicState).not.toHaveProperty('wordCycle');
+    // A guesser must not receive the secret word mid-round.
+    expect(publicState.word).toBeNull();
+    // No future deck word may appear anywhere in the payload (JSON keys such
+    // as "history" are stripped so key names cannot collide with word values).
+    const values = JSON.stringify(publicState).replace(/"[A-Za-z]+":/g, '');
+    for (const entry of state().wordDeck) {
+      expect(values).not.toContain(JSON.stringify(entry));
     }
+  });
+
+  it('rounds progress easy to hard while the deck still forbids repeats', () => {
+    // Difficulty is now derived from round progress (display), the word itself
+    // comes strictly from the shuffled deck in draw order.
+    const fresh = {
+      ...(state() as unknown as DrawGuessState),
+      wordDeck: buildWordDeck(context().random),
+      wordCycle: 1,
+      usedWords: [],
+    };
+    const first = drawWord(fresh, context().random);
+    const second = drawWord(fresh, context().random);
+    expect(first).not.toBe(second);
+    expect(ALL_WORDS.some((entry) => entry.word === second)).toBe(true);
   });
 });

@@ -16,7 +16,7 @@ interface SimEdgeView {
 }
 
 export interface SimPublicState {
-  phase: 'idle' | 'playing' | 'finished';
+  phase: 'idle' | 'playing' | 'reveal' | 'finished';
   nodes: number;
   edges: SimEdgeView[];
   currentPlayerId: string | null;
@@ -110,6 +110,11 @@ function SimGame({ state, players, myPlayerId, sendAction, play, vibrate }: Game
 
   const currentPlayer = players.find((player) => player.id === state.currentPlayerId);
   const losing = new Set(state.losingTriangle);
+  // The reveal: the server froze the board with the exact losing triangle so
+  // everyone sees the decisive moment before the result screen appears.
+  const isReveal = phase === 'reveal' && state.losingTriangle.length > 0;
+  const loserName = players.find((player) => player.id === state.loserId)?.nickname ?? 'A player';
+  const iLost = Boolean(myPlayerId) && state.loserId === myPlayerId;
 
   return (
     <div className="space-y-4">
@@ -127,17 +132,19 @@ function SimGame({ state, players, myPlayerId, sendAction, play, vibrate }: Game
 
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Badge tone={state.isMyTurn ? 'success' : 'default'}>
-          {phase === 'finished'
-            ? state.isDraw
-              ? 'Draw'
-              : state.winnerId === myPlayerId
-                ? 'You win!'
-                : 'You lost'
-            : state.isMyTurn
-              ? 'Your turn'
-              : currentPlayer
-                ? `${currentPlayer.nickname}'s turn`
-                : 'Waiting'}
+          {phase === 'reveal'
+            ? 'Triangle!'
+            : phase === 'finished'
+              ? state.isDraw
+                ? 'Draw'
+                : state.winnerId === myPlayerId
+                  ? 'You win!'
+                  : 'You lost'
+              : state.isMyTurn
+                ? 'Your turn'
+                : currentPlayer
+                  ? `${currentPlayer.nickname}'s turn`
+                  : 'Waiting'}
         </Badge>
         {state.mySeat !== null ? (
           <Badge tone="default">
@@ -196,14 +203,19 @@ function SimGame({ state, players, myPlayerId, sendAction, play, vibrate }: Game
                   y1={from.y}
                   x2={to.x}
                   y2={to.y}
-                  stroke={colorOf(edge.owner)}
+                  stroke={isLosing && isReveal ? '#f43f5e' : colorOf(edge.owner)}
                   strokeWidth={isLosing ? 8 : free ? 2 : 5}
                   strokeLinecap="round"
                   strokeDasharray={free ? '5 7' : undefined}
                   initial={isLast ? { pathLength: 0 } : false}
-                  animate={{ pathLength: 1, opacity: isLosing ? 1 : 0.95 }}
-                  transition={{ duration: 0.3 }}
+                  animate={
+                    isLosing && isReveal
+                      ? { pathLength: 1, opacity: [1, 0.45, 1] }
+                      : { pathLength: 1, opacity: isLosing ? 1 : 0.95 }
+                  }
+                  transition={{ duration: isReveal ? 0.8 : 0.3, repeat: isLosing && isReveal ? Infinity : 0 }}
                   className={cn(free && canPlay && 'hover:opacity-100', isLosing && 'animate-pulse')}
+                  data-losing={isLosing ? 'true' : undefined}
                   pointerEvents="none"
                 />
               </g>
@@ -228,18 +240,30 @@ function SimGame({ state, players, myPlayerId, sendAction, play, vibrate }: Game
         </svg>
       </div>
 
-      {phase === 'finished' ? (
-        <div className="card space-y-1 p-4 text-center">
+      {isReveal || phase === 'finished' ? (
+        <motion.div
+          initial={isReveal ? { opacity: 0, scale: 0.94 } : false}
+          animate={{ opacity: 1, scale: 1 }}
+          className={cn(
+            'card space-y-1 p-4 text-center',
+            isReveal && (iLost ? 'border-rose-400/50 bg-rose-500/10' : 'border-amber-300/40 bg-amber-400/10'),
+          )}
+          data-testid="sim-result-message"
+        >
           <p className="text-lg font-semibold text-white">
             {state.isDraw
               ? 'Draw — every line claimed'
-              : `${players.find((p) => p.id === state.loserId)?.nickname ?? 'A player'} made a triangle and lost`}
+              : isReveal
+                ? iLost
+                  ? 'Triangle! You made three of your own lines and lose…'
+                  : `Triangle! ${loserName} made a triangle and loses`
+                : `${loserName} made a triangle and lost`}
           </p>
           <p className="text-xs text-slate-400">
             {state.moves} lines claimed
             {state.losingTriangle.length > 0 ? ' · the losing triangle is highlighted' : ''}
           </p>
-        </div>
+        </motion.div>
       ) : null}
 
       <div className="flex flex-wrap justify-center gap-3 text-xs text-slate-400">

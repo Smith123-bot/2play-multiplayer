@@ -60,6 +60,7 @@ const envSchema = z.object({
   ROOM_CREATE_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(600).default(20),
   ROOM_JOIN_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(600).default(60),
   AUTH_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(600).default(60),
+  SOCKET_CONNECT_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(2000).default(120),
   HTTP_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(10_000).default(300),
 });
 

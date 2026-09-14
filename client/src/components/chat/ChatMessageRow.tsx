@@ -8,14 +8,9 @@ export function ChatMessageRow({
   message: ChatMessage;
   isMine: boolean;
 }) {
-  if (message.type === 'system') {
-    return (
-      <p className="my-1 text-center text-xs italic text-slate-500">
-        <span aria-hidden>{message.avatar} </span>
-        {message.text}
-      </p>
-    );
-  }
+  // System/lifecycle rows never render (the server stopped producing them;
+  // this keeps any stale snapshot from resurrecting them as chat lines).
+  if (message.type === 'system') return null;
 
   if (message.type === 'emote') {
     return (

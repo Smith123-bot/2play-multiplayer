@@ -10,7 +10,7 @@ import type {
   ValidationResult,
 } from '../GameModule';
 import { actionAccepted, actionRejected } from '../GameModule';
-import { allDrawWords, normalizeGuess, type DrawCategory } from './words';
+import { ALL_WORDS, normalizeGuess, shuffled, type DrawCategory } from './words';
 
 /**
  * Draw & Guess Battle — party drawing with a server-owned secret word.
@@ -67,6 +67,19 @@ export interface DrawGuessState {
   scores: Record<string, number>;
   solvedCount: Record<string, number>;
   drawnCount: Record<string, number>;
+  /**
+   * Shuffled draw deck (words NOT yet used in the current cycle).
+   *
+   * ANTI-REPETITION CONTRACT: a word is drawn by shifting it off this deck;
+   * the deck is only rebuilt (reshuffled over the full pool) once it is fully
+   * exhausted. A word therefore can never repeat within a cycle, no matter
+   * how many rounds are played. A server restart naturally starts a new
+   * cycle because the deck lives in the match state.
+   */
+  wordDeck: string[];
+  /** How many full decks have been consumed (diagnostics/tests). */
+  wordCycle: number;
+  /** Every word drawn since the match started (used to keep rematches fresh). */
   usedWords: string[];
   drawerCursor: number;
   startedAt: number | null;
@@ -106,7 +119,29 @@ const AI_GUESS_DELAY: Record<AIDifficulty, number> = { easy: 14_000, medium: 8_0
 const AI_GUESS_JITTER: Record<AIDifficulty, number> = { easy: 10_000, medium: 6_000, hard: 2_500 };
 const AI_ACCURACY: Record<AIDifficulty, number> = { easy: 0.4, medium: 0.72, hard: 0.92 };
 
-const WORD_BANK = allDrawWords();
+/** Builds a fresh shuffled deck over the whole validated pool. */
+export function buildWordDeck(random: () => number, exclude: readonly string[] = []): string[] {
+  const excluded = new Set(exclude);
+  const pool = ALL_WORDS.filter((entry) => !excluded.has(entry.word));
+  const source = pool.length > 0 ? pool : ALL_WORDS;
+  return shuffled(source, random).map((entry) => entry.word);
+}
+
+/**
+ * Draws the next prompt from the shuffled deck.
+ *
+ * The deck is only rebuilt when FULLY exhausted — never per round, never per
+ * difficulty band. Reshuffling earlier would allow repeats while unused words
+ * remain, which is exactly the repetition bug this replaced.
+ */
+export function drawWord(state: DrawGuessState, random: () => number): string {
+  const next = state.wordDeck.shift();
+  if (next !== undefined) return next;
+  state.wordDeck = buildWordDeck(random);
+  state.wordCycle += 1;
+  const word = state.wordDeck.shift();
+  return word ?? 'cat';
+}
 
 function roundsFor(requested: number | undefined, playerCount: number): number {
   if (typeof requested === 'number' && Number.isFinite(requested)) {
@@ -137,21 +172,9 @@ function guessersOf(state: DrawGuessState, ctx: GameContext): string[] {
   return activeIds(ctx, state).filter((id) => id !== drawerId);
 }
 
-export function pickPrompt(
-  used: string[],
-  rng: () => number,
-  difficulty: 'easy' | 'medium' | 'hard' = 'medium',
-): { word: string; category: DrawCategory } {
-  const suitable = WORD_BANK.filter((entry) =>
-    difficulty === 'easy'
-      ? entry.word.length <= 5
-      : difficulty === 'medium'
-        ? entry.word.length <= 8
-        : entry.word.length > 5,
-  );
-  const unused = suitable.filter((entry) => !used.includes(entry.word));
-  const pool = unused.length > 0 ? unused : suitable.length > 0 ? suitable : WORD_BANK;
-  return pool[Math.floor(rng() * pool.length)]!;
+/** Category lookup for a drawn word (prompts are unique across the pool). */
+function categoryFor(word: string): DrawCategory {
+  return ALL_WORDS.find((entry) => entry.word === word)?.category ?? 'objects';
 }
 
 export function guessPointsFor(index: number): number {
@@ -181,9 +204,12 @@ export function beginDrawRound(state: DrawGuessState, ctx: GameContext): void {
   }
   const progress = state.round / Math.max(1, state.totalRounds);
   const difficulty = progress <= 1 / 3 ? 'easy' : progress <= 2 / 3 ? 'medium' : 'hard';
-  const prompt = pickPrompt(state.usedWords, ctx.random, difficulty);
+  // STRICT deck order: no difficulty filtering, no re-picking. The shuffled
+  // deck alone decides the word so a prompt can never repeat before the whole
+  // pool has been used once. `difficulty` stays as a display/metadata value.
+  const word = drawWord(state, ctx.random);
+  const prompt = { word, category: categoryFor(word) };
   state.usedWords.push(prompt.word);
-  if (state.usedWords.length >= WORD_BANK.length) state.usedWords = [prompt.word];
 
   const now = ctx.now();
   state.current = {
@@ -318,6 +344,8 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       scores: Object.fromEntries(players.map((player) => [player.id, 0])),
       solvedCount: Object.fromEntries(players.map((player) => [player.id, 0])),
       drawnCount: Object.fromEntries(players.map((player) => [player.id, 0])),
+      wordDeck: [],
+      wordCycle: 0,
       usedWords: [],
       drawerCursor: 0,
       startedAt: null,
@@ -358,6 +386,12 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       if (state.scores[player.id] === undefined) state.scores[player.id] = 0;
       if (state.solvedCount[player.id] === undefined) state.solvedCount[player.id] = 0;
       if (state.drawnCount[player.id] === undefined) state.drawnCount[player.id] = 0;
+    }
+    // First start of the match: build the shuffled deck. (After a rematch the
+    // deck was already rebuilt by `reset`, excluding the previous words.)
+    if (state.wordDeck.length === 0) {
+      state.wordDeck = buildWordDeck(ctx.random);
+      state.wordCycle = 1;
     }
     state.round = 1;
     state.startedAt = ctx.now();
@@ -581,6 +615,11 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
   reset(state): DrawGuessState {
     const zero = (table: Record<string, number>) =>
       Object.fromEntries(Object.keys(table).map((id) => [id, 0]));
+    // Rematch: the previous prompts are excluded from the fresh shuffle for as
+    // long as enough unused words remain, so a rematch never opens with a word
+    // the table just played. Once the pool is truly exhausted, start over.
+    const used = [...state.usedWords];
+    const remaining = used.length > 0 ? ALL_WORDS.length - used.length : ALL_WORDS.length;
     return {
       ...state,
       phase: 'idle',
@@ -590,6 +629,8 @@ export const drawGuessGame: GameModule<DrawGuessState> = {
       scores: zero(state.scores),
       solvedCount: zero(state.solvedCount),
       drawnCount: zero(state.drawnCount),
+      wordDeck: buildWordDeck(() => Math.random(), remaining > used.length ? used : []),
+      wordCycle: 1,
       usedWords: [],
       drawerCursor: 0,
       startedAt: null,

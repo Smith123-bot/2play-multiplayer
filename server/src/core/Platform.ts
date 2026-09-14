@@ -14,6 +14,7 @@ import type { StatisticsManager } from '../managers/StatisticsManager';
 import type { RoomStore } from '../rooms/RoomStore';
 import type { SocketManager } from '../sockets/SocketManager';
 import type { EventBus } from './EventBus';
+import type { HealthSignals } from './Health';
 
 export interface PlatformConfig {
   maxRooms: number;
@@ -24,6 +25,7 @@ export interface PlatformConfig {
   roomMaxLifetimeMs: number;
   actionRateLimitPerSec: number;
   chatRateLimitPerSec: number;
+  authRateLimitPerMin: number;
 }
 import type { RateLimiter } from './RateLimiter';
 import type { TimerManager } from './TimerManager';
@@ -39,6 +41,8 @@ export interface Platform {
   eventBus: EventBus;
   timerManager: TimerManager;
   rateLimiter: RateLimiter;
+  /** Mutable process-health counters, read by the /api/health route. */
+  healthSignals: HealthSignals;
   registry: GameRegistry;
   roomStore: RoomStore;
   database: DatabaseLike;

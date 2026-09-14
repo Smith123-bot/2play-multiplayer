@@ -80,22 +80,59 @@ describe('chat', () => {
     }
   }, 30_000);
 
-  it('publishes system messages on join and leave', async () => {
+  it('keeps lifecycle events out of the chat transcript (status UI only)', async () => {
     const { host, guest, roomId } = await lobbyPair();
     try {
+      // Joins and leaves are room-status information, never chat lines. The
+      // transcript holds only real player chat + explicit emotes.
       const room = await host.waitForRoom((current) => current.id === roomId, 10_000);
-      const systemEvents = room.chat.filter((message) => message.type === 'system');
-      expect(systemEvents.length).toBeGreaterThan(0);
+      const systemMessages = (room.chat ?? []).filter((message) => message.type === 'system');
+      expect(systemMessages).toHaveLength(0);
 
+      // A leave still updates the room roster through the normal status path.
       await emitAck(guest.socket, 'room:leave', {});
       const afterLeave = await host.waitForRoom(
-        (current) => current.chat.some((message) => message.systemEvent === 'player_left'),
+        (current) => current.players.length === 1,
         10_000,
       );
       expect(afterLeave.players).toHaveLength(1);
+      expect((afterLeave.chat ?? []).some((message) => message.type === 'system')).toBe(false);
     } finally {
       host.close();
       guest.close();
     }
   }, 30_000);
 });
+
+  it('omits chat from snapshots while unchanged and re-sends it on change', async () => {
+    const { host, guest, roomId } = await lobbyPair();
+    try {
+      // The join ack (and the join broadcast) carry the full transcript.
+      const initial = await guest.waitForRoom((current) => current.id === roomId, 10_000);
+      expect(Array.isArray(initial.chat)).toBe(true);
+
+      // Drive a state change that does NOT touch the transcript (both players
+      // ready up): the resulting snapshot must flip the status but omit `chat`.
+      await emitAck(host.socket, 'lobby:ready', { isReady: true });
+      await emitAck(guest.socket, 'lobby:ready', { isReady: true });
+      const withoutChat = await guest.waitForRoom(
+        (current) => current.status === 'READY' && current.chat === undefined,
+        10_000,
+      );
+      expect(withoutChat.id).toBe(roomId);
+
+      // A new message bumps the transcript version: the next snapshot must
+      // carry the full transcript again.
+      const messagePromise = once<{ message: ChatMessage }>(guest.socket, 'chat:message', 10_000);
+      await emitAck(host.socket, 'chat:send', { text: 'incremental delivery check' });
+      await messagePromise;
+      const withChat = await guest.waitForRoom(
+        (current) => (current.chat ?? []).some((entry) => entry.text === 'incremental delivery check'),
+        10_000,
+      );
+      expect(withChat.chat?.length).toBeGreaterThan(0);
+    } finally {
+      host.close();
+      guest.close();
+    }
+  }, 30_000);

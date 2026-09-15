@@ -178,24 +178,6 @@ const CASES: GameCase[] = [
     action: { type: 'turn', payload: { direction: 'down' } },
   },
   {
-    id: 'coin-hunters-arena',
-    expect: (state) =>
-      Array.isArray(state.coins) &&
-      Boolean(state.hunters) &&
-      Boolean(state.bonus) &&
-      typeof state.endsAt === 'number',
-    action: { type: 'move', payload: { direction: 'right' } },
-  },
-  {
-    id: 'shop-rush-battle',
-    expect: (state) =>
-      Array.isArray(state.shelves) &&
-      Boolean(state.shoppers) &&
-      Boolean(state.till) &&
-      typeof state.endsAt === 'number',
-    action: { type: 'move', payload: { direction: 'up' } },
-  },
-  {
     id: 'fake-door-battle',
     settings: { rounds: 3 },
     expect: (state) =>
@@ -213,16 +195,6 @@ const CASES: GameCase[] = [
       typeof state.range === 'number' &&
       typeof state.endsAt === 'number',
     action: { type: 'move', payload: { dx: 1, dy: 0 } },
-  },
-  {
-    id: 'chain-reaction-battle',
-    settings: { rounds: 2 },
-    expect: (state) =>
-      Array.isArray(state.nodes) &&
-      Boolean(state.players) &&
-      typeof state.round === 'number' &&
-      typeof state.cols === 'number',
-    action: { type: 'TRIGGER_NODE', payload: { nodeId: '0,0' } },
   },
   {
     id: 'split-world',

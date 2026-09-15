@@ -40,6 +40,34 @@ describe('GameLifecycleManager', () => {
     expect((room.gameState as { phase?: string }).phase).toBeDefined();
   });
 
+  it('publishes the authoritative GO timestamp and walks 3-2-1-GO', async () => {
+    const room = await twoPlayerRoom(platform);
+    for (const player of room.humanPlayers) platform.lobbyManager.setReady(room, player.id, true);
+
+    const before = Date.now();
+    platform.lifecycleManager.startCountdown(room);
+    expect(room.status).toBe('COUNTDOWN');
+    expect(room.countdownValue).toBe(3);
+    // GO lands ~3 s after the countdown starts — the client derives every
+    // 3-2-1-GO phase from this timestamp on the server clock.
+    expect(room.countdownEndsAt).toBeGreaterThanOrEqual(before + 2900);
+    expect(room.countdownEndsAt).toBeLessThanOrEqual(Date.now() + 3100);
+
+    // The server ticks 2, then 1 — never stuck on 3, never skipping to GO.
+    await waitFor(() => room.countdownValue === 2, { timeoutMs: 5000 });
+    expect(room.status).toBe('COUNTDOWN');
+    await waitFor(() => room.countdownValue === 1, { timeoutMs: 5000 });
+    expect(room.status).toBe('COUNTDOWN');
+
+    await waitFor(() => room.status === 'PLAYING', { timeoutMs: 10_000 });
+    expect(room.countdownValue).toBe(0);
+    // The timestamp survives into PLAYING so clients can flash the GO beat.
+    expect(room.countdownEndsAt).toBeGreaterThan(0);
+
+    platform.lifecycleManager.finishMatch(room, 'completed');
+    expect(room.countdownEndsAt).toBeNull();
+  });
+
   it('prevents a second countdown while one is running', async () => {
     const room = await twoPlayerRoom(platform);
     for (const player of room.humanPlayers) platform.lobbyManager.setReady(room, player.id, true);

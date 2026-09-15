@@ -34,7 +34,7 @@ export const REACTION_RACE_METADATA = {
   scoring: '1 point per round won. Ties are broken by average reaction time.',
   winCondition: 'Win the most of five rounds.',
   tags: ['reflex', 'fast', 'party', '2-4 players'],
-  featured: true,
+  featured: false,
   hasRounds: true,
   defaultRounds: 5,
   howToPlay: {
@@ -78,7 +78,7 @@ export const MEMORY_MATCH_METADATA = {
   scoring: '1 point per pair collected.',
   winCondition: 'Collect the most pairs.',
   tags: ['memory', 'turn-based', 'family', '2-4 players'],
-  featured: true,
+  featured: false,
   gridOptions: ['4x4', '6x4', '6x6'],
   howToPlay: {
     controls: { mobile: 'Tap a face-down card to flip it.', desktop: 'Click a card to flip it.' },
@@ -121,7 +121,7 @@ export const WORD_RACE_METADATA = {
   scoring: '1 point per unique valid word. Highest total after 3 rounds wins.',
   winCondition: 'Score the most valid words across three rounds.',
   tags: ['word', 'typing', 'party', '2-4 players'],
-  featured: true,
+  featured: false,
   hasRounds: true,
   defaultRounds: 3,
   howToPlay: {
@@ -208,7 +208,7 @@ export const MATH_RUSH_METADATA = {
   scoring: '10 points per correct answer + up to 10 bonus points for speed.',
   winCondition: 'Score the most points across all questions.',
   tags: ['math', 'speed', 'skill', '2-4 players'],
-  featured: true,
+  featured: false,
   howToPlay: {
     controls: { mobile: 'Tap the on-screen keypad, then tap Submit.', desktop: 'Type digits, minus and Backspace; press Enter to submit.' },
     turnSystem: 'Simultaneous — everyone is shown the same question at the same moment and races to answer it.',
@@ -433,7 +433,7 @@ export const SNAKE_BATTLE_METADATA = {
   scoring: '10 points per food. Survival beats lives, lives beat score; score breaks the rest.',
   winCondition: 'Outlast your rival — or finish with more lives, then more food.',
   tags: ['reflex', 'arcade', 'classic', '2 players'],
-  featured: false,
+  featured: true,
   howToPlay: {
     controls: { mobile: 'Swipe across the board or use the on-screen D-pad.', desktop: 'Arrow keys or WASD to steer.' },
     turnSystem: 'Simultaneous and real-time — both snakes move on the same server step, so there are no turns.',
@@ -611,7 +611,7 @@ export const PATTERN_MEMORY_METADATA = {
   scoring: '10 per tile + up to 5 per tile for speed + a streak bonus (max +6).',
   winCondition: 'Score the most points across eight rounds.',
   tags: ['memory', 'focus', 'party', '2 players'],
-  featured: false,
+  featured: true,
   hasRounds: true,
   defaultRounds: 8,
   howToPlay: {
@@ -705,7 +705,7 @@ export const SECRET_ROLE_METADATA = {
   scoring: 'Citizen correct vote +100. Agent survives +150. Agent guesses the location +200.',
   winCondition: 'Highest cumulative score after all rounds.',
   tags: ['strategy', 'party', 'deduction', '3-4 players'],
-  featured: true,
+  featured: false,
   hasRounds: true,
   defaultRounds: 4,
   howToPlay: {
@@ -752,7 +752,7 @@ export const COLOR_CLASH_METADATA = {
   scoring: 'Fastest correct 100, then 75 / 50 / 25. Wrong answers score 0.',
   winCondition: 'Score the most points across twelve rounds.',
   tags: ['reflex', 'colour', 'speed', '2-4 players'],
-  featured: true,
+  featured: false,
   hasRounds: true,
   defaultRounds: 12,
   howToPlay: {
@@ -797,7 +797,7 @@ export const TERRITORY_RUSH_METADATA = {
   scoring: '1 point per owned cell. Ties broken by successful captures, then fewer deaths.',
   winCondition: 'Own the most cells when the timer ends.',
   tags: ['reflex', 'territory', 'arcade', '2-4 players'],
-  featured: true,
+  featured: false,
   howToPlay: {
     controls: { mobile: 'Swipe anywhere on the grid to change direction.', desktop: 'Arrow keys or WASD to steer.' },
     turnSystem: 'Simultaneous and real-time — everyone expands territory on the same server step; there are no turns.',
@@ -812,95 +812,6 @@ export const TERRITORY_RUSH_METADATA = {
   },
   version: '1.0.0',
 } satisfies GameMetadata;
-
-
-export const COIN_HUNTERS_METADATA = {
-  id: 'coin-hunters-arena',
-  name: 'Coin Hunters Arena',
-  description:
-    'Dash around a shared arena vacuuming coins. Gold and rare coins pay more, multipliers and bonus zones juice the haul, and a roaming blocker keeps you honest.',
-  category: 'reflex' as const,
-  icon: '🪙',
-  thumbnail: '🪙',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'easy' as const,
-  controls: 'Move with WASD / arrows, swipe or the D-pad. Collection is confirmed by the server.',
-  rules: [
-    'The server spawns coins: normal +10, gold +25, rare +50, multiplier 2× for a few seconds.',
-    'Stand on a coin (or send collect) — distance and identity are checked server-side.',
-    'A 2× bonus zone doubles collections while you stand in it. Slow tiles double your step time.',
-    'A moving blocker occupies a cell; walking into it bounces you back.',
-    'Duplicate collects award nothing. Highest score when the timer ends wins.',
-  ],
-  scoring: 'Coin value × active multiplier (personal 2× and/or bonus zone 2×).',
-  winCondition: 'Hold the highest score when the arena clock ends.',
-  tags: ['reflex', 'arcade', 'collection', '2-4 players'],
-  featured: true,
-  howToPlay: {
-    controls: { mobile: 'Swipe anywhere on the arena to change direction.', desktop: 'Arrow keys or WASD to move.' },
-    turnSystem: 'Simultaneous and real-time — everyone collects in the same arena on the same server step.',
-    timeLimit: 'A 2.5-minute arena clock, moving one cell every 250 ms. Coins live for 8 s, a 2× multiplier lasts 4 s and a streak window is 3.5 s.',
-    winCondition: 'Highest score when the 2.5-minute arena clock ends. A level total is a draw — how many coins you collected or how often you doubled them is not a tie-break.',
-    specialRules: [
-      'The server spawns coins: normal +10, gold +25, rare +50, plus a 2× multiplier pickup.',
-      'Distance and identity are checked server-side, so you cannot collect a coin you are not standing on.',
-      'Standing in a bonus zone doubles collections; slow tiles double your step time.',
-      'A moving blocker occupies a cell — walking into it bounces you back.',
-      'Duplicate collects award nothing.',
-    ],
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
-export const SHOP_RUSH_METADATA = {
-  id: 'shop-rush-battle',
-  name: 'Shop Rush Battle',
-  description:
-    'Race the aisles with a private shopping list. Grab the right items, dump bonus candy and check out before the clock.',
-  category: 'strategy' as const,
-  icon: '🛒',
-  thumbnail: '🛒',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 150,
-  difficulty: 'easy' as const,
-  controls: 'Move with WASD / arrows / swipe / D-pad. Pick up on a shelf, check out on the till.',
-  rules: [
-    'Each shopper gets a private 3-item list. The basket holds at most 4 items.',
-    'Stand on a shelf and pick to collect. Only the server grants the item.',
-    'Bonus candy is never on the list but pays extra at checkout.',
-    'Checkout scores matching list items and candy, then deals a fresh list. Wrong items stay in the basket.',
-    'Highest checkout score when time ends wins. Lists of other players never leave the server.',
-  ],
-  scoring: '+40 per listed item, +25 candy, +50 list-complete bonus.',
-  winCondition: 'Hold the highest checkout score when the shop closes.',
-  tags: ['strategy', 'collection', 'arcade', '2-4 players'],
-  featured: true,
-  howToPlay: {
-    controls: { mobile: 'Swipe to move, then tap Grab and Check out on the action buttons.', desktop: 'Arrow keys or WASD to move, E or Space to grab, Enter to check out at the till.' },
-    turnSystem: 'Simultaneous and real-time — every shopper works their own private list inside the same shared shop.',
-    timeLimit: 'The shop closes after 2 minutes. Your first order has a 28 s deadline; every checkout shortens the next one by 1 s, down to a 16 s floor.',
-    winCondition: 'Highest checkout score when the shop closes. Equal scores are a draw.',
-    specialRules: [
-      'Your basket holds at most 4 items, and your shopping list is private — other players\' lists never leave the server.',
-      'You must stand next to a shelf to pick, and only the server grants the item.',
-      'Bonus candy is never on the list but pays extra at checkout.',
-      'Checking out scores matching items and candy, then deals a fresh list; wrong items stay in the basket.',
-      'Missing an order deadline empties your basket, resets your combo and deals a new list.',
-    ],
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
 
 export const FAKE_DOOR_METADATA = {
   id: 'fake-door-battle',
@@ -927,7 +838,7 @@ export const FAKE_DOOR_METADATA = {
   scoring: 'Correct door +100 plus a speed bonus. Highest total after five rounds wins.',
   winCondition: 'Score the most points across five rounds.',
   tags: ['memory', 'puzzle', 'party', '2-4 players'],
-  featured: true,
+  featured: false,
   hasRounds: true,
   defaultRounds: 5,
   howToPlay: {
@@ -970,7 +881,7 @@ export const MAGNET_THIEF_METADATA = {
   scoring: 'Coin +10, gem +50 (held at the buzzer). Highest valid total wins.',
   winCondition: 'Hold the highest score when the arena clock ends.',
   tags: ['strategy', 'collection', 'arcade', '2-4 players'],
-  featured: true,
+  featured: false,
   howToPlay: {
     controls: { mobile: 'Swipe to move and tap the Pull or Repel buttons.', desktop: 'Arrow keys or WASD to move, E or Space to pull, Q to repel.' },
     turnSystem: 'Simultaneous and real-time — everyone moves and magnetises in the same arena at the same time.',
@@ -986,51 +897,6 @@ export const MAGNET_THIEF_METADATA = {
   },
   version: '1.0.0',
 } satisfies GameMetadata;
-
-
-export const CHAIN_REACTION_METADATA = {
-  id: 'chain-reaction-battle',
-  name: 'Chain Reaction Battle',
-  description:
-    'Trigger one node and watch the board cascade. Long, high-value chains win — the server owns every spark.',
-  category: 'strategy' as const,
-  icon: '💥',
-  thumbnail: '💥',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 140,
-  difficulty: 'medium' as const,
-  controls: 'Tap a node to trigger it. Two triggers per round.',
-  rules: [
-    'Each round the server deals a coloured board of normal, bonus, multiplier, blocker and arrow nodes.',
-    'Trigger a node: same-colour neighbours chain. Arrows continue in their direction. Blockers never chain.',
-    'You get two triggers per round. Clients submit a node id — never a chain length.',
-    'Highest total after four rounds wins.',
-  ],
-  scoring: 'Chain length × 10 × multipliers, plus 15 per bonus node in the chain.',
-  winCondition: 'Score the most points across four rounds.',
-  tags: ['strategy', 'puzzle', 'party', '2-4 players'],
-  featured: true,
-  hasRounds: true,
-  defaultRounds: 4,
-  howToPlay: {
-    controls: { mobile: 'Tap a node you own to trigger its chain.', desktop: 'Click a node you own to trigger its chain.' },
-    turnSystem: 'Simultaneous within a round — everyone spends their triggers on the same board deal inside the 22 s window.',
-    timeLimit: '4 rounds of 22 s each, with a 1.5 s break between rounds.',
-    winCondition: 'Highest total after the four rounds wins. Equal totals are a draw.',
-    specialRules: [
-      'Each round the server deals a coloured board of normal, bonus, multiplier, blocker and arrow nodes.',
-      'Triggering a node chains into same-colour neighbours; arrows continue in their direction; blockers never chain.',
-      'You get exactly two triggers per round.',
-      'Clients submit a node id — the chain length and the score are computed by the server.',
-    ],
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
 
 export const SPLIT_WORLD_METADATA = {
   id: 'split-world',
@@ -1059,7 +925,7 @@ export const SPLIT_WORLD_METADATA = {
     'Switch +30, key +25, plate +20, exit +100 plus a speed bonus, round win +25. Hazards and wrong order cost points.',
   winCondition: 'Hold the highest total score after five rounds (rounds won breaks a tie).',
   tags: ['strategy', 'coop', 'puzzle', 'communication', '2-4 players'],
-  featured: true,
+  featured: false,
   hasRounds: true,
   defaultRounds: 5,
   howToPlay: {
@@ -1193,7 +1059,7 @@ export const BLACK_BLAST_METADATA = {
   scoring: 'Energy +20, rich node +60, chain depth bonus per hit, combo multiplier up to 4x.',
   winCondition: 'Hold the highest score when the three minute clock expires.',
   tags: ['arcade', 'reflex', 'chain-reaction', 'combo', '2-4 players'],
-  featured: true,
+  featured: false,
   howToPlay: {
     controls: { mobile: 'Tap a node to pulse it and tap Overcharge for the bigger blast.', desktop: 'Arrow keys or WASD to move, Space for a standard pulse, E to overcharge.' },
     turnSystem: 'Simultaneous and real-time — everyone drops pulses in the same arena on the same server step.',
@@ -1397,7 +1263,7 @@ export const HANGMAN_METADATA = {
   scoring: 'Correct letter +15 each occurrence, streak +10, solving +100 plus 15 per attempt left. Wrong letter -8.',
   winCondition: 'Highest total score after five rounds. Equal scores are a draw.',
   tags: ['word', 'classic', 'guessing', 'turn-based', '2 players'],
-  featured: true,
+  featured: false,
   hasRounds: true,
   defaultRounds: 5,
   howToPlay: {
@@ -1672,7 +1538,7 @@ export const MIRROR_GRID_METADATA = {
   scoring: 'Level solved +200, placement bonus up to +120, plus a speed bonus. A wrong submission costs 10.',
   winCondition: 'Highest total score after the final level. Fastest server-recorded solve breaks a tie.',
   tags: ['puzzle', 'logic', 'symmetry', 'race', '2-4 players'],
-  featured: true,
+  featured: false,
   hasRounds: true,
   defaultRounds: 5,
   howToPlay: {
@@ -1731,7 +1597,7 @@ export const FUSE_METADATA = {
   scoring: 'Level solved +250, placement bonus up to +120, plus a speed bonus. Each rotation costs 1.',
   winCondition: 'Highest total score after the final level. Fastest server-recorded solve breaks a tie.',
   tags: ['puzzle', 'logic', 'circuit', 'race', '2-4 players'],
-  featured: true,
+  featured: false,
   hasRounds: true,
   defaultRounds: 4,
   howToPlay: {
@@ -1854,11 +1720,8 @@ export const ALL_GAME_METADATA: readonly GameMetadata[] = [
   SECRET_ROLE_METADATA,
   COLOR_CLASH_METADATA,
   TERRITORY_RUSH_METADATA,
-  COIN_HUNTERS_METADATA,
-  SHOP_RUSH_METADATA,
   FAKE_DOOR_METADATA,
   MAGNET_THIEF_METADATA,
-  CHAIN_REACTION_METADATA,
   SPLIT_WORLD_METADATA,
   LUDO_METADATA,
   ARROW_PUZZLE_METADATA,

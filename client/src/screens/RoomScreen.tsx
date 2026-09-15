@@ -20,6 +20,7 @@ import { useRoomStore } from '../stores/roomStore';
 import { useSessionStore } from '../stores/sessionStore';
 import { useGameStore } from '../stores/gameStore';
 import { useRoomActions } from '../hooks/useRoomActions';
+import { useMatchCountdown } from '../hooks/useMatchCountdown';
 import { useLeaveRoomOnBackNavigation } from '../hooks/useLeaveRoomOnBackNavigation';
 import { getLocalPlayerId } from '../stores/roomStore';
 import { useGameEndReveal } from '../hooks/useGameEndReveal';
@@ -64,6 +65,8 @@ export function RoomScreen() {
 
   const [reconnecting, setReconnecting] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Server-authoritative 3-2-1-GO phases from `room.countdownEndsAt`.
+  const countdown = useMatchCountdown(room && room.id === roomId ? room : null);
   // Manual in-match guide: the 11 games that own `useHowToPlay` keep their
   // auto-opening behaviour, every other game gets this on-demand button.
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -146,7 +149,7 @@ export function RoomScreen() {
   const game = useMemo(() => games.find((entry) => entry.id === room?.gameId), [games, room?.gameId]);
 
   /**
-   * Centralised How to Play (all 38 games).
+   * Centralised How to Play (all 35 games).
    *
    * The pre-match popup fires once per game before play begins, so no match can
    * start without its rules being one tap away; the header Rules button re-opens
@@ -212,7 +215,7 @@ export function RoomScreen() {
         </Link>
         <div className="flex items-center gap-2">
           <Badge tone={status === 'PLAYING' ? 'success' : 'default'}>{status}</Badge>
-          {/* Platform-level Help: available for all 38 games, before and during play. */}
+          {/* Platform-level Help: available for all 35 games, before and during play. */}
           {game ? (
             <Button
               size="sm"
@@ -250,7 +253,9 @@ export function RoomScreen() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="relative space-y-4">
-          {showCountdown ? <CountdownOverlay value={room.countdownValue} visible /> : null}
+          {countdown.visible ? (
+            <CountdownOverlay value={countdown.value} visible />
+          ) : null}
 
           {inLobby ? (
             <Card>

@@ -10,7 +10,7 @@ import { HowToPlayContent, HowToPlayModal, useHowToPlay } from './HowToPlayModal
 /**
  * The single shared How To Play system.
  *
- * All 38 games render their rules through this one component, so these tests
+ * All 35 games render their rules through this one component, so these tests
  * pin the contract the rules audit depends on: every section is present for
  * every game, the timer text is the real clock rather than a derived estimate,
  * mobile and desktop controls are described separately, and the auto-popup is
@@ -32,8 +32,8 @@ const SECTION_HEADINGS = [
 const STORAGE_PREFIX = '2play:howtoplay:';
 
 describe('HowToPlayContent', () => {
-  it('renders every section, for every one of the 38 games', () => {
-    expect(ALL_GAME_METADATA).toHaveLength(38);
+  it('renders every section, for every one of the 35 games', () => {
+    expect(ALL_GAME_METADATA).toHaveLength(35);
     for (const game of ALL_GAME_METADATA) {
       const { unmount } = render(<HowToPlayContent game={game} />);
       for (const heading of SECTION_HEADINGS) {

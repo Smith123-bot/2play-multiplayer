@@ -276,11 +276,8 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 🕵️ Secret Role | strategy | 3–4 | yes | Private roles, no identity leak |
 | 🌈 Color Clash | reflex | 2–4 | yes | Fast colour rounds, labelled buttons |
 | 🗺️ Territory Rush | reflex | 2–4 | yes | Grid capture, flood-fill loops, trail cuts |
-| 🪙 Coin Hunters Arena | reflex | 2–4 | yes | Server-spawned coins, multipliers, bonus zone |
-| 🛒 Shop Rush Battle | strategy | 2–4 | yes | Private lists, limited inventory, server checkout |
 | 🚪 Fake Door Battle | memory | 2–4 | yes | Learnable clues, server-owned safe door |
 | 🧲 Magnet Thief | strategy | 2–4 | yes | Server magnet range, cooldown, steal and ownership |
-| 💥 Chain Reaction Battle | strategy | 2–4 | yes | Trigger a node; the server owns chain length, multipliers and score |
 | 🌍 Split World | strategy | 2–4 | yes | Shared true world, per-player views; hidden tiles never leave the server |
 | 🎲 Ludo | strategy | 2–4 | yes | Server-rolled dice, token captures, safe squares, four tokens home |
 | ➡️ Arrow Puzzle | strategy | 2–4 | yes | Identical seeded boards, path-gated arrows, placement + speed bonuses |

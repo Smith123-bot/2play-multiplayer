@@ -61,6 +61,7 @@ describe('Batch 3 premium game clients', () => {
     const player = {
       x: 2,
       y: 2,
+      facing: { dx: 1, dy: 0 },
       score: 10,
       stolen: 1,
       carrying: 1,

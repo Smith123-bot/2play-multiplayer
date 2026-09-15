@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, type ComponentType } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type ComponentType,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
 import { TERRITORY_RUSH_METADATA, type GameAction, type Player } from '@2play/shared';
 import type { ClientGameModule, GameComponentProps } from '../registry/types';
@@ -77,7 +84,7 @@ function TerritoryRushGame({
   vibrate,
 }: GameComponentProps<TerritoryRushPublicState>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeStart = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const previousEvent = useRef<string | null>(null);
   const inputSequence = useRef(0);
 
@@ -209,6 +216,53 @@ function TerritoryRushGame({
     }
   }, [state, myPlayerId]);
 
+  // ---- Swipe steering (mouse, pen and touch unified) --------------------------
+  // Pointer Events cover touch too, so one handler steers on every device.
+  const onSwipeStart = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!canSteer) return;
+    swipeStart.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const onSwipeEnd = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+    if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 'right' : 'left');
+    else turn(dy > 0 ? 'down' : 'up');
+  };
+
+  const onSwipeCancel = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (swipeStart.current?.pointerId === event.pointerId) swipeStart.current = null;
+  };
+
+  /** Human-readable banner for the latest capture / cut / stage event. */
+  const eventBanner = useMemo(() => {
+    const lastEvent = state?.lastEvent;
+    if (!lastEvent) return null;
+    if (lastEvent.startsWith('capture:')) {
+      const [, id, gained] = lastEvent.split(':');
+      const nick = players.find((player) => player.id === id)?.nickname ?? 'Someone';
+      const mine = id === myPlayerId;
+      return {
+        key: lastEvent,
+        tone: mine ? ('success' as const) : ('default' as const),
+        text: mine ? `You captured +${gained} cells!` : `${nick} captured +${gained}`,
+      };
+    }
+    if (lastEvent.startsWith('cut:')) {
+      const victims = lastEvent.slice('cut:'.length).split('+');
+      const mine = myPlayerId ? victims.includes(myPlayerId) : false;
+      if (mine) return { key: lastEvent, tone: 'danger' as const, text: 'Your trail was cut!' };
+      const nick = players.find((player) => player.id === victims[0])?.nickname ?? 'A rival';
+      return { key: lastEvent, tone: 'warning' as const, text: `${nick}'s trail was cut` };
+    }
+    return null;
+  }, [state?.lastEvent, players, myPlayerId]);
+
   if (phase === 'idle' || !state) {
     return (
       <div className="space-y-4">
@@ -252,6 +306,11 @@ function TerritoryRushGame({
           <Badge tone="success">Best loop +{me.largestCapture}</Badge>
         ) : null}
         {phase === 'finished' ? <Badge tone="accent">Match over</Badge> : null}
+        {eventBanner ? (
+          <Badge key={eventBanner.key} tone={eventBanner.tone}>
+            {eventBanner.text}
+          </Badge>
+        ) : null}
       </div>
 
       <div className="mx-auto w-full max-w-lg">
@@ -261,22 +320,9 @@ function TerritoryRushGame({
           aria-label="Territory Rush map"
           className="touch-none h-auto w-full overflow-hidden rounded-2xl border border-white/10 bg-slate-950 select-none"
           style={{ aspectRatio: `${state.cols} / ${state.rows}` }}
-          onTouchStart={(event) => {
-            const touch = event.changedTouches[0];
-            touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
-          }}
-          onTouchMove={(event) => event.preventDefault()}
-          onTouchEnd={(event) => {
-            const start = touchStart.current;
-            touchStart.current = null;
-            const touch = event.changedTouches[0];
-            if (!start || !touch) return;
-            const dx = touch.clientX - start.x;
-            const dy = touch.clientY - start.y;
-            if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
-            if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 'right' : 'left');
-            else turn(dy > 0 ? 'down' : 'up');
-          }}
+          onPointerDown={onSwipeStart}
+          onPointerUp={onSwipeEnd}
+          onPointerCancel={onSwipeCancel}
         />
       </div>
 

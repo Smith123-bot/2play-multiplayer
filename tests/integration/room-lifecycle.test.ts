@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { io, type Socket } from 'socket.io-client';
 import type { AckResponse, RoomState, SessionInfo } from '@2play/shared';
 import { startTestServer, type TestServer } from '../helpers/server';
+import { waitForRoom } from '../helpers/client';
 
 let server: TestServer;
 
@@ -261,6 +262,52 @@ describe('room lifecycle over sockets', () => {
     }
   });
 
+  it.each(['sos-game', 'snake-battle'])(
+    'runs a server-authoritative 3-2-1-GO countdown for %s before gameplay starts',
+    async (gameId) => {
+      const host = connect(server.url);
+      try {
+        await once(host, 'connect');
+        await authenticate(host, 'CountdownHost');
+        const created = await emitAck<{ room: RoomState; playerId: string }>(host, 'room:create', {
+          gameId,
+          maxPlayers: 2,
+          isPrivate: true,
+        });
+        expect(created.ok).toBe(true);
+        const ai = await emitAck<{ playerId: string }>(host, 'room:add-ai', { difficulty: 'easy' });
+        expect(ai.ok).toBe(true);
+        await emitAck(host, 'lobby:ready', { isReady: true });
+
+        // Capture the COUNTDOWN snapshot: it must carry the GO timestamp.
+        const countdownPromise = new Promise<RoomState>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('no COUNTDOWN snapshot')), 10000);
+          const handler = (payload: { room: RoomState }) => {
+            if (payload.room.status === 'COUNTDOWN') {
+              clearTimeout(timer);
+              host.off('room:updated', handler);
+              resolve(payload.room);
+            }
+          };
+          host.on('room:updated', handler);
+        });
+        const started = await emitAck(host, 'game:start', {});
+        expect(started.ok).toBe(true);
+        const countdown = await countdownPromise;
+        expect(countdown.countdownValue).toBe(3);
+        expect(countdown.countdownEndsAt).toBeGreaterThan(Date.now());
+        expect(countdown.countdownEndsAt).toBeLessThanOrEqual(Date.now() + 3200);
+
+        // Gameplay begins only after GO.
+        const playing = await waitForRoom(host, (room) => room.status === 'PLAYING', 15000);
+        expect(playing.gameStartedAt).toBeGreaterThanOrEqual(countdown.countdownEndsAt! - 500);
+      } finally {
+        host.close();
+      }
+    },
+    60000,
+  );
+
   it('exposes health and the game catalogue over HTTP', async () => {
     const health = (await fetch(`${server.url}/api/health`).then((res) => res.json())) as {
       status: string;
@@ -277,9 +324,7 @@ describe('room lifecycle over sockets', () => {
       'arrow-puzzle',
       'black-blast',
       'brick-breaker-battle',
-      'chain-reaction-battle',
       'chess',
-      'coin-hunters-arena',
       'color-clash',
       'connect-four',
       'couple-memory',
@@ -301,7 +346,6 @@ describe('room lifecycle over sockets', () => {
       'rock-paper-scissors',
       'secret-role',
       'shape-match-battle',
-      'shop-rush-battle',
       'sim',
       'snake-battle',
       'sos-game',

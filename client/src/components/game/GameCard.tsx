@@ -33,7 +33,7 @@ const CARD_IDLE =
 
 /**
  * Memoized: the Games browser re-renders on every keystroke in the search box
- * and on every room snapshot; with 38 cards in the grid, skipping unchanged
+ * and on every room snapshot; with 35 cards in the grid, skipping unchanged
  * cards keeps search typing and filter changes instant on mid-range phones.
  * Callback props are stable at the call sites (useCallback), so the default
  * shallow compare is effective.

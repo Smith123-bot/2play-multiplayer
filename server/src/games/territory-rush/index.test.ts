@@ -176,6 +176,134 @@ describe('Territory Rush', () => {
     expect(b.y).toBe(homeY);
   });
 
+  it('records a cut exactly once when two runners cross the same trail', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const victim = state().runners[players[0]!.id]!;
+    const cutterA = state().runners[players[1]!.id]!;
+    const cols = state().cols;
+    // Victim's trail sits at (11,10); both cutters step onto it this step.
+    victim.x = 20;
+    victim.y = 10;
+    victim.direction = 'right';
+    victim.pending = null;
+    victim.frozenUntil = 0;
+    victim.trail = [cellIndex(cols, 11, 10)];
+    cutterA.x = 10;
+    cutterA.y = 10;
+    cutterA.direction = 'right';
+    cutterA.pending = null;
+    cutterA.frozenUntil = 0;
+    cutterA.trail = [];
+    // A second cutter stepping onto the same trail cell this step.
+    state().runners.ghost = {
+      x: 11,
+      y: 9,
+      direction: 'down',
+      pending: null,
+      alive: true,
+      frozenUntil: 0,
+      trail: [],
+      home: [],
+      owner: 3,
+      captures: 0,
+      deaths: 0,
+      largestCapture: 0,
+      latestInputSeq: -1,
+      disconnected: false,
+      left: false,
+    };
+    const outcome = stepTerritory(state(), context());
+    expect(outcome.cuts).toEqual([players[0]!.id]);
+    expect(state().lastEvent).toBe(`cut:${players[0]!.id}`);
+    expect(victim.deaths).toBe(1);
+    expect(victim.trail).toHaveLength(0);
+  });
+
+  it('grows an open trail without capturing until the runner returns home', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const runner = state().runners[players[0]!.id]!;
+    const cols = state().cols;
+    // Stand on owned home facing open neutral ground.
+    const homeMid = runner.home[Math.floor(runner.home.length / 2)]!;
+    runner.x = homeMid % cols;
+    runner.y = (homeMid / cols) | 0;
+    runner.direction = 'right';
+    runner.pending = null;
+    runner.frozenUntil = 0;
+    runner.trail = [];
+    const capturesBefore = runner.captures;
+    // Step out: the trail starts but nothing is captured yet.
+    state().grid[cellIndex(cols, runner.x + 1, runner.y)] = 0;
+    stepTerritory(state(), context());
+    expect(runner.trail.length).toBeGreaterThan(0);
+    expect(runner.captures).toBe(capturesBefore);
+    expect(state().lastEvent?.startsWith('capture:')).toBe(false);
+  });
+
+  it('the AI steers on-map instead of preferring out-of-bounds reads', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const id = players[0]!.id;
+    const runner = state().runners[id]!;
+    const cols = state().cols;
+    // Cornered: every non-reverse direction is a wall or the runner's own
+    // trail except (1,0), which is neutral ground.
+    runner.x = 0;
+    runner.y = 0;
+    runner.direction = 'up';
+    runner.pending = null;
+    runner.trail = [cellIndex(cols, 1, 0)];
+    state().grid[cellIndex(cols, 1, 0)] = 0;
+    for (let i = 0; i < 10; i += 1) {
+      const move = territoryRushGame.getAIMove?.(id, 'hard', state(), context());
+      expect(move?.type).toBe('turn');
+      expect((move?.payload as { direction: string }).direction).toBe('right');
+    }
+  });
+
+  it('rejects forged territory, trail and score actions', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const id = players[0]!.id;
+    for (const type of ['trail', 'grid', 'cells', 'score', 'capture', 'teleport', 'win']) {
+      expect(
+        territoryRushGame.validateAction(id, { type, payload: { cells: 999 } }, state(), context())
+          .valid,
+      ).toBe(false);
+      expect(
+        territoryRushGame.handlePlayerAction(id, { type, payload: { cells: 999 } }, state(), context())
+          .accepted,
+      ).toBe(false);
+    }
+    expect(
+      territoryRushGame.validateAction(
+        id,
+        { type: 'turn', payload: { direction: 'sideways' } },
+        state(),
+        context(),
+      ).valid,
+    ).toBe(false);
+  });
+
+  it('reset clears trails, grid ownership and step state for a rematch', async () => {
+    await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
+    const runner = state().runners[players[0]!.id]!;
+    runner.trail = [1, 2, 3];
+    runner.captures = 5;
+    state().stepIndex = 42;
+    const next = territoryRushGame.reset(state());
+    expect(next.phase).toBe('idle');
+    expect(next.grid.every((cell) => cell === 0 || cell > 0)).toBe(true);
+    expect(next.stepIndex).toBe(0);
+    expect(next.accumulatorMs).toBe(0);
+    for (const entry of Object.values(next.runners)) {
+      expect(entry.trail).toHaveLength(0);
+      expect(entry.captures).toBe(0);
+      expect(entry.deaths).toBe(0);
+      expect(entry.pending).toBeNull();
+    }
+    // Fresh home paint only: no leftover enclosed captures.
+    expect(countCells(next.grid, 1)).toBe(next.runners[players[0]!.id]!.home.length);
+  });
+
   it('timeout finishes and ranks by cell count', async () => {
     await waitFor(() => state().phase === 'playing', { timeoutMs: 5000 });
     const a = state().runners[players[0]!.id]!;

@@ -104,6 +104,83 @@ describe('Magnet Thief', () => {
     ).toBe(false);
   });
 
+  it('records server-side facing on every landed step', () => {
+    const playerId = players[0]!.id;
+    expect(state().players[playerId]!.facing).toEqual({ dx: 0, dy: 0 });
+    // Player 0 spawns top-left (1.2, 1.2): right and down are open.
+    expect(
+      platform.gameManager.handleAction(room, playerId, { type: 'move', payload: { dx: 1, dy: 0 } })
+        .accepted,
+    ).toBe(true);
+    expect(state().players[playerId]!.facing).toEqual({ dx: 1, dy: 0 });
+    expect(
+      platform.gameManager.handleAction(room, playerId, {
+        type: 'move',
+        payload: { dx: 0.75, dy: 0.75 },
+      }).accepted,
+    ).toBe(true);
+    expect(state().players[playerId]!.facing).toEqual({ dx: 1, dy: 1 });
+    const view = magnetThiefGame.getPublicState(state(), playerId, context()) as {
+      players: Record<string, { facing: { dx: number; dy: number } }>;
+    };
+    expect(view.players[playerId]!.facing).toEqual({ dx: 1, dy: 1 });
+  });
+
+  it('clamps movement to the arena and never crosses an obstacle', () => {
+    const playerId = players[0]!.id;
+    const player = state().players[playerId]!;
+    player.x = 1.2;
+    player.y = 1.2;
+    for (let i = 0; i < 60; i += 1) {
+      platform.gameManager.handleAction(room, playerId, { type: 'move', payload: { dx: -1, dy: 0 } });
+    }
+    expect(player.x).toBeGreaterThanOrEqual(0.4);
+    expect(player.x).toBeLessThanOrEqual(18 - 0.4);
+    // Parked against the centre obstacle: stepping into it is refused.
+    player.x = 9;
+    player.y = 4.2;
+    const before = { x: player.x, y: player.y };
+    const blocked = platform.gameManager.handleAction(room, playerId, {
+      type: 'move',
+      payload: { dx: 0, dy: 1 },
+    });
+    expect(blocked.accepted).toBe(false);
+    expect(player.x).toBe(before.x);
+    expect(player.y).toBe(before.y);
+  });
+
+  it('collects a gem exactly once — a second pull cannot double-score it', () => {
+    const playerId = players[0]!.id;
+    const player = state().players[playerId]!;
+    const gem = state().gems[0]!;
+    gem.ownerId = null;
+    gem.x = player.x;
+    gem.y = player.y;
+    player.lastPullAt = 0;
+    const first = pullGems(playerId, state(), context());
+    expect(first.ok).toBe(true);
+    expect(gem.ownerId).toBe(playerId);
+    const scoreAfterFirst = player.score;
+    expect(player.carrying).toEqual([gem.id]);
+    player.lastPullAt = 0;
+    const second = pullGems(playerId, state(), context());
+    expect(second.ok).toBe(true);
+    expect(player.score).toBe(scoreAfterFirst);
+    expect(player.carrying).toEqual([gem.id]);
+  });
+
+  it('reports the stage-adjusted cooldown the server actually enforces', () => {
+    const playerId = players[0]!.id;
+    const player = state().players[playerId]!;
+    state().stage = 3; // stage 3 cooldown: 1400 ms, not the base 2000 ms.
+    player.lastPullAt = Date.now();
+    const view = magnetThiefGame.getPublicState(state(), playerId, context()) as {
+      players: Record<string, { cooldownLeft: number }>;
+    };
+    expect(view.players[playerId]!.cooldownLeft).toBeGreaterThan(0);
+    expect(view.players[playerId]!.cooldownLeft).toBeLessThanOrEqual(1400);
+  });
+
   it('attracts an unowned gem in range and enforces cooldown', () => {
     const playerId = players[0]!.id;
     const player = state().players[playerId]!;

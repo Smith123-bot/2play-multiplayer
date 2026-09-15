@@ -45,22 +45,55 @@ function SosGameComponent({
   const previousEvent = useRef<string | null>(null);
   const rules = useHowToPlay(SOS_GAME_METADATA.id, false);
   const [letter, setLetter] = useState<SosLetter>('S');
+  /** Transient invalid-move hint (cleared on the next valid server event). */
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<number | null>(null);
 
   const phase = state?.phase ?? 'idle';
   const canPlay = phase === 'playing' && Boolean(state?.isMyTurn);
 
+  const flashNotice = useCallback(
+    (message: string) => {
+      setNotice(message);
+      play('wrong');
+      vibrate('error');
+      if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
+      noticeTimer.current = window.setTimeout(() => {
+        noticeTimer.current = null;
+        setNotice(null);
+      }, 2200);
+    },
+    [play, vibrate],
+  );
+
+  useEffect(
+    () => () => {
+      if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
   const place = useCallback(
     (index: number) => {
-      if (!canPlay) return;
-      if (state?.board?.[index] != null) {
-        play('wrong');
-        vibrate('error');
+      // Cells stay pressable (not `disabled`) so illegal taps get feedback
+      // instead of silence — the server still rejects anything invalid.
+      if (phase !== 'playing') {
+        flashNotice('The match is over — start a rematch to play again.');
         return;
       }
+      if (!state?.isMyTurn) {
+        flashNotice('Wait for your turn.');
+        return;
+      }
+      if (state?.board?.[index] != null) {
+        flashNotice('That cell is already taken.');
+        return;
+      }
+      setNotice(null);
       sendAction({ type: 'place', payload: { index, letter } } satisfies GameAction);
       vibrate('buttonPress');
     },
-    [canPlay, state?.board, letter, sendAction, play, vibrate],
+    [phase, state?.isMyTurn, state?.board, letter, sendAction, flashNotice, vibrate],
   );
 
   // S / O keyboard shortcuts.
@@ -182,6 +215,12 @@ function SosGameComponent({
         ))}
       </div>
 
+      {notice ? (
+        <p role="alert" className="text-center text-sm font-medium text-amber-300">
+          {notice}
+        </p>
+      ) : null}
+
       <div
         className="mx-auto grid w-full max-w-[min(94vw,26rem)] gap-1.5"
         style={{ gridTemplateColumns: `repeat(${state.size}, minmax(0, 1fr))` }}
@@ -196,7 +235,7 @@ function SosGameComponent({
               key={index}
               type="button"
               whileTap={canPlay && cell === null ? { scale: 0.9 } : undefined}
-              disabled={!canPlay || cell !== null}
+              aria-disabled={!canPlay || cell !== null}
               onClick={() => place(index)}
               aria-label={cell ? `Cell ${index + 1} has ${cell}` : `Place ${letter} in cell ${index + 1}`}
               className={cn(

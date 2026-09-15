@@ -25,7 +25,7 @@ export function CountdownOverlay({ value, visible }: { value: number; visible: b
               }`}
               aria-live="assertive"
             >
-              {value === 0 ? 'GO!' : value}
+              {value === 0 ? 'GO' : value}
             </span>
           </motion.div>
         </motion.div>

@@ -55,6 +55,12 @@ export interface RoomState {
   players: Player[];
   /** Remaining seconds during COUNTDOWN. */
   countdownValue: number;
+  /**
+   * Epoch ms when the COUNTDOWN reaches GO. Clients derive the 3-2-1-GO
+   * phases from this timestamp (server clock) so every player — including
+   * late joiners and reconnects — sees the same phase. Null outside countdown.
+   */
+  countdownEndsAt: number | null;
   /** Increments on every rematch. */
   matchNumber: number;
   gameStartedAt: number | null;

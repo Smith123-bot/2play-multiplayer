@@ -40,6 +40,21 @@ export class StatisticsManager {
     { count: number; players: Set<string>; lastPlayedAt: number }
   >();
 
+  /**
+   * Idempotency guard: `room.id:matchNumber` pairs already written to the
+   * database. A duplicate `game:finished` emission (retried finish, double
+   * event) must never double-count a match; a rematch bumps `matchNumber`,
+   * so it always records as a separate match.
+   */
+  private readonly recordedMatches = new Set<string>();
+
+  /**
+   * The guard only needs to cover live rooms plus a safety margin — entries
+   * are evicted oldest-first so a long-lived process cannot grow this set
+   * without bound.
+   */
+  private static readonly RECORDED_MATCHES_CAP = 10_000;
+
   constructor(private readonly platform: Platform) {
     this.platform.eventBus.on('game:finished', ({ room, result }) => {
       this.recordGlobalPopularity(
@@ -83,6 +98,20 @@ export class StatisticsManager {
   }
 
   async recordMatch(room: Room, result: GameResult): Promise<void> {
+    const matchKey = `${room.id}:${room.matchNumber}`;
+    if (this.recordedMatches.has(matchKey)) {
+      this.logger.debug('duplicate finish ignored', {
+        roomId: room.id,
+        matchNumber: room.matchNumber,
+      });
+      return;
+    }
+    this.recordedMatches.add(matchKey);
+    while (this.recordedMatches.size > StatisticsManager.RECORDED_MATCHES_CAP) {
+      const oldest = this.recordedMatches.values().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.recordedMatches.delete(oldest);
+    }
     const players: PlayerSummary[] = room.orderedPlayers.map((player) => ({
       id: player.id,
       nickname: player.nickname,

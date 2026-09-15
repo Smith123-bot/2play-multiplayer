@@ -16,6 +16,11 @@ export interface StatisticsStoreState {
   statistics: GameStatistics[];
   history: GameHistoryEntry[];
   summary: StatisticsSummary | null;
+  /**
+   * The user id the cached statistics belong to. The cache is never served
+   * to a different user: after an identity change the next load refetches.
+   */
+  loadedUserId: string | null;
   loading: boolean;
   error: string | null;
   load: (force?: boolean) => Promise<void>;
@@ -26,17 +31,22 @@ export const useStatisticsStore = create<StatisticsStoreState>((set, get) => ({
   statistics: [],
   history: [],
   summary: null,
+  loadedUserId: null,
   loading: false,
   error: null,
 
   load: async (force = false) => {
     const session = useSessionStore.getState().session;
     if (!session) {
-      set({ statistics: [], history: [], summary: null, loading: false });
+      set({ statistics: [], history: [], summary: null, loadedUserId: null, loading: false });
       return;
     }
+    // Never serve one user's cached statistics to another identity.
+    if (get().loadedUserId !== null && get().loadedUserId !== session.userId) {
+      set({ statistics: [], history: [], summary: null, loadedUserId: null });
+    }
     if (get().loading) return;
-    if (!force && get().summary) return;
+    if (!force && get().summary && get().loadedUserId === session.userId) return;
 
     set({ loading: true, error: null });
     const [stats, history] = await Promise.all([
@@ -59,11 +69,13 @@ export const useStatisticsStore = create<StatisticsStoreState>((set, get) => ({
         winRate: 0,
         favoriteGameId: null,
       }) as unknown as StatisticsSummary,
+      loadedUserId: session.userId,
       history: history.ok && history.data ? history.data.history : [],
       loading: false,
       error: null,
     });
   },
 
-  clear: () => set({ statistics: [], history: [], summary: null, loading: false, error: null }),
+  clear: () =>
+    set({ statistics: [], history: [], summary: null, loadedUserId: null, loading: false, error: null }),
 }));

@@ -20,6 +20,7 @@ import { useChatStore } from '../stores/chatStore';
 import { useConnectionStore } from '../stores/connectionStore';
 import { getLocalPlayerId, setLocalPlayerId, useRoomStore } from '../stores/roomStore';
 import { useSessionStore } from '../stores/sessionStore';
+import { useStatisticsStore } from '../stores/statisticsStore';
 import { audioManager } from '../audio/AudioManager';
 import { hapticsManager } from '../haptics/HapticsManager';
 
@@ -157,6 +158,9 @@ export function useConnection(): { ensureSession: (nickname?: string, avatar?: s
 
     const offFinished = socketClient.on<GameFinishedPayload>(SERVER_EVENTS.GAME_FINISHED, (payload) => {
       useRoomStore.getState().setLastResult(payload.result);
+      // A finished match changed our statistics: refresh the cache in the
+      // background so Home/Stats show fresh numbers (failure keeps old data).
+      void useStatisticsStore.getState().load(true);
       const myId = getLocalPlayerId();
       const isWinner = payload.result.winners.includes(myId ?? '');
       audioManager.play(payload.result.isDraw ? 'draw' : isWinner ? 'victory' : 'defeat');

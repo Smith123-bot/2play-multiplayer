@@ -8,6 +8,7 @@ import { env, isProduction, parseCorsOrigins } from './config/env';
 import type { Platform } from './core/Platform';
 import { errorHandler, httpRateLimiter, notFoundHandler, requestLogger } from './middleware';
 import { createApiRouter } from './routes';
+import { healthzHandler } from './routes/health.routes';
 import { createLogger } from './utils/logger';
 
 const logger = createLogger('App');
@@ -59,6 +60,10 @@ export function createApp(platform: Platform): Express {
   app.use(express.json({ limit: '32kb' }));
   app.use(express.urlencoded({ extended: false, limit: '32kb' }));
   app.use(requestLogger);
+
+  // Bare liveness probe, mounted outside `/api` so monitor traffic is never
+  // subject to the API rate limiter. Helmet/CORS still apply (global above).
+  app.get('/healthz', healthzHandler);
 
   app.use('/api', httpRateLimiter, createApiRouter(platform));
 

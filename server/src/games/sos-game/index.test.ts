@@ -267,6 +267,35 @@ describe('SOS Game', () => {
     expect(state().finishReason).toBe('forfeit');
   });
 
+  it('a rematch start clears the board, scores, lines and turn after a finished game', () => {
+    place(current(), at(0, 0), 'S');
+    place(current(), at(1, 0), 'O');
+    finishSos(state(), context(), 'completed');
+    expect(state().phase).toBe('finished');
+
+    const rematch = sosGame.reset(state());
+    (room as { gameState: unknown }).gameState = rematch;
+    sosGame.start(rematch, context());
+
+    expect(rematch.phase).toBe('playing');
+    expect(rematch.board).toHaveLength(25);
+    expect(rematch.board.every((cell) => cell === null)).toBe(true);
+    expect(rematch.lines).toHaveLength(0);
+    expect(rematch.moves).toBe(0);
+    expect(rematch.lastMove).toBeNull();
+    expect(rematch.winnerId).toBeNull();
+    expect(rematch.isDraw).toBe(false);
+    expect(Object.values(rematch.players).every((slot) => slot.score === 0 && slot.moves === 0)).toBe(
+      true,
+    );
+    // A first turn is live with a deadline, and the starter alternates.
+    expect(rematch.currentPlayerId).toBeTruthy();
+    expect(rematch.turnEndsAt).toBeGreaterThan(0);
+    const accepted = place(rematch.currentPlayerId as string, at(2, 2), 'S');
+    expect(accepted.accepted).toBe(true);
+    expect(rematch.board[at(2, 2)]).toBe('S');
+  });
+
   it('reset and cleanup prepare a rematch', () => {
     place(current(), at(0, 0), 'S');
     finishSos(state(), context(), 'completed');

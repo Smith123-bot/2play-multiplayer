@@ -6,8 +6,6 @@ import type { Player, RoomState } from '@2play/shared';
 import type { GameComponentProps } from './registry/types';
 import { drawGuessClient, type DrawGuessPublicState } from './draw-guess-battle';
 import { territoryRushClient, type TerritoryRushPublicState } from './territory-rush';
-import { coinHuntersClient, type CoinHuntersPublicState } from './coin-hunters-arena';
-import { shopRushClient, type ShopPublicState } from './shop-rush-battle';
 
 const players = [
   {
@@ -134,90 +132,4 @@ describe('Batch 2 premium game clients', () => {
     });
   });
 
-  it('renders real Coin Hunter rounds/streaks and sequences movement', async () => {
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
-    const hunter = {
-      x: 1,
-      y: 1,
-      direction: 'right',
-      score: 75,
-      coins: 4,
-      multiplier: true,
-      streak: 3,
-      bestStreak: 4,
-      latestInputSeq: 9,
-      disconnected: false,
-    };
-    const state = {
-      phase: 'playing',
-      cols: 18,
-      rows: 12,
-      stepMs: 190,
-      stepIndex: 2,
-      startedAt: Date.now(),
-      endsAt: Date.now() + 20_000,
-      durationMs: 150_000,
-      finishReason: null,
-      lastEvent: null,
-      serverTime: Date.now(),
-      bonus: { x: 8, y: 5, w: 3, h: 2 },
-      slow: [],
-      blocker: { x: 9, y: 1, direction: 'down' },
-      walls: [20],
-      layout: 'lanes',
-      round: 3,
-      coins: [{ id: 'c1', x: 3, y: 3, kind: 'gold', value: 25, expiresAt: Date.now() + 5000 }],
-      hunters: { p1: hunter, p2: { ...hunter, x: 16, latestInputSeq: 0 } },
-    } as CoinHuntersPublicState;
-    const send = renderGame(coinHuntersClient, state);
-    expect(screen.getByText('Round 3/3 · lanes')).toBeInTheDocument();
-    expect(screen.getByText('Streak x3')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Move down' }));
-    expect(send).toHaveBeenCalledWith({
-      type: 'move',
-      payload: { direction: 'down', sequence: 10 },
-    });
-  });
-
-  it('renders Shop Rush customer progress and sends authoritative checkout', async () => {
-    const shopper = {
-      x: 5,
-      y: 8,
-      inventory: ['milk'],
-      list: ['milk', 'bread'],
-      score: 90,
-      checkouts: 2,
-      combo: 2,
-      bestCombo: 2,
-      correctItems: 4,
-      wrongItems: 1,
-      missedOrders: 0,
-      orderNumber: 3,
-      orderDeadline: Date.now() + 15_000,
-      latestInputSeq: 4,
-      disconnected: false,
-      basketSize: 1,
-    };
-    const state = {
-      phase: 'playing',
-      cols: 11,
-      rows: 9,
-      shelves: [{ x: 2, y: 2, item: 'milk' }],
-      till: { x: 5, y: 8 },
-      startedAt: Date.now(),
-      endsAt: Date.now() + 40_000,
-      durationMs: 120_000,
-      finishReason: null,
-      lastEvent: null,
-      eventSeq: 2,
-      serverTime: Date.now(),
-      shoppers: { p1: shopper, p2: { ...shopper, inventory: ['hidden'], list: [] } },
-    } as ShopPublicState;
-    const send = renderGame(shopRushClient, state);
-    expect(screen.getByText('Customer order 3')).toBeInTheDocument();
-    expect(screen.getByText('Service streak x2')).toBeInTheDocument();
-    expect(screen.getByText('Accuracy 80%')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Checkout' }));
-    expect(send).toHaveBeenCalledWith({ type: 'checkout' });
-  });
 });

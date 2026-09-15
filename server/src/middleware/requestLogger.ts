@@ -9,6 +9,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   res.on('finish', () => {
     const duration = Date.now() - startedAt;
     if (req.path.startsWith('/api/health') && res.statusCode < 400) return;
+    if (req.path === '/healthz' && res.statusCode < 400) return;
     logger.debug('http request', {
       method: req.method,
       path: req.path,

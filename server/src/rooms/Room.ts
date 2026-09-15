@@ -44,6 +44,8 @@ export class Room {
   public readonly rematchVotes = new Map<string, boolean>();
   public rematchDeadline: number | null = null;
   public countdownValue = 0;
+  /** Epoch ms of the GO moment; null when no countdown is running. */
+  public countdownEndsAt: number | null = null;
   public matchNumber = 1;
 
   public readonly createdAt: number = Date.now();
@@ -267,6 +269,7 @@ export class Room {
       status: this.status,
       players: this.orderedPlayers.map((player) => player.toPublic()),
       countdownValue: this.countdownValue,
+      countdownEndsAt: this.countdownEndsAt,
       matchNumber: this.matchNumber,
       gameStartedAt: this.gameStartedAt,
       gameResult: this.gameResult,

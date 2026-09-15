@@ -280,7 +280,9 @@ export function stepTerritory(
       const other = state.runners[otherId]!;
       if (other.trail.includes(plan.i)) {
         dead.add(otherId);
-        outcome.cuts.push(otherId);
+        // Two cutters can cross the same trail on one step — record the
+        // victim once so the event and the UI never double-count the cut.
+        if (!outcome.cuts.includes(otherId)) outcome.cuts.push(otherId);
       }
     }
   }
@@ -753,6 +755,14 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       return true;
     });
     const pool = safe.length > 0 ? safe : options;
+    // Steering candidates must stay on the map: `options` can hold
+    // wall-facing directions, and an out-of-bounds grid read is `undefined`
+    // (never the owner), which used to make the AI *prefer* walls.
+    const onMap = pool.filter((dir) => {
+      const n = { x: runner.x + DELTA[dir].dx, y: runner.y + DELTA[dir].dy };
+      return inBounds(cols, rows, n.x, n.y);
+    });
+    const steerPool = onMap.length > 0 ? onMap : pool;
     if (difficulty === 'easy' && ctx.random() < 0.45) {
       return {
         type: 'turn',
@@ -760,7 +770,7 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       };
     }
     if (runner.trail.length > (difficulty === 'hard' ? 14 : 22)) {
-      const homeward = pool.reduce((best, dir) => {
+      const homeward = steerPool.reduce((best, dir) => {
         const n = { x: runner.x + DELTA[dir].dx, y: runner.y + DELTA[dir].dy };
         const home = runner.home[0] ?? 0;
         const hx = home % cols;
@@ -772,8 +782,9 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       }, pool[0]!);
       return { type: 'turn', payload: { direction: homeward } };
     }
-    const prefer = pool.filter((dir) => {
+    const prefer = steerPool.filter((dir) => {
       const n = { x: runner.x + DELTA[dir].dx, y: runner.y + DELTA[dir].dy };
+      if (!inBounds(cols, rows, n.x, n.y)) return false;
       return grid[cellIndex(cols, n.x, n.y)] !== runner.owner;
     });
     const chosen = (prefer.length > 0 ? prefer : pool)[

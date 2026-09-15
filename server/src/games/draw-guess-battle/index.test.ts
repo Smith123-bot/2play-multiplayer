@@ -51,13 +51,21 @@ describe('Draw & Guess Battle', () => {
       scores: Record<string, number>;
     };
 
-  it('the word bank holds at least 500 unique family-friendly prompts', () => {
-    expect(ALL_WORDS.length).toBeGreaterThanOrEqual(500);
+  it('the word bank holds at least 900 unique family-friendly prompts', () => {
+    expect(ALL_WORDS.length).toBeGreaterThanOrEqual(900);
     const names = new Set(ALL_WORDS.map((entry) => entry.word));
     expect(names.size).toBe(ALL_WORDS.length); // no duplicates
     for (const entry of ALL_WORDS) {
       expect(entry.word).toMatch(/^[a-z0-9 -]+$/); // plain, common, safe
       expect(entry.word.length).toBeGreaterThan(1);
+    }
+    // Recognisable everyday anchors are always in the pool.
+    for (const anchor of [
+      'cat', 'dog', 'pizza', 'banana', 'ice cream', 'ball', 'phone', 'car', 'rocket',
+      'sun', 'moon', 'tree', 'house', 'fish', 'chicken', 'monkey', 'robot',
+      'sunglasses', 'umbrella', 'birthday cake',
+    ]) {
+      expect(names.has(anchor)).toBe(true);
     }
   });
 

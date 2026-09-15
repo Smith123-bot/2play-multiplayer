@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Award, BarChart3, Clock, Trophy } from 'lucide-react';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { EmptyState } from '../components/ui/EmptyState';
 import { LoadingBlock } from '../components/ui/Spinner';
@@ -12,7 +13,7 @@ import { useSessionStore } from '../stores/sessionStore';
 import { formatDuration } from '../utils/format';
 
 export function StatisticsScreen() {
-  const { statistics, history, summary, loading, load } = useStatisticsStore();
+  const { statistics, history, summary, loading, error, load } = useStatisticsStore();
   const games = useGameStore((store) => store.games);
   const loadGames = useGameStore((store) => store.load);
   const session = useSessionStore((store) => store.session);
@@ -45,6 +46,19 @@ export function StatisticsScreen() {
         <h1 className="text-3xl font-bold text-white">Statistics</h1>
         <p className="mt-1 text-sm text-slate-400">Your results across every 2PLAY game.</p>
       </header>
+
+      {error ? (
+        <Card role="alert">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-300">
+              Couldn&apos;t refresh statistics ({error}). Showing the last known data.
+            </p>
+            <Button variant="secondary" size="sm" onClick={() => void load(true)}>
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       {summary ? (
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -267,21 +267,17 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 🧩 Maze Race 2D | reflex | 2–4 | yes | Seeded maze, first to the flag |
 | 🔀 Word Scramble Battle | word | 2–4 | yes | Hidden word until reveal |
 | 🔶 Shape Match Battle | reflex | 2–4 | yes | Server-owned matching target |
-| 🐍 Snake Battle | reflex | 2 | yes | Shared grid, server-stepped snakes |
+| 🐍 Snake Battle | reflex | 2 | yes | Shared grid, server-stepped snakes, 3 lives, fair pass-through collisions |
 | 🎯 Target Rush | reflex | 2 | yes | First correct tap, combos |
 | 🏓 Paddle Duel | reflex | 2 | yes | Server-simulated ball |
 | 🧱 Brick Breaker Battle | reflex | 2 | yes | Mirrored walls, combos |
 | 🔮 Pattern Memory Battle | memory | 2 | yes | Hidden sequence until reveal |
-| 🎨 Draw & Guess Battle | word | 2–4 | yes | Secret word, stroke sync, guess scoring |
+| 🎨 Draw & Guess Battle | word | 2–4 | yes | Secret word, 900+ easy prompts, smooth canvas, guess scoring |
 | 🕵️ Secret Role | strategy | 3–4 | yes | Private roles, no identity leak |
 | 🌈 Color Clash | reflex | 2–4 | yes | Fast colour rounds, labelled buttons |
 | 🗺️ Territory Rush | reflex | 2–4 | yes | Grid capture, flood-fill loops, trail cuts |
-| 🪙 Coin Hunters Arena | reflex | 2–4 | yes | Server-spawned coins, multipliers, bonus zone |
-| 🛒 Shop Rush Battle | strategy | 2–4 | yes | Private lists, limited inventory, server checkout |
 | 🚪 Fake Door Battle | memory | 2–4 | yes | Learnable clues, server-owned safe door |
 | 🧲 Magnet Thief | strategy | 2–4 | yes | Server magnet range, cooldown, steal and ownership |
-| 💥 Chain Reaction Battle | strategy | 2–4 | yes | Trigger a node; the server owns chain length, multipliers and score |
-| 🔘 One Button Battle | reflex | 2–4 | yes | One tap, many contexts; server-owned timing windows |
 | 🌍 Split World | strategy | 2–4 | yes | Shared true world, per-player views; hidden tiles never leave the server |
 | 🎲 Ludo | strategy | 2–4 | yes | Server-rolled dice, token captures, safe squares, four tokens home |
 | ➡️ Arrow Puzzle | strategy | 2–4 | yes | Identical seeded boards, path-gated arrows, placement + speed bonuses |
@@ -296,7 +292,6 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 🔺 Sim | strategy | 2 | yes | Claim edges on six dots — completing a triangle in your colour loses |
 | 🪟 Mirror Grid | strategy | 2–4 | yes | Reflection puzzles, level progression, wrong-submission penalty |
 | 💡 Fuse | strategy | 2–4 | yes | Rotate wire tiles until every source reaches its matching bulb |
-| 🁣 Domino Mind | strategy | 2–4 | yes | Build a domino chain, push the starter, hit every target |
 
 Every game is server-authoritative: clients send *intents*, the server decides
 legality, scores, winners and timers.

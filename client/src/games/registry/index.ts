@@ -3,7 +3,7 @@ import type { ClientGameModule } from './types';
 /**
  * Client game registry — lazily loaded, one Vite chunk per game.
  *
- * All 40 games used to be imported eagerly, which put every game's renderer
+ * All 35 games used to be imported eagerly, which put every game's renderer
  * (including the chess engine, ludo board and canvas games) into the initial
  * bundle and made the Home page download ~850 KB of JavaScript before showing a
  * single card. Each game is now a dynamic import, so its chunk is fetched only
@@ -22,14 +22,11 @@ const loaders: Record<string, GameLoader> = {
   'arrow-puzzle': () => import('../arrow-puzzle').then((m) => m.arrowPuzzleClient),
   'black-blast': () => import('../black-blast').then((m) => m.blackBlastClient),
   'brick-breaker-battle': () => import('../brick-breaker-battle').then((m) => m.brickBreakerClient),
-  'chain-reaction-battle': () => import('../chain-reaction-battle').then((m) => m.chainReactionClient),
   'chess': () => import('../chess').then((m) => m.chessClient),
-  'coin-hunters-arena': () => import('../coin-hunters-arena').then((m) => m.coinHuntersClient),
   'color-clash': () => import('../color-clash').then((m) => m.colorClashClient),
   'connect-four': () => import('../connect-four').then((m) => m.connectFourClient),
   'couple-memory': () => import('../couple-memory').then((m) => m.coupleMemoryClient),
   'couple-sync': () => import('../couple-sync').then((m) => m.coupleSyncClient),
-  'domino-mind': () => import('../domino-mind').then((m) => m.dominoMindClient),
   'dots-and-boxes': () => import('../dots-and-boxes').then((m) => m.dotsAndBoxesClient),
   'draw-guess-battle': () => import('../draw-guess-battle').then((m) => m.drawGuessClient),
   'fake-door-battle': () => import('../fake-door-battle').then((m) => m.fakeDoorClient),
@@ -41,14 +38,12 @@ const loaders: Record<string, GameLoader> = {
   'maze-race-2d': () => import('../maze-race-2d').then((m) => m.mazeRaceClient),
   'memory-match': () => import('../memory-match').then((m) => m.memoryMatchClient),
   'mirror-grid': () => import('../mirror-grid').then((m) => m.mirrorGridClient),
-  'one-button-battle': () => import('../one-button-battle').then((m) => m.oneButtonClient),
   'paddle-duel': () => import('../paddle-duel').then((m) => m.paddleDuelClient),
   'pattern-memory-battle': () => import('../pattern-memory-battle').then((m) => m.patternMemoryClient),
   'reaction-race': () => import('../reaction-race').then((m) => m.reactionRaceClient),
   'rock-paper-scissors': () => import('../rock-paper-scissors').then((m) => m.rockPaperScissorsClient),
   'secret-role': () => import('../secret-role').then((m) => m.secretRoleClient),
   'shape-match-battle': () => import('../shape-match-battle').then((m) => m.shapeMatchClient),
-  'shop-rush-battle': () => import('../shop-rush-battle').then((m) => m.shopRushClient),
   'sim': () => import('../sim').then((m) => m.simClient),
   'snake-battle': () => import('../snake-battle').then((m) => m.snakeBattleClient),
   'sos-game': () => import('../sos-game').then((m) => m.sosGameClient),

@@ -79,8 +79,12 @@ export class GameLifecycleManager {
 
     this.transition(room, 'COUNTDOWN');
     room.countdownValue = COUNTDOWN_SECONDS;
+    // The authoritative GO timestamp: clients derive the 3-2-1-GO phases from
+    // this (server clock), so every player sees the same phase without the
+    // server re-broadcasting every tick.
+    room.countdownEndsAt = Date.now() + COUNTDOWN_SECONDS * 1000;
 
-    const durationMs = (COUNTDOWN_SECONDS + 1) * 1000;
+    const durationMs = COUNTDOWN_SECONDS * 1000;
     this.platform.timerManager.create({
       roomId: room.id,
       type: 'countdown',
@@ -90,7 +94,8 @@ export class GameLifecycleManager {
       key: 'start',
       label: 'match-countdown',
       onTick: ({ remainingMs }) => {
-        const value = Math.max(1, Math.ceil(remainingMs / 1000) - 1);
+        // remaining ≈2000 → 2, ≈1000 → 1; completion emits 0 (GO).
+        const value = Math.max(0, Math.ceil(remainingMs / 1000));
         room.countdownValue = value;
         this.platform.socketManager?.emitToRoom(room.id, 'game:countdown', {
           roomId: room.id,
@@ -214,6 +219,7 @@ export class GameLifecycleManager {
     this.platform.timerManager.cancelByType(room.id, 'turn');
     this.platform.timerManager.cancelByType(room.id, 'countdown');
     this.platform.timerManager.cancelByType(room.id, 'gameDuration');
+    room.countdownEndsAt = null;
 
     const result = this.platform.gameManager.buildResult(room, reason);
     room.gameResult = result;

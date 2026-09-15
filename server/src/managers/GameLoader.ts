@@ -17,12 +17,8 @@ import { drawGuessGame } from '../games/draw-guess-battle';
 import { secretRoleGame } from '../games/secret-role';
 import { colorClashGame } from '../games/color-clash';
 import { territoryRushGame } from '../games/territory-rush';
-import { coinHuntersGame } from '../games/coin-hunters-arena';
-import { shopRushGame } from '../games/shop-rush-battle';
 import { fakeDoorGame } from '../games/fake-door-battle';
 import { magnetThiefGame } from '../games/magnet-thief';
-import { chainReactionGame } from '../games/chain-reaction-battle';
-import { oneButtonGame } from '../games/one-button-battle';
 import { splitWorldGame } from '../games/split-world';
 import { connectFourGame } from '../games/connect-four';
 import { hangmanGame } from '../games/hangman';
@@ -32,7 +28,6 @@ import { unoGame } from '../games/uno';
 import { simGame } from '../games/sim';
 import { mirrorGridGame } from '../games/mirror-grid';
 import { fuseGame } from '../games/fuse';
-import { dominoMindGame } from '../games/domino-mind';
 import { coupleSyncGame } from '../games/couple-sync';
 import { coupleMemoryGame } from '../games/couple-memory';
 import { ludoGame } from '../games/ludo';
@@ -73,12 +68,8 @@ export class GameLoader {
       secretRoleGame,
       colorClashGame,
       territoryRushGame,
-      coinHuntersGame,
-      shopRushGame,
       fakeDoorGame,
       magnetThiefGame,
-      chainReactionGame,
-      oneButtonGame,
       splitWorldGame,
       ludoGame,
       arrowPuzzleGame,
@@ -93,7 +84,6 @@ export class GameLoader {
       simGame,
       mirrorGridGame,
       fuseGame,
-      dominoMindGame,
       rockPaperScissorsGame,
     ];
 

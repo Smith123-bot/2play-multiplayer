@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { KeyRound, RefreshCw } from 'lucide-react';
-import type { RoomSummary } from '@2play/shared';
 import { normalizeRoomCode } from '@2play/shared';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -9,6 +8,7 @@ import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useRoomActions } from '../hooks/useRoomActions';
+import { usePublicRooms } from '../hooks/usePublicRooms';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import { useSessionStore } from '../stores/sessionStore';
 import { useGameStore } from '../stores/gameStore';
@@ -17,7 +17,7 @@ export function JoinRoomScreen() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const gate = useIdentityGate();
-  const { joinRoom, listRooms } = useRoomActions();
+  const { joinRoom } = useRoomActions();
   const recentRooms = useSessionStore((store) => store.recentRooms);
   const games = useGameStore((store) => store.games);
   const loadGames = useGameStore((store) => store.load);
@@ -25,9 +25,11 @@ export function JoinRoomScreen() {
   const [code, setCode] = useState(normalizeRoomCode(params.get('code') ?? ''));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [rooms, setRooms] = useState<RoomSummary[]>([]);
-  const [loadingRooms, setLoadingRooms] = useState(false);
   const gameFilter = params.get('game');
+  /** Live public listing (server pushes + explicit refresh on demand). */
+  const { rooms, loading: loadingRooms, refresh: refreshRooms } = usePublicRooms(
+    gameFilter ?? undefined,
+  );
 
   useEffect(() => {
     void loadGames();
@@ -37,18 +39,6 @@ export function JoinRoomScreen() {
     const value = normalizeRoomCode(params.get('code') ?? '');
     if (value) setCode(value);
   }, [params]);
-
-  const refreshRooms = async () => {
-    setLoadingRooms(true);
-    const result = await listRooms(gameFilter ?? undefined);
-    setRooms(result);
-    setLoadingRooms(false);
-  };
-
-  useEffect(() => {
-    void refreshRooms();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameFilter]);
 
   const submit = () => {
     const clean = normalizeRoomCode(code);

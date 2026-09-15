@@ -57,6 +57,7 @@ function DrawGuessGame({
   vibrate,
 }: GameComponentProps<DrawGuessPublicState>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const localPoints = useRef<DrawPoint[]>([]);
   const [color, setColor] = useState('#111827');
@@ -73,7 +74,25 @@ function DrawGuessGame({
   const canGuess = phase === 'drawing' && !iAmDrawer && !iSolved;
   const drawer = players.find((player) => player.id === state?.drawerId);
 
-  const paint = useCallback(() => {
+  // ---- Smooth canvas system -------------------------------------------------
+  // Two layers: the base canvas replays the server's stroke list, the overlay
+  // canvas shows the in-progress local stroke. All pointer input is handled
+  // with refs only (no per-point React re-renders), pointer capture keeps the
+  // stroke alive outside the canvas, and both repaints are coalesced into a
+  // single requestAnimationFrame. Socket sync is throttled: a chunk is sent
+  // every 100 ms or 32 points, overlapping by one point so chunked segments
+  // join seamlessly on every screen.
+  const strokesRef = useRef<DrawStroke[]>([]);
+  const canDrawRef = useRef(canDraw);
+  canDrawRef.current = canDraw;
+  const styleRef = useRef({ color, size, tool });
+  useEffect(() => {
+    styleRef.current = { color, size, tool };
+  }, [color, size, tool]);
+  const frameQueued = useRef(false);
+  const lastFlushAt = useRef(0);
+
+  const paintBase = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -82,12 +101,21 @@ function DrawGuessGame({
     const h = canvas.height;
     ctx.fillStyle = '#f8fafc';
     ctx.fillRect(0, 0, w, h);
-    for (const stroke of state?.strokes ?? []) {
+    for (const stroke of strokesRef.current) {
       if (stroke.points.length === 0) continue;
       ctx.strokeStyle = stroke.tool === 'eraser' ? '#f8fafc' : stroke.color;
+      ctx.fillStyle = stroke.tool === 'eraser' ? '#f8fafc' : stroke.color;
       ctx.lineWidth = Math.max(2, (stroke.size / 28) * 18);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+      if (stroke.points.length === 1) {
+        // A single tap is a dot, not an invisible moveTo.
+        const only = stroke.points[0]!;
+        ctx.beginPath();
+        ctx.arc(only.x * w, only.y * h, Math.max(1, (stroke.size / 28) * 9), 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
       ctx.beginPath();
       stroke.points.forEach((point, index) => {
         const x = point.x * w;
@@ -97,11 +125,60 @@ function DrawGuessGame({
       });
       ctx.stroke();
     }
-  }, [state?.strokes]);
+  }, []);
+
+  const paintPreview = useCallback(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const ctx = overlay.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    const points = localPoints.current;
+    if (points.length === 0) return;
+    const { color: liveColor, size: liveSize, tool: liveTool } = styleRef.current;
+    const paint = liveTool === 'eraser' ? '#f8fafc' : liveColor;
+    ctx.strokeStyle = paint;
+    ctx.fillStyle = paint;
+    ctx.lineWidth = Math.max(2, (liveSize / 28) * 18);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (points.length === 1) {
+      const only = points[0]!;
+      ctx.beginPath();
+      ctx.arc(
+        only.x * overlay.width,
+        only.y * overlay.height,
+        Math.max(1, (liveSize / 28) * 9),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      return;
+    }
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const x = point.x * overlay.width;
+      const y = point.y * overlay.height;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }, []);
+
+  const schedulePaint = useCallback(() => {
+    if (frameQueued.current) return;
+    frameQueued.current = true;
+    requestAnimationFrame(() => {
+      frameQueued.current = false;
+      paintBase();
+      paintPreview();
+    });
+  }, [paintBase, paintPreview]);
 
   useEffect(() => {
-    paint();
-  }, [paint]);
+    strokesRef.current = state?.strokes ?? [];
+    schedulePaint();
+  }, [state?.strokes, schedulePaint]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -109,71 +186,96 @@ function DrawGuessGame({
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
       const dpr = Math.min(2, window.devicePixelRatio || 1);
-      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-      paint();
+      const width = Math.max(1, Math.floor(rect.width * dpr));
+      const height = Math.max(1, Math.floor(rect.height * dpr));
+      canvas.width = width;
+      canvas.height = height;
+      const overlay = overlayRef.current;
+      if (overlay) {
+        overlay.width = width;
+        overlay.height = height;
+      }
+      schedulePaint();
     };
     resize();
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
-  }, [paint]);
+  }, [schedulePaint]);
 
-  const toNorm = (event: PointerEvent<HTMLCanvasElement>): DrawPoint | null => {
+  const toNormPoint = useCallback((clientX: number, clientY: number): DrawPoint | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
     return {
-      x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
-      y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+      x: Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)),
+      y: Math.min(1, Math.max(0, (clientY - rect.top) / rect.height)),
     };
-  };
+  }, []);
 
-  const flushStroke = () => {
-    if (!canDraw || localPoints.current.length === 0) {
+  const flushStroke = useCallback(() => {
+    const pending = localPoints.current;
+    if (pending.length === 0) return;
+    if (!canDrawRef.current) {
       localPoints.current = [];
+      schedulePaint();
       return;
     }
+    const { color: liveColor, size: liveSize, tool: liveTool } = styleRef.current;
     sendAction({
       type: 'stroke',
-      payload: { color, size, tool, points: localPoints.current },
+      payload: { color: liveColor, size: liveSize, tool: liveTool, points: pending },
     } satisfies GameAction);
-    localPoints.current = [];
-  };
+    // Keep the last point so the next chunk joins seamlessly (the server
+    // caps a chunk at 40 points, well above our 32-point flush size).
+    const last = pending[pending.length - 1]!;
+    localPoints.current = drawing.current ? [last] : [];
+  }, [sendAction, schedulePaint]);
 
-  const onPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (!canDraw) return;
-    event.preventDefault();
-    drawing.current = true;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const point = toNorm(event);
-    if (point) localPoints.current = [point];
-  };
-
-  const onPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (!drawing.current || !canDraw) return;
-    event.preventDefault();
-    const point = toNorm(event);
-    if (!point) return;
-    const previous = localPoints.current.at(-1);
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (previous && canvas && ctx) {
-      ctx.strokeStyle = tool === 'eraser' ? '#f8fafc' : color;
-      ctx.lineWidth = Math.max(2, (size / 28) * 18);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(previous.x * canvas.width, previous.y * canvas.height);
-      ctx.lineTo(point.x * canvas.width, point.y * canvas.height);
-      ctx.stroke();
-    }
-    localPoints.current.push(point);
-    if (localPoints.current.length >= 16) flushStroke();
-  };
-
-  const onPointerUp = () => {
+  const endStroke = useCallback(() => {
     if (!drawing.current) return;
     drawing.current = false;
     flushStroke();
+    localPoints.current = [];
+    schedulePaint();
+  }, [flushStroke, schedulePaint]);
+
+  // If drawing rights end mid-stroke (round over), finish cleanly.
+  useEffect(() => {
+    if (!canDraw && drawing.current) endStroke();
+  }, [canDraw, endStroke]);
+
+  const onPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!canDrawRef.current) return;
+    event.preventDefault();
+    drawing.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    lastFlushAt.current = performance.now();
+    const point = toNormPoint(event.clientX, event.clientY);
+    localPoints.current = point ? [point] : [];
+    schedulePaint();
+  };
+
+  const onPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current || !canDrawRef.current) return;
+    event.preventDefault();
+    // Coalesced events recover the in-between samples browsers batch,
+    // which is what makes fast strokes look smooth instead of polygonal.
+    const native = event.nativeEvent;
+    const samples: Array<{ clientX: number; clientY: number }> =
+      typeof native.getCoalescedEvents === 'function' && native.getCoalescedEvents().length > 0
+        ? native.getCoalescedEvents()
+        : [native];
+    for (const sample of samples) {
+      const point = toNormPoint(sample.clientX, sample.clientY);
+      if (point) localPoints.current.push(point);
+    }
+    schedulePaint();
+    const now = performance.now();
+    if (localPoints.current.length >= 32 || now - lastFlushAt.current >= 100) {
+      lastFlushAt.current = now;
+      flushStroke();
+    }
   };
 
   const solvedCount = state?.solved?.length ?? 0;
@@ -269,19 +371,24 @@ function DrawGuessGame({
         ) : null}
       </div>
 
-      <div className="mx-auto w-full max-w-lg">
+      <div className="relative mx-auto w-full max-w-lg">
         <canvas
           ref={canvasRef}
           role="img"
           aria-label="Shared drawing canvas"
           className={cn(
-            'touch-none h-64 w-full rounded-2xl border border-white/10 bg-slate-50 sm:h-80',
+            'touch-none block h-64 w-full rounded-2xl border border-white/10 bg-slate-50 sm:h-80',
             canDraw ? 'cursor-crosshair' : 'cursor-default',
           )}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          onPointerUp={endStroke}
+          onPointerCancel={endStroke}
+        />
+        <canvas
+          ref={overlayRef}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 block h-full w-full rounded-2xl"
         />
       </div>
 

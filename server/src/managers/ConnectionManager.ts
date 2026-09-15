@@ -69,6 +69,33 @@ export class ConnectionManager {
         });
         return { session: this.toSessionInfo(existing), restored: true };
       }
+      // Not in memory (server restart, idle prune, multi-instance): the token
+      // is the persistent identity, so look the user up in the database before
+      // concluding it is unknown. Restoring the SAME user id is what keeps
+      // statistics/history/favorites attached to the player across browser
+      // restarts instead of orphaning them under a duplicate user row.
+      const storedUser = await this.platform.database.findUserBySession(input.sessionToken);
+      if (storedUser) {
+        const restored: Session = {
+          token: input.sessionToken,
+          userId: storedUser.id,
+          playerId: storedUser.id,
+          nickname: input.nickname,
+          avatar,
+          socketId: input.socketId,
+          roomId: null,
+          createdAt: Date.now(),
+          lastSeenAt: Date.now(),
+        };
+        this.sessionsByToken.set(restored.token, restored);
+        this.tokenByPlayer.set(restored.playerId, restored.token);
+        this.tokenBySocket.set(input.socketId, restored.token);
+        this.logger.info('session restored from database', { userId: restored.userId });
+        void this.platform.database
+          .updateUser(restored.userId, { nickname: input.nickname, avatar })
+          .catch(() => undefined);
+        return { session: this.toSessionInfo(restored), restored: true };
+      }
       // Unknown token: treat as a new session rather than failing the user.
       this.logger.warn('unknown session token supplied — minting a new session');
     }

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, type ComponentType } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type ComponentType,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
 import { MAGNET_THIEF_METADATA, type GameAction } from '@2play/shared';
 import type { ClientGameModule, GameComponentProps } from '../registry/types';
@@ -33,6 +39,7 @@ export interface MagnetThiefPublicState {
     {
       x: number;
       y: number;
+      facing: { dx: number; dy: number };
       score: number;
       stolen: number;
       carrying: number;
@@ -52,6 +59,51 @@ const DPAD = [
   { dx: 1, dy: 0, icon: ArrowRight, label: 'Move right', area: 'col-start-3 row-start-2' },
 ];
 const SEAT = ['#818cf8', '#34d399', '#f472b6', '#fbbf24'];
+/** Held-movement cadence: one server step per interval while held. */
+const MOVE_REPEAT_MS = 130;
+/** Minimum drag length before the arena steers the magnet. */
+const DRAG_MIN_PX = 24;
+/** Diagonals are scaled so hypot(dx, dy) stays inside the server's 1.1 cap. */
+const DIAGONAL = 0.75;
+
+const KEY_DIRS: Record<string, { dx: number; dy: number }> = {
+  ArrowUp: { dx: 0, dy: -1 },
+  ArrowDown: { dx: 0, dy: 1 },
+  ArrowLeft: { dx: -1, dy: 0 },
+  ArrowRight: { dx: 1, dy: 0 },
+  w: { dx: 0, dy: -1 },
+  s: { dx: 0, dy: 1 },
+  a: { dx: -1, dy: 0 },
+  d: { dx: 1, dy: 0 },
+  W: { dx: 0, dy: -1 },
+  S: { dx: 0, dy: 1 },
+  A: { dx: -1, dy: 0 },
+  D: { dx: 1, dy: 0 },
+};
+
+/** Quantizes a drag vector to one of the 8 server-legal step directions. */
+function quantizeDrag(dx: number, dy: number): { dx: number; dy: number } {
+  const angle = Math.atan2(dy, dx);
+  const octant = Math.round(angle / (Math.PI / 4));
+  switch (((octant % 8) + 8) % 8) {
+    case 0:
+      return { dx: 1, dy: 0 };
+    case 1:
+      return { dx: DIAGONAL, dy: DIAGONAL };
+    case 2:
+      return { dx: 0, dy: 1 };
+    case 3:
+      return { dx: -DIAGONAL, dy: DIAGONAL };
+    case 4:
+      return { dx: -1, dy: 0 };
+    case 5:
+      return { dx: -DIAGONAL, dy: -DIAGONAL };
+    case 6:
+      return { dx: 0, dy: -1 };
+    default:
+      return { dx: DIAGONAL, dy: -DIAGONAL };
+  }
+}
 
 function MagnetThiefGame({
   state,
@@ -61,25 +113,74 @@ function MagnetThiefGame({
   play,
   vibrate,
 }: GameComponentProps<MagnetThiefPublicState>) {
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const previousEvent = useRef<string | null>(null);
   const inputSequence = useRef(0);
   const phase = state?.phase ?? 'idle';
   const me = myPlayerId ? state?.players?.[myPlayerId] : undefined;
   const playing = phase === 'playing' && Boolean(me) && !me?.disconnected;
 
+  // ---- Smooth movement ------------------------------------------------------
+  // Steps stay server-authoritative discrete intents, but holding a key, a
+  // D-pad button or an arena drag now streams them at a fixed 130 ms cadence
+  // (refs + interval only — no per-frame React re-renders) instead of one
+  // irregular OS key-repeat / one step per tap.
+  const playState = useRef({ playing: false, latestSeq: -1 });
+  playState.current = { playing, latestSeq: me?.latestInputSeq ?? -1 };
+  const heldDir = useRef<{ dx: number; dy: number } | null>(null);
+  const heldKey = useRef<string | null>(null);
+  const repeatTimer = useRef<number | null>(null);
+  const dragAnchor = useRef<{ x: number; y: number } | null>(null);
+  const dragPointerId = useRef<number | null>(null);
+  const lastDragSend = useRef(0);
+  const sendActionRef = useRef(sendAction);
+  sendActionRef.current = sendAction;
+
+  const sendStep = useCallback((dx: number, dy: number) => {
+    if (!playState.current.playing) return;
+    inputSequence.current = Math.max(inputSequence.current, playState.current.latestSeq) + 1;
+    sendActionRef.current({
+      type: 'move',
+      payload: { dx, dy, sequence: inputSequence.current },
+    } satisfies GameAction);
+  }, []);
+
+  const stopRepeat = useCallback(() => {
+    heldDir.current = null;
+    heldKey.current = null;
+    if (repeatTimer.current !== null) {
+      window.clearInterval(repeatTimer.current);
+      repeatTimer.current = null;
+    }
+  }, []);
+
+  const startRepeat = useCallback(() => {
+    if (repeatTimer.current !== null) return;
+    repeatTimer.current = window.setInterval(() => {
+      const dir = heldDir.current;
+      if (dir) sendStep(dir.dx, dir.dy);
+    }, MOVE_REPEAT_MS);
+  }, [sendStep]);
+
+  /** Discrete press: one step now + haptic. Held sources call startRepeat too. */
   const move = useCallback(
     (dx: number, dy: number) => {
       if (!playing) return;
-      inputSequence.current = Math.max(inputSequence.current, me?.latestInputSeq ?? -1) + 1;
-      sendAction({
-        type: 'move',
-        payload: { dx, dy, sequence: inputSequence.current },
-      } satisfies GameAction);
+      sendStep(dx, dy);
       vibrate('buttonPress');
     },
-    [me?.latestInputSeq, playing, sendAction, vibrate],
+    [playing, sendStep, vibrate],
   );
+
+  const pressAndHold = useCallback(
+    (dx: number, dy: number) => {
+      move(dx, dy);
+      heldDir.current = { dx, dy };
+      startRepeat();
+    },
+    [move, startRepeat],
+  );
+
+  useEffect(() => stopRepeat, [stopRepeat]);
 
   const activateField = useCallback(
     (mode: 'pull' | 'repel') => {
@@ -93,20 +194,6 @@ function MagnetThiefGame({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const map: Record<string, { dx: number; dy: number }> = {
-        ArrowUp: { dx: 0, dy: -1 },
-        ArrowDown: { dx: 0, dy: 1 },
-        ArrowLeft: { dx: -1, dy: 0 },
-        ArrowRight: { dx: 1, dy: 0 },
-        w: { dx: 0, dy: -1 },
-        s: { dx: 0, dy: 1 },
-        a: { dx: -1, dy: 0 },
-        d: { dx: 1, dy: 0 },
-        W: { dx: 0, dy: -1 },
-        S: { dx: 0, dy: 1 },
-        A: { dx: -1, dy: 0 },
-        D: { dx: 1, dy: 0 },
-      };
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -115,24 +202,39 @@ function MagnetThiefGame({
       ) {
         return;
       }
-      if (event.key === 'q' || event.key === 'Q') {
+      if ((event.key === 'q' || event.key === 'Q') && !event.repeat) {
         event.preventDefault();
         activateField('repel');
         return;
       }
-      if (event.key === 'e' || event.key === 'E' || event.key === ' ') {
+      if ((event.key === 'e' || event.key === 'E' || event.key === ' ') && !event.repeat) {
         event.preventDefault();
         activateField('pull');
         return;
       }
-      const delta = map[event.key];
+      const delta = KEY_DIRS[event.key];
       if (!delta) return;
       event.preventDefault();
+      // OS key-repeat is irregular — our interval owns held movement.
+      if (event.repeat) return;
       move(delta.dx, delta.dy);
+      heldDir.current = { ...delta };
+      heldKey.current = event.key;
+      startRepeat();
     };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (heldKey.current !== null && event.key === heldKey.current) stopRepeat();
+    };
+    const onBlur = () => stopRepeat();
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [move, activateField]);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [move, activateField, startRepeat, stopRepeat]);
 
   useEffect(() => {
     const lastEvent = state?.lastEvent ?? null;
@@ -151,6 +253,41 @@ function MagnetThiefGame({
       play('countdown');
     }
   }, [state?.lastEvent, myPlayerId, play, vibrate]);
+
+  // ---- Arena drag steering (mouse, pen and touch unified) ---------------------
+  // Pointer Events cover touch too, so these replace the old touch-only swipe:
+  // drag in a direction to stream steps, re-anchoring as you go.
+  const onArenaPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!playing) return;
+    event.preventDefault();
+    dragPointerId.current = event.pointerId;
+    dragAnchor.current = { x: event.clientX, y: event.clientY };
+    // Optional-chained: jsdom and very old browsers lack pointer capture.
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const onArenaPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!playing || dragPointerId.current !== event.pointerId) return;
+    const anchor = dragAnchor.current;
+    if (!anchor) return;
+    event.preventDefault();
+    const dx = event.clientX - anchor.x;
+    const dy = event.clientY - anchor.y;
+    if (Math.hypot(dx, dy) < DRAG_MIN_PX) return;
+    const now = Date.now();
+    if (now - lastDragSend.current < MOVE_REPEAT_MS) return;
+    lastDragSend.current = now;
+    const step = quantizeDrag(dx, dy);
+    sendStep(step.dx, step.dy);
+    // Re-anchor so a long drag keeps steering instead of firing once.
+    dragAnchor.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const onArenaPointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragPointerId.current !== event.pointerId) return;
+    dragPointerId.current = null;
+    dragAnchor.current = null;
+  };
 
   if (phase === 'idle' || !state) {
     return (
@@ -192,22 +329,10 @@ function MagnetThiefGame({
         aria-label="Magnet arena"
         className="touch-none relative mx-auto w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-slate-950 select-none"
         style={{ aspectRatio: `${width} / ${height}` }}
-        onTouchStart={(event) => {
-          const touch = event.changedTouches[0];
-          touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
-        }}
-        onTouchMove={(event) => event.preventDefault()}
-        onTouchEnd={(event) => {
-          const start = touchStart.current;
-          touchStart.current = null;
-          const touch = event.changedTouches[0];
-          if (!start || !touch) return;
-          const dx = touch.clientX - start.x;
-          const dy = touch.clientY - start.y;
-          if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
-          if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1, 0);
-          else move(0, dy > 0 ? 1 : -1);
-        }}
+        onPointerDown={onArenaPointerDown}
+        onPointerMove={onArenaPointerMove}
+        onPointerUp={onArenaPointerEnd}
+        onPointerCancel={onArenaPointerEnd}
       >
         {(state.safeCorners ?? []).map((corner, index) => (
           <span
@@ -236,24 +361,36 @@ function MagnetThiefGame({
             }}
           />
         ))}
-        {(state.gems ?? []).map((gem) => (
-          <span
-            key={gem.id}
-            className="absolute rounded-sm bg-cyan-300"
-            style={{
-              left: `${(gem.x / width) * 100}%`,
-              top: `${(gem.y / height) * 100}%`,
-              width: '3%',
-              height: '4.5%',
-              transform: 'translate(-50%, -50%)',
-              opacity: gem.ownerId ? 0.85 : 1,
-            }}
-          />
-        ))}
+        {(state.gems ?? []).map((gem) => {
+          // The server names the gems each pull/repel touched — flash them so
+          // attraction and collection are visible the moment they happen.
+          const touched = state.lastEffect?.gemIds.includes(gem.id) ?? false;
+          return (
+            <span
+              // Remounts on each new effect so the flash retriggers per pull.
+              key={touched && state.lastEffect ? `${gem.id}:fx${state.lastEffect.id}` : gem.id}
+              className={cn(
+                'absolute rounded-sm bg-cyan-300',
+                touched && 'animate-ping [animation-iteration-count:2]',
+              )}
+              style={{
+                left: `${(gem.x / width) * 100}%`,
+                top: `${(gem.y / height) * 100}%`,
+                width: '3%',
+                height: '4.5%',
+                transform: 'translate(-50%, -50%)',
+                opacity: gem.ownerId ? 0.85 : 1,
+                boxShadow: touched ? '0 0 8px 2px rgba(103,232,249,.9)' : undefined,
+              }}
+            />
+          );
+        })}
         {players.map((player, seat) => {
           const runner = state.players[player.id];
           if (!runner) return null;
           const activeEffect = state.lastEffect?.playerId === player.id ? state.lastEffect : null;
+          const facing = runner.facing ?? { dx: 0, dy: 0 };
+          const hasFacing = facing.dx !== 0 || facing.dy !== 0;
           return (
             <span
               key={player.id}
@@ -268,6 +405,17 @@ function MagnetThiefGame({
                 boxShadow: player.id === myPlayerId ? '0 0 0 2px #fff' : undefined,
               }}
             >
+              {hasFacing ? (
+                <span
+                  aria-hidden
+                  className="absolute h-[26%] w-[26%] rounded-full bg-white/90"
+                  style={{
+                    left: `${50 + facing.dx * 30}%`,
+                    top: `${50 + facing.dy * 30}%`,
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                />
+              ) : null}
               {activeEffect ? (
                 <span
                   key={activeEffect.id}
@@ -295,9 +443,22 @@ function MagnetThiefGame({
               type="button"
               aria-label={label}
               disabled={!playing}
-              onClick={() => move(dx, dy)}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                pressAndHold(dx, dy);
+              }}
+              onPointerUp={stopRepeat}
+              onPointerCancel={stopRepeat}
+              onPointerLeave={stopRepeat}
+              onKeyDown={(event) => {
+                // Keyboard activation (Enter/Space) without the global handler.
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  move(dx, dy);
+                }
+              }}
               className={cn(
-                'grid h-14 place-items-center rounded-xl border border-white/10 bg-white/5 text-white transition active:scale-95 disabled:opacity-40',
+                'grid h-14 touch-none place-items-center rounded-xl border border-white/10 bg-white/5 text-white transition active:scale-95 disabled:opacity-40',
                 area,
               )}
             >
@@ -325,8 +486,9 @@ function MagnetThiefGame({
         </div>
       </div>
       <p className="text-center text-xs text-slate-500">
-        Pull loose gems into collection range, or repel an exposed rival’s haul. Obstacles block
-        movement; safe corners protect carried gems.
+        Hold WASD / arrows, hold the D-pad, or drag on the arena to move. Pull loose gems into
+        collection range, or repel an exposed rival’s haul. Obstacles block movement; safe corners
+        protect carried gems.
       </p>
     </div>
   );

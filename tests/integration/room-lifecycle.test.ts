@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { io, type Socket } from 'socket.io-client';
 import type { AckResponse, RoomState, SessionInfo } from '@2play/shared';
 import { startTestServer, type TestServer } from '../helpers/server';
+import { waitForRoom } from '../helpers/client';
 
 let server: TestServer;
 
@@ -83,6 +84,89 @@ describe('room lifecycle over sockets', () => {
     } finally {
       host.close();
       guest.close();
+    }
+  });
+
+  it('pushes public room list updates live: created rooms appear and closed rooms disappear without polling', async () => {
+    const watcher = connect(server.url);
+    const host = connect(server.url);
+    try {
+      await once(watcher, 'connect');
+      await once(host, 'connect');
+      await authenticate(watcher, 'RoomWatcher');
+      await authenticate(host, 'LiveHostOne');
+
+      // A newly created public room is pushed to every connected client.
+      const appearPromise = once<{ rooms: Array<{ id: string; isPrivate: boolean }> }>(
+        watcher,
+        'room:list',
+      );
+      const created = await emitAck<{ room: RoomState }>(host, 'room:create', {
+        gameId: 'reaction-race',
+        maxPlayers: 4,
+        isPrivate: false,
+      });
+      expect(created.ok).toBe(true);
+      const roomId = created.data?.room.id;
+      expect(roomId).toMatch(/^[A-Z0-9]{6}$/);
+
+      const appeared = await appearPromise;
+      expect(appeared.rooms.some((room) => room.id === roomId)).toBe(true);
+      expect(appeared.rooms.every((room) => room.isPrivate === false)).toBe(true);
+
+      // When the room closes (last player leaves), a push arrives that no longer
+      // lists it. The leave emits player-left before the close, so the first
+      // push can still show the briefly-empty room — wait for the push that
+      // reflects the closed room instead of asserting on the first one.
+      const disappearedPromise = new Promise<{ rooms: Array<{ id: string }> }>(
+        (resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error('timeout waiting for room to disappear from "room:list"')),
+            5000,
+          );
+          const handler = (payload: { rooms: Array<{ id: string }> }) => {
+            if (!payload.rooms.some((room) => room.id === roomId)) {
+              clearTimeout(timer);
+              watcher.off('room:list', handler);
+              resolve(payload);
+            }
+          };
+          watcher.on('room:list', handler);
+        },
+      );
+      const left = await emitAck<{ left: boolean }>(host, 'room:leave', {});
+      expect(left.ok).toBe(true);
+      const disappeared = await disappearedPromise;
+      expect(disappeared.rooms.some((room) => room.id === roomId)).toBe(false);
+    } finally {
+      watcher.close();
+      host.close();
+    }
+  });
+
+  it('never exposes private rooms through pushes or listing', async () => {
+    const watcher = connect(server.url);
+    const host = connect(server.url);
+    try {
+      await once(watcher, 'connect');
+      await once(host, 'connect');
+      await authenticate(watcher, 'PrivacyWatch');
+      await authenticate(host, 'PrivateHost');
+
+      const created = await emitAck<{ room: RoomState }>(host, 'room:create', {
+        gameId: 'reaction-race',
+        maxPlayers: 4,
+        isPrivate: true,
+      });
+      expect(created.ok).toBe(true);
+      const privateId = created.data?.room.id;
+
+      const listed = await emitAck<{ rooms: Array<{ id: string }> }>(watcher, 'room:list', {});
+      expect(listed.ok).toBe(true);
+      expect(listed.data?.rooms.some((room) => room.id === privateId)).toBe(false);
+    } finally {
+      watcher.close();
+      host.close();
     }
   });
 
@@ -178,6 +262,52 @@ describe('room lifecycle over sockets', () => {
     }
   });
 
+  it.each(['sos-game', 'snake-battle'])(
+    'runs a server-authoritative 3-2-1-GO countdown for %s before gameplay starts',
+    async (gameId) => {
+      const host = connect(server.url);
+      try {
+        await once(host, 'connect');
+        await authenticate(host, 'CountdownHost');
+        const created = await emitAck<{ room: RoomState; playerId: string }>(host, 'room:create', {
+          gameId,
+          maxPlayers: 2,
+          isPrivate: true,
+        });
+        expect(created.ok).toBe(true);
+        const ai = await emitAck<{ playerId: string }>(host, 'room:add-ai', { difficulty: 'easy' });
+        expect(ai.ok).toBe(true);
+        await emitAck(host, 'lobby:ready', { isReady: true });
+
+        // Capture the COUNTDOWN snapshot: it must carry the GO timestamp.
+        const countdownPromise = new Promise<RoomState>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('no COUNTDOWN snapshot')), 10000);
+          const handler = (payload: { room: RoomState }) => {
+            if (payload.room.status === 'COUNTDOWN') {
+              clearTimeout(timer);
+              host.off('room:updated', handler);
+              resolve(payload.room);
+            }
+          };
+          host.on('room:updated', handler);
+        });
+        const started = await emitAck(host, 'game:start', {});
+        expect(started.ok).toBe(true);
+        const countdown = await countdownPromise;
+        expect(countdown.countdownValue).toBe(3);
+        expect(countdown.countdownEndsAt).toBeGreaterThan(Date.now());
+        expect(countdown.countdownEndsAt).toBeLessThanOrEqual(Date.now() + 3200);
+
+        // Gameplay begins only after GO.
+        const playing = await waitForRoom(host, (room) => room.status === 'PLAYING', 15000);
+        expect(playing.gameStartedAt).toBeGreaterThanOrEqual(countdown.countdownEndsAt! - 500);
+      } finally {
+        host.close();
+      }
+    },
+    60000,
+  );
+
   it('exposes health and the game catalogue over HTTP', async () => {
     const health = (await fetch(`${server.url}/api/health`).then((res) => res.json())) as {
       status: string;
@@ -194,14 +324,11 @@ describe('room lifecycle over sockets', () => {
       'arrow-puzzle',
       'black-blast',
       'brick-breaker-battle',
-      'chain-reaction-battle',
       'chess',
-      'coin-hunters-arena',
       'color-clash',
       'connect-four',
       'couple-memory',
       'couple-sync',
-      'domino-mind',
       'dots-and-boxes',
       'draw-guess-battle',
       'fake-door-battle',
@@ -213,14 +340,12 @@ describe('room lifecycle over sockets', () => {
       'maze-race-2d',
       'memory-match',
       'mirror-grid',
-      'one-button-battle',
       'paddle-duel',
       'pattern-memory-battle',
       'reaction-race',
       'rock-paper-scissors',
       'secret-role',
       'shape-match-battle',
-      'shop-rush-battle',
       'sim',
       'snake-battle',
       'sos-game',

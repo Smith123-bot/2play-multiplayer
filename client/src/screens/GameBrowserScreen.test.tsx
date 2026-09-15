@@ -90,13 +90,13 @@ beforeEach(() => {
 });
 
 describe('game discovery: catalogue', () => {
-  it('lists all 40 games with no duplicates', async () => {
+  it('lists all 35 games with no duplicates', async () => {
     renderScreen();
     const cards = await allGamesCards();
     const names = cardNames(cards);
-    expect(names).toHaveLength(40);
-    expect(new Set(names).size, 'duplicate game cards').toBe(40);
-    expect(screen.getByText(/40 games · 0 favorites/)).toBeInTheDocument();
+    expect(names).toHaveLength(35);
+    expect(new Set(names).size, 'duplicate game cards').toBe(35);
+    expect(screen.getByText(/35 games · 0 favorites/)).toBeInTheDocument();
   });
 
   it('shows every game exactly once across all category filters', async () => {
@@ -111,7 +111,7 @@ describe('game discovery: catalogue', () => {
     }
 
     expect(seen.sort()).toEqual(ALL_GAME_METADATA.map((game) => game.name).sort());
-    expect(new Set(seen).size, 'a game appears in two categories').toBe(40);
+    expect(new Set(seen).size, 'a game appears in two categories').toBe(35);
   });
 
   it('filters by player count using the real supportedPlayerCounts', async () => {
@@ -168,7 +168,7 @@ describe('game discovery: search', () => {
     expect(resultCards()).toHaveLength(0);
 
     await userEvent.click(screen.getByRole('button', { name: /clear filters/i }));
-    await waitFor(() => expect(allGamesCards()).resolves.toHaveLength(40));
+    await waitFor(() => expect(allGamesCards()).resolves.toHaveLength(35));
   });
 
   it('clears the query with the search field clear button', async () => {
@@ -177,11 +177,11 @@ describe('game discovery: search', () => {
     await allGamesCards();
 
     fireEvent.change(search, { target: { value: 'chess' } });
-    await waitFor(() => expect(resultCards().length).toBeLessThan(40));
+    await waitFor(() => expect(resultCards().length).toBeLessThan(35));
 
     await userEvent.click(screen.getByRole('button', { name: 'Clear search' }));
     expect((search as HTMLInputElement).value).toBe('');
-    await waitFor(() => expect(allGamesCards()).resolves.toHaveLength(40));
+    await waitFor(() => expect(allGamesCards()).resolves.toHaveLength(35));
   });
 
   it('announces the result count to assistive technology', async () => {
@@ -295,6 +295,6 @@ describe('game discovery: failure states', () => {
 
     gamesFail.current = false;
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
-    await waitFor(() => expect(allGamesCards()).resolves.toHaveLength(40));
+    await waitFor(() => expect(allGamesCards()).resolves.toHaveLength(35));
   });
 });

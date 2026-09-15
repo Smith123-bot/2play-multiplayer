@@ -30,6 +30,8 @@ export interface MagnetGem {
 export interface MagnetPlayer {
   x: number;
   y: number;
+  /** Last successful move direction — the magnet's facing, owned by the server. */
+  facing: { dx: number; dy: number };
   score: number;
   stolen: number;
   lastPullAt: number;
@@ -152,6 +154,7 @@ function makePlayer(index: number): MagnetPlayer {
   return {
     x: spawn.x,
     y: spawn.y,
+    facing: { dx: 0, dy: 0 },
     score: 0,
     stolen: 0,
     lastPullAt: -MAGNET_COOLDOWN,
@@ -478,6 +481,8 @@ export const magnetThiefGame: GameModule<MagnetState> = {
       if (typeof sequence === 'number') player.latestInputSeq = sequence;
       if (!tryMagnetMove(player, dx, dy, state.obstacles))
         return actionRejected('An obstacle blocks the way.');
+      // Facing follows the last step that actually landed.
+      player.facing = { dx: Math.sign(dx), dy: Math.sign(dy) };
       for (const gem of state.gems) {
         if (gem.ownerId === playerId) {
           gem.x = player.x;
@@ -594,6 +599,9 @@ export const magnetThiefGame: GameModule<MagnetState> = {
   },
 
   getPublicState(state, viewerId, ctx) {
+    // The live cooldown shrinks every stage — the UI countdown must use the
+    // same stage-adjusted value the server enforces, not the base 2000 ms.
+    const liveCooldown = Math.max(1_150, MAGNET_COOLDOWN - (state.stage - 1) * 300);
     return {
       phase: state.phase,
       gems: state.gems.map((gem) => ({ ...gem })),
@@ -618,10 +626,11 @@ export const magnetThiefGame: GameModule<MagnetState> = {
           {
             x: player.x,
             y: player.y,
+            facing: { ...player.facing },
             score: player.score,
             stolen: player.stolen,
             carrying: player.carrying.length,
-            cooldownLeft: Math.max(0, MAGNET_COOLDOWN - (ctx.now() - player.lastPullAt)),
+            cooldownLeft: Math.max(0, liveCooldown - (ctx.now() - player.lastPullAt)),
             inSafe: inSafeCorner(player.x, player.y),
             disconnected: player.disconnected,
             latestInputSeq: player.latestInputSeq,

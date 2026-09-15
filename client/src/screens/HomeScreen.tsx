@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, BarChart3, Heart, Plus, RefreshCw, Sparkles, Users, Zap } from 'lucide-react';
+import { ArrowRight, BarChart3, Heart, LogIn, Plus, RefreshCw, Sparkles, Users, Zap } from 'lucide-react';
 import { GameCard } from '../components/game/GameCard';
 import { ActiveRoomPrompt } from '../components/room/ActiveRoomPrompt';
+import { PublicRoomsModal } from '../components/room/PublicRoomsModal';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -15,12 +16,33 @@ import { useStatisticsStore } from '../stores/statisticsStore';
 import { usePopularityStore } from '../stores/popularityStore';
 import { useSessionStore } from '../stores/sessionStore';
 import { useRoomActions } from '../hooks/useRoomActions';
+import { usePublicRooms } from '../hooks/usePublicRooms';
 import { useIdentityGate } from '../hooks/useIdentityGate';
-import type { RoomSummary } from '@2play/shared';
 import { APP_CONFIG } from '../core/config';
 import { useConnectionStore } from '../stores/connectionStore';
 import { formatCategory } from '../utils/format';
 import { cn } from '../utils/cn';
+
+/**
+ * Canonical Featured Games order on Home. The `featured` metadata flag decides
+ * *membership*; this list decides *position* so the required games always
+ * appear in the required order near the top of the page.
+ */
+export const FEATURED_HOME_ORDER = [
+  'draw-guess-battle',
+  'rock-paper-scissors',
+  'sim',
+  'uno',
+  'chess',
+  'ludo',
+  'arrow-puzzle',
+  'snake-battle',
+  'couple-sync',
+  'couple-memory',
+  'connect-four',
+  'pattern-memory-battle',
+  'sos-game',
+] as const;
 
 export function HomeScreen() {
   const navigate = useNavigate();
@@ -38,9 +60,11 @@ export function HomeScreen() {
   const popularity = usePopularityStore((store) => store.popularity);
   const loadPopularity = usePopularityStore((store) => store.load);
   const connection = useConnectionStore((store) => store.state);
-  const { listRooms } = useRoomActions();
-  const [publicRooms, setPublicRooms] = useState<RoomSummary[]>([]);
-  const [roomsLoading, setRoomsLoading] = useState(false);
+  const { joinRoom } = useRoomActions();
+  /** Live public listing: server pushes keep it fresh, no polling needed. */
+  const { rooms: publicRooms, loading: roomsLoading, refresh: refreshRooms } = usePublicRooms();
+  const [joiningRoomId, setJoiningRoomId] = useState<string | null>(null);
+  const [roomsOpen, setRoomsOpen] = useState(false);
 
   useEffect(() => {
     void loadGames();
@@ -49,35 +73,50 @@ export function HomeScreen() {
     void loadPopularity();
   }, [loadGames, loadFavorites, loadStatistics, loadPopularity]);
 
-  /** Public rooms are the social heartbeat of the home page — kept fresh. */
-  const refreshRooms = useCallback(async () => {
-    setRoomsLoading(true);
-    try {
-      const rooms = await listRooms();
-      setPublicRooms(rooms);
-    } finally {
-      setRoomsLoading(false);
-    }
-  }, [listRooms]);
+  /**
+   * Joins a public room straight from Home using the existing Join Room logic,
+   * then opens the room — never a detour through the generic Join screen.
+   */
+  const joinPublicRoom = useCallback(
+    (roomId: string) => {
+      gate(async () => {
+        setJoiningRoomId(roomId);
+        try {
+          const room = await joinRoom({ roomId });
+          if (room) navigate(`/room/${room.id}`);
+        } finally {
+          setJoiningRoomId((current) => (current === roomId ? null : current));
+        }
+      });
+    },
+    [gate, joinRoom, navigate],
+  );
 
-  useEffect(() => {
-    void refreshRooms();
-    // Keep the list live so a friend's room never needs a page reload to join.
-    const timer = window.setInterval(() => void refreshRooms(), 15_000);
-    return () => window.clearInterval(timer);
-  }, [refreshRooms]);
-
-  const featured = games.filter((game) => game.featured);
+  /**
+   * Featured games in the canonical order. No game appears in two visible
+   * sections: "Popular right now" below explicitly excludes these ids.
+   */
+  const featured = useMemo(() => {
+    const byId = new Map(games.map((game) => [game.id, game]));
+    const ordered = FEATURED_HOME_ORDER.map((id) => byId.get(id)).filter(
+      (game): game is NonNullable<typeof game> => Boolean(game),
+    );
+    if (ordered.length > 0) return ordered;
+    return games.filter((game) => game.featured);
+  }, [games]);
+  const featuredIds = useMemo(() => new Set(featured.map((game) => game.id)), [featured]);
 
   /**
    * "Popular right now" is backed by the platform's real completed-match counts
    * (`/api/games/popularity`). Until the server has recorded any matches there
-   * is nothing honest to rank, so it falls back to the featured picks and says
-   * so — the numbers are never fabricated.
+   * is nothing honest to rank, so it falls back to non-featured catalogue picks
+   * and says so — the numbers are never fabricated, and featured games are
+   * never duplicated into this section.
    */
   const popular = useMemo(() => {
     const byId = new Map(popularity.map((entry) => [entry.gameId, entry]));
     const ranked = games
+      .filter((game) => !featuredIds.has(game.id))
       .filter((game) => (byId.get(game.id)?.playCount ?? 0) > 0)
       .sort((a, b) => (byId.get(b.id)?.playCount ?? 0) - (byId.get(a.id)?.playCount ?? 0))
       .slice(0, 4);
@@ -85,11 +124,11 @@ export function HomeScreen() {
       return { games: ranked, counts: byId, real: true };
     }
     return {
-      games: (featured.length > 0 ? featured : games).slice(0, 4),
+      games: games.filter((game) => !featuredIds.has(game.id)).slice(0, 4),
       counts: byId,
       real: false,
     };
-  }, [games, popularity, featured]);
+  }, [games, popularity, featuredIds]);
 
   const recent = recentlyPlayed
     .map((gameId) => games.find((game) => game.id === gameId))
@@ -105,6 +144,17 @@ export function HomeScreen() {
   return (
     <div className="space-y-10">
       <ActiveRoomPrompt />
+      <PublicRoomsModal
+        open={roomsOpen}
+        onClose={() => setRoomsOpen(false)}
+        rooms={publicRooms}
+        loading={roomsLoading}
+        connected={connection === 'CONNECTED'}
+        joiningRoomId={joiningRoomId}
+        onRefresh={() => void refreshRooms()}
+        onJoin={joinPublicRoom}
+        onCreateRoom={quickPlay}
+      />
 
       <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary-600/25 via-surface/70 to-accent-500/20 p-6 sm:p-10">
         <div className="grid-glow absolute inset-0 opacity-40" aria-hidden />
@@ -127,14 +177,27 @@ export function HomeScreen() {
             </Button>
             <Button
               size="lg"
-              variant="secondary"
+              variant="create"
               onClick={() => gate(() => navigate('/create'))}
               icon={<Plus className="h-4 w-4" />}
             >
               Create room
             </Button>
-            <Button size="lg" variant="ghost" onClick={() => gate(() => navigate('/join'))}>
+            <Button
+              size="lg"
+              variant="join"
+              onClick={() => gate(() => navigate('/join'))}
+              icon={<LogIn className="h-4 w-4" />}
+            >
               Join room
+            </Button>
+            <Button
+              size="lg"
+              variant="rooms"
+              onClick={() => setRoomsOpen(true)}
+              icon={<Users className="h-4 w-4" />}
+            >
+              Public rooms
             </Button>
           </div>
 
@@ -255,13 +318,14 @@ export function HomeScreen() {
                     >
                       {room.playerCount}/{room.maxPlayers}
                     </span>{' '}
-                    players
+                    players · {room.status === 'LOBBY' ? 'Open' : room.status === 'READY' ? 'Starting soon' : 'Waiting'}
                   </p>
                 </div>
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => gate(() => navigate(`/join?code=${room.id}`))}
+                  loading={joiningRoomId === room.id}
+                  onClick={() => joinPublicRoom(room.id)}
                 >
                   Join
                 </Button>

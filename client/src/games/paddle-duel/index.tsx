@@ -4,6 +4,7 @@ import { PADDLE_DUEL_METADATA, type GameAction } from '@2play/shared';
 import type { ClientGameModule, GameComponentProps } from '../registry/types';
 import { GameHUD } from '../../components/game/GameHUD';
 import { Badge } from '../../components/ui/Badge';
+import { useConnectionStore } from '../../stores/connectionStore';
 import { cn } from '../../utils/cn';
 
 export interface PaddlePublic {
@@ -50,6 +51,9 @@ export interface PaddleDuelPublicState {
 
 const PADDLE_SPEED = 42; // units/s — must mirror the server constant
 
+/** Minimum gap between drag-generated intents — presses/releases are instant. */
+const DRAG_THROTTLE_MS = 50;
+
 function PaddleDuelGame({
   state,
   players,
@@ -59,8 +63,13 @@ function PaddleDuelGame({
   vibrate,
 }: GameComponentProps<PaddleDuelPublicState>) {
   const clockOffset = useRef(0); // serverTime - Date.now()
-  const lastIntent = useRef(0);
+  const lastDragIntent = useRef(0);
   const activeIntent = useRef<'up' | 'down' | 'stop' | null>(null);
+  /** Set after a directional intent, cleared by the matching stop. */
+  const needsStop = useRef(false);
+  /** Pointer currently dragging the arena (touch, mouse and pen unified). */
+  const dragPointerId = useRef<number | null>(null);
+  const heldKeys = useRef(new Set<string>());
   const inputSequence = useRef(0);
   const previousEvent = useRef<string | null>(null);
   const previousScore = useRef(0);
@@ -72,6 +81,12 @@ function PaddleDuelGame({
   const rivalPaddle = rival ? state?.paddles?.[rival.id] : undefined;
   const canPlay = phase === 'playing' && !!me;
 
+  // Stable mirror for global listeners (no stale closures, no re-subscribing).
+  const canPlayRef = useRef(canPlay);
+  canPlayRef.current = canPlay;
+  const connectionState = useConnectionStore((store) => store.state);
+  const wasConnected = useRef(true);
+
   // Smooth motion: extrapolate ball + paddles from the last authoritative
   // snapshot using the server clock. Visual only — the server stays the truth.
   useEffect(() => {
@@ -79,52 +94,108 @@ function PaddleDuelGame({
     if (me) inputSequence.current = Math.max(inputSequence.current, me.latestInputSeq);
   }, [state, me]);
 
+  // Re-render every animation frame while playing so the extrapolated
+  // paddles/ball glide at the display refresh rate.
   const playing = phase === 'playing';
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
-    let last = 0;
-    const loop = (time: number) => {
-      if (time - last > 33) {
-        last = time;
-        setFrame((frame) => frame + 1);
-      }
+    const loop = () => {
+      setFrame((frame) => frame + 1);
       raf = window.requestAnimationFrame(loop);
     };
     raf = window.requestAnimationFrame(loop);
     return () => window.cancelAnimationFrame(raf);
   }, [playing]);
 
+  /**
+   * Sends a paddle intent. Deduplicated (no repeat network events for a held
+   * press) and sequence-numbered (the server drops stale/duplicate inputs).
+   * Only intents — the server owns the paddle position, always.
+   */
   const sendMove = useCallback(
-    (direction: 'up' | 'down' | 'stop') => {
-      if (!canPlay || activeIntent.current === direction) return;
+    (direction: 'up' | 'down' | 'stop', options: { haptic?: boolean } = {}) => {
+      if (!canPlayRef.current || activeIntent.current === direction) return;
       activeIntent.current = direction;
+      needsStop.current = direction !== 'stop';
       inputSequence.current += 1;
       sendAction({
         type: 'move',
         payload: { direction, sequence: inputSequence.current },
       } satisfies GameAction);
-      vibrate('buttonPress');
+      if (options.haptic !== false) vibrate('buttonPress');
     },
-    [canPlay, sendAction, vibrate],
+    [sendAction, vibrate],
   );
 
+  /**
+   * Releases any held intent. Idempotent and safe to call from every
+   * release/cancel path (pointerup, pointercancel, keyup, blur, unmount):
+   * exactly one stop is sent per press, so movement can never stick.
+   */
+  const releaseMove = useCallback(() => {
+    if (!needsStop.current) return;
+    needsStop.current = false;
+    activeIntent.current = 'stop';
+    if (!canPlayRef.current) return; // match over: server state is moot
+    inputSequence.current += 1;
+    sendAction({
+      type: 'move',
+      payload: { direction: 'stop', sequence: inputSequence.current },
+    } satisfies GameAction);
+  }, [sendAction]);
+
+  // A phase transition fully resets input tracking — the server state is fresh
+  // (new match) or moot (match over) afterwards, so no intent is sent.
+  useEffect(() => {
+    activeIntent.current = null;
+    needsStop.current = false;
+    dragPointerId.current = null;
+    heldKeys.current.clear();
+  }, [phase]);
+
+  // A point reset keeps the server paddle direction: only clear the dedup flag
+  // so a still-held press re-sends its intent instead of going silent.
+  const pointNumber = state?.pointNumber;
   useEffect(() => {
     // A point reset or remount must never leave a deduplicated held intent stuck.
     activeIntent.current = null;
-  }, [state?.pointNumber, phase]);
+  }, [pointNumber]);
+
+  // A stop lost to a network blip would leave the server paddle driving
+  // forever: after any reconnect mid-match with nothing currently held,
+  // re-assert stop once (idempotent, sequence-guarded server-side).
+  useEffect(() => {
+    const connected = connectionState === 'CONNECTED';
+    if (
+      connected &&
+      !wasConnected.current &&
+      canPlayRef.current &&
+      dragPointerId.current === null &&
+      heldKeys.current.size === 0
+    ) {
+      needsStop.current = false;
+      activeIntent.current = 'stop';
+      inputSequence.current += 1;
+      sendAction({
+        type: 'move',
+        payload: { direction: 'stop', sequence: inputSequence.current },
+      } satisfies GameAction);
+    }
+    wasConnected.current = connected;
+  }, [connectionState, sendAction]);
 
   // Keyboard: W/S + arrows (never while typing in chat/inputs).
   useEffect(() => {
+    const map: Record<string, 'up' | 'down'> = {
+      ArrowUp: 'up',
+      ArrowDown: 'down',
+      w: 'up',
+      s: 'down',
+      W: 'up',
+      S: 'down',
+    };
     const onKeyDown = (event: KeyboardEvent) => {
-      const map: Record<string, 'up' | 'down' | 'stop'> = {
-        ArrowUp: 'up',
-        ArrowDown: 'down',
-        w: 'up',
-        s: 'down',
-        W: 'up',
-        S: 'down',
-      };
       const direction = map[event.key];
       if (!direction) return;
       const target = event.target as HTMLElement | null;
@@ -136,18 +207,54 @@ function PaddleDuelGame({
         return;
       }
       event.preventDefault();
+      heldKeys.current.add(event.key);
       sendMove(direction);
     };
     const onKeyUp = (event: KeyboardEvent) => {
-      if (['ArrowUp', 'ArrowDown', 'w', 's', 'W', 'S'].includes(event.key)) sendMove('stop');
+      if (!map[event.key]) return;
+      heldKeys.current.delete(event.key);
+      // Release only when no direction key is still held — otherwise the
+      // remaining key keeps driving (no stuck, no stop-while-held).
+      const remaining = [...heldKeys.current].map((key) => map[key]).find(Boolean);
+      if (remaining) sendMove(remaining);
+      else releaseMove();
+    };
+    const onBlur = () => {
+      heldKeys.current.clear();
+      releaseMove();
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
     };
-  }, [sendMove]);
+  }, [sendMove, releaseMove]);
+
+  // Safety net: a press that ends outside the arena/buttons, a hidden tab or
+  // an unmount mid-hold still releases exactly once (releaseMove is idempotent,
+  // so overlapping with the element handlers is harmless).
+  useEffect(() => {
+    const onGlobalRelease = () => releaseMove();
+    const onVisibility = () => {
+      if (document.hidden) {
+        heldKeys.current.clear();
+        dragPointerId.current = null;
+        releaseMove();
+      }
+    };
+    window.addEventListener('pointerup', onGlobalRelease);
+    window.addEventListener('pointercancel', onGlobalRelease);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pointerup', onGlobalRelease);
+      window.removeEventListener('pointercancel', onGlobalRelease);
+      document.removeEventListener('visibilitychange', onVisibility);
+      releaseMove();
+    };
+  }, [releaseMove]);
 
   // Event feedback.
   const lastEvent = state?.lastEvent ?? null;
@@ -249,23 +356,22 @@ function PaddleDuelGame({
   const iWon = phase === 'finished' && (me?.score ?? 0) > (rivalPaddle?.score ?? 0);
   const isDraw = phase === 'finished' && me?.score === rivalPaddle?.score;
 
-  // Touch drag: track finger vs paddle and stream up/down/stop intents.
-  const onTouch = (clientY: number, arena: HTMLElement) => {
-    if (!canPlay || !me) return;
+  // Pointer drag (touch, mouse and pen unified): track the pointer vs the
+  // paddle and stream up/down/stop intents. Only intents — the server moves
+  // the paddle on its own clock.
+  const onDrag = (clientY: number, arena: HTMLElement) => {
+    if (!canPlayRef.current || !me) return;
+    const now = Date.now();
+    if (now - lastDragIntent.current < DRAG_THROTTLE_MS) return;
+    lastDragIntent.current = now;
     const rect = arena.getBoundingClientRect();
     const touchY = ((clientY - rect.top) / rect.height) * height;
-    const deadline = Date.now() - lastIntent.current;
-    if (deadline < 90) return;
     const offset = touchY - me.y;
     if (Math.abs(offset) < ph * 0.2) {
-      if (me.dir !== 0) {
-        lastIntent.current = Date.now();
-        sendMove('stop');
-      }
+      releaseMove();
       return;
     }
-    lastIntent.current = Date.now();
-    sendMove(offset < 0 ? 'up' : 'down');
+    sendMove(offset < 0 ? 'up' : 'down', { haptic: false });
   };
 
   return (
@@ -318,15 +424,46 @@ function PaddleDuelGame({
           className="relative w-full touch-none overflow-hidden rounded-2xl border border-white/10 bg-black/60 select-none"
           style={{ aspectRatio: `${width} / ${height}` }}
           onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId);
-            onTouch(event.clientY, event.currentTarget);
+            if (!canPlayRef.current) return;
+            event.preventDefault();
+            try {
+              event.currentTarget.setPointerCapture(event.pointerId);
+            } catch {
+              // Pointer capture is best-effort (older browsers).
+            }
+            dragPointerId.current = event.pointerId;
+            lastDragIntent.current = 0;
+            // Immediate response on press: compare against the paddle now.
+            const rect = event.currentTarget.getBoundingClientRect();
+            const touchY = ((event.clientY - rect.top) / rect.height) * height;
+            const offset = me ? touchY - me.y : 0;
+            if (me && Math.abs(offset) < ph * 0.2) releaseMove();
+            else sendMove(offset < 0 ? 'up' : 'down');
           }}
           onPointerMove={(event) => {
-            if (event.buttons > 0 || event.pointerType === 'touch')
-              onTouch(event.clientY, event.currentTarget);
+            if (event.pointerId !== dragPointerId.current) return;
+            event.preventDefault();
+            onDrag(event.clientY, event.currentTarget);
           }}
-          onPointerUp={() => canPlay && sendMove('stop')}
-          onPointerCancel={() => canPlay && sendMove('stop')}
+          onPointerUp={(event) => {
+            if (event.pointerId === dragPointerId.current) {
+              dragPointerId.current = null;
+              releaseMove();
+            }
+          }}
+          onPointerCancel={(event) => {
+            if (event.pointerId === dragPointerId.current) {
+              dragPointerId.current = null;
+              releaseMove();
+            }
+          }}
+          onLostPointerCapture={(event) => {
+            if (event.pointerId === dragPointerId.current) {
+              dragPointerId.current = null;
+              releaseMove();
+            }
+          }}
+          onContextMenu={(event) => event.preventDefault()}
         >
           {/* centre line */}
           <div
@@ -458,10 +595,21 @@ function PaddleDuelGame({
           type="button"
           aria-label="Move paddle up"
           disabled={!canPlay}
-          onPointerDown={() => sendMove('up')}
-          onPointerUp={() => sendMove('stop')}
-          onPointerLeave={() => canPlay && sendMove('stop')}
-          className="grid h-14 place-items-center rounded-xl border border-white/10 bg-white/5 text-white transition active:scale-95 disabled:opacity-40"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            try {
+              event.currentTarget.setPointerCapture(event.pointerId);
+            } catch {
+              // Best-effort: leave/cancel handlers still release below.
+            }
+            sendMove('up');
+          }}
+          onPointerUp={() => releaseMove()}
+          onPointerCancel={() => releaseMove()}
+          onLostPointerCapture={() => releaseMove()}
+          onPointerLeave={() => releaseMove()}
+          onContextMenu={(event) => event.preventDefault()}
+          className="grid h-14 touch-none place-items-center rounded-xl border border-white/10 bg-white/5 text-white transition select-none active:scale-95 disabled:opacity-40"
         >
           <ChevronUp className="h-6 w-6" aria-hidden />
         </button>
@@ -469,10 +617,21 @@ function PaddleDuelGame({
           type="button"
           aria-label="Move paddle down"
           disabled={!canPlay}
-          onPointerDown={() => sendMove('down')}
-          onPointerUp={() => sendMove('stop')}
-          onPointerLeave={() => canPlay && sendMove('stop')}
-          className="grid h-14 place-items-center rounded-xl border border-white/10 bg-white/5 text-white transition active:scale-95 disabled:opacity-40"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            try {
+              event.currentTarget.setPointerCapture(event.pointerId);
+            } catch {
+              // Best-effort: leave/cancel handlers still release below.
+            }
+            sendMove('down');
+          }}
+          onPointerUp={() => releaseMove()}
+          onPointerCancel={() => releaseMove()}
+          onLostPointerCapture={() => releaseMove()}
+          onPointerLeave={() => releaseMove()}
+          onContextMenu={(event) => event.preventDefault()}
+          className="grid h-14 touch-none place-items-center rounded-xl border border-white/10 bg-white/5 text-white transition select-none active:scale-95 disabled:opacity-40"
         >
           <ChevronDown className="h-6 w-6" aria-hidden />
         </button>

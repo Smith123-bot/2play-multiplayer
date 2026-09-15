@@ -9,9 +9,9 @@ import { hasClientGame, listClientGameIds, loadGameModule } from './index';
  * tests resolve every chunk so a broken registration fails the build.
  */
 describe('lazy client game registry', () => {
-  it('registers exactly the 40 catalogue games, once each', () => {
+  it('registers exactly the 38 catalogue games, once each', () => {
     const ids = listClientGameIds();
-    expect(ids).toHaveLength(40);
+    expect(ids).toHaveLength(38);
     expect(new Set(ids).size, 'duplicate loader key').toBe(ids.length);
     expect([...ids].sort()).toEqual(ALL_GAME_METADATA.map((game) => game.id).sort());
   });

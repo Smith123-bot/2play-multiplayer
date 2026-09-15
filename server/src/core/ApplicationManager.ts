@@ -34,6 +34,8 @@ export class ApplicationManager {
   private readonly platform = {} as Platform;
   private readonly logger = createLogger('ApplicationManager');
   private server: Server | null = null;
+  /** Serialised form of the last published public room listing (diff gate). */
+  private lastPublicRoomsJson: string | null = null;
 
   getPlatform(): Platform {
     return this.platform;
@@ -91,6 +93,24 @@ export class ApplicationManager {
       this.platform.socketManager.broadcastRoomState(room);
     });
 
+    // Public room browser: push the listing to every connected client whenever
+    // it may have changed (created / joined / left / closed / game or host
+    // change / match start / finish / rematch / any lobby transition). The
+    // publish itself is diff-gated, so high-frequency gameplay snapshots that
+    // do not affect the listing cost one cheap filter and emit nothing.
+    const republishPublicRooms = () => this.publishPublicRooms();
+    bus.on('room:created', republishPublicRooms);
+    bus.on('room:player-joined', republishPublicRooms);
+    bus.on('room:player-left', republishPublicRooms);
+    bus.on('room:closed', republishPublicRooms);
+    bus.on('room:game-changed', republishPublicRooms);
+    bus.on('room:host-changed', republishPublicRooms);
+    bus.on('game:started', republishPublicRooms);
+    bus.on('game:finished', republishPublicRooms);
+    bus.on('rematch:started', republishPublicRooms);
+    bus.on('rematch:cancelled', republishPublicRooms);
+    bus.on('room:state-changed', republishPublicRooms);
+
     bus.on('room:player-joined', ({ room, player }) => {
       this.platform.socketManager.emitToRoom(room.id, 'room:player-joined', {
         roomId: room.id,
@@ -121,6 +141,22 @@ export class ApplicationManager {
     bus.on('room:closed', ({ room }) => {
       this.platform.socketManager.clearRoom(room.id);
     });
+  }
+
+  /**
+   * Pushes the current public room listing to all connected sockets.
+   *
+   * Diff-gated: the serialised listing is compared with the last published one
+   * and identical snapshots emit nothing, so subscribing to the hot
+   * `room:state-changed` event stays cheap. Private and Quick Play rooms are
+   * excluded by `RoomManager.listRooms` itself, so they can never leak here.
+   */
+  private publishPublicRooms(): void {
+    const rooms = this.platform.roomManager.listRooms();
+    const json = JSON.stringify(rooms);
+    if (json === this.lastPublicRoomsJson) return;
+    this.lastPublicRoomsJson = json;
+    this.platform.socketManager.emitToAll('room:list', { rooms });
   }
 
   /** Phase 2: connect the database, load games, start the HTTP + socket server. */

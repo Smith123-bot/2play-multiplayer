@@ -13,6 +13,17 @@ export interface SnakePublic {
   score: number;
   foodEaten: number;
   disconnected: boolean;
+  /** Lives remaining (starts at maxLives, eliminated at 0). */
+  lives: number;
+  maxLives: number;
+  /** Respawn grace is active — crashes are forgiven briefly. */
+  safe: boolean;
+}
+
+function livesLabel(snake: SnakePublic): string {
+  const lives = Math.max(0, snake.lives);
+  const max = Math.max(lives, snake.maxLives);
+  return `${'❤️'.repeat(lives)}${'🤍'.repeat(Math.max(0, max - lives))}`;
 }
 
 export interface SnakeBattlePublicState {
@@ -54,6 +65,7 @@ function SnakeBattleGame({
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const previousDeaths = useRef(0);
   const previousFood = useRef(0);
+  const previousLives = useRef<number | null>(null);
 
   const phase = state?.phase ?? 'idle';
   const me = myPlayerId ? state?.snakes?.[myPlayerId] : undefined;
@@ -119,6 +131,22 @@ function SnakeBattleGame({
     previousDeaths.current = deaths;
   }, [deaths, me?.alive, play, vibrate]);
 
+  // Life feedback: losing a life (but surviving) stings; elimination defeats.
+  const myLives = me?.lives ?? 0;
+  const iAmAlive = me?.alive ?? false;
+  useEffect(() => {
+    if (previousLives.current !== null && myLives < previousLives.current) {
+      if (iAmAlive) {
+        play('wrong');
+        vibrate('error');
+      } else {
+        play('defeat');
+        vibrate('error');
+      }
+    }
+    previousLives.current = myLives;
+  }, [myLives, iAmAlive, play, vibrate]);
+
   if (phase === 'idle') {
     return (
       <div className="space-y-4">
@@ -159,18 +187,26 @@ function SnakeBattleGame({
       <div className="flex flex-wrap items-center gap-2">
         {me ? (
           me.alive ? (
-            <Badge tone="primary">You · {me.score} pts · {me.foodEaten} food</Badge>
+            <Badge tone="primary">
+              You · {me.score} pts · {me.foodEaten} food · {livesLabel(me)}
+            </Badge>
           ) : (
-            <Badge tone="danger" icon={<Skull className="h-3 w-3" aria-hidden />}>You crashed</Badge>
+            <Badge tone="danger" icon={<Skull className="h-3 w-3" aria-hidden />}>
+              Eliminated · {me.score} pts
+            </Badge>
           )
         ) : null}
         {opponent && state.snakes?.[opponent.id] ? (
           state.snakes[opponent.id]!.alive ? (
-            <Badge tone="default">{opponent.nickname} · {state.snakes[opponent.id]!.score} pts</Badge>
+            <Badge tone="default">
+              {opponent.nickname} · {state.snakes[opponent.id]!.score} pts ·{' '}
+              {livesLabel(state.snakes[opponent.id]!)}
+            </Badge>
           ) : (
-            <Badge tone="success">{opponent.nickname} crashed</Badge>
+            <Badge tone="success">{opponent.nickname} eliminated</Badge>
           )
         ) : null}
+        {me?.safe && me.alive ? <Badge tone="accent">🛡 Respawning — safe</Badge> : null}
         {phase === 'finished' ? <Badge tone="accent">Match over</Badge> : null}
       </div>
 
@@ -206,6 +242,7 @@ function SnakeBattleGame({
             const seat = first
               ? Math.max(0, players.findIndex((player) => player.id === first.playerId))
               : 0;
+            const isSafe = first ? (snakes?.[first.playerId]?.safe ?? false) : false;
             return (
               <div
                 key={key}
@@ -219,6 +256,7 @@ function SnakeBattleGame({
                         backgroundColor: SNAKE_COLORS[seat % SNAKE_COLORS.length],
                         opacity: first.isHead ? 1 : 0.75,
                         borderRadius: first.isHead ? 4 : 2,
+                        boxShadow: isSafe ? '0 0 6px 1px rgba(255,255,255,0.85)' : undefined,
                       }
                     : undefined
                 }

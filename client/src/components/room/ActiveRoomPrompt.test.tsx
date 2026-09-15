@@ -55,7 +55,7 @@ describe('ActiveRoomPrompt (Home "you are in a room" popup)', () => {
     expect(screen.queryByText('You are in a room')).not.toBeInTheDocument();
   });
 
-  it('shows the room code, game and player count when a room is active', () => {
+  it('shows the room code, game, player count and status when a room is active', () => {
     useRoomStore.getState().setRoom(baseRoom());
 
     render(
@@ -65,9 +65,12 @@ describe('ActiveRoomPrompt (Home "you are in a room" popup)', () => {
     );
 
     expect(screen.getByText('You are in a room')).toBeInTheDocument();
-    expect(screen.getByText(/ABC123/)).toBeInTheDocument();
+    // The code appears in the dialog description and in the highlighted code row.
+    expect(screen.getAllByText(/ABC123/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Room code: ABC123')).toBeInTheDocument();
     expect(screen.getByText('Reaction Race')).toBeInTheDocument();
     expect(screen.getByText('2/4')).toBeInTheDocument();
+    expect(screen.getByText('Open lobby')).toBeInTheDocument();
   });
 
   it('never shows for a CLOSED room', () => {
@@ -98,6 +101,57 @@ describe('ActiveRoomPrompt (Home "you are in a room" popup)', () => {
 
     expect(emitAckSpy).toHaveBeenCalled();
     expect(useRoomStore.getState().room).toBeNull();
+
+    emitAckSpy.mockRestore();
+  });
+
+  it('closing the dialog minimises to a persistent banner that keeps Return / Leave available', async () => {
+    useRoomStore.getState().setRoom(baseRoom({ status: 'PLAYING' }));
+
+    render(
+      <MemoryRouter>
+        <ActiveRoomPrompt />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('You are in a room')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+
+    // The dialog is gone but the prompt remains available on Home.
+    expect(screen.queryByText('You are in a room')).not.toBeInTheDocument();
+    expect(screen.getByTestId('active-room-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('active-room-banner')).toHaveTextContent('ABC123');
+    expect(screen.getByTestId('active-room-banner')).toHaveTextContent('Match in progress');
+    expect(
+      screen.getByRole('button', { name: /Return to room/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Leave room/i })).toBeInTheDocument();
+
+    // Details reopens the full dialog.
+    await userEvent.click(screen.getByRole('button', { name: /Details/i }));
+    expect(screen.getByText('You are in a room')).toBeInTheDocument();
+  });
+
+  it('leaving from the minimised banner clears the room', async () => {
+    useRoomStore.getState().setRoom(baseRoom());
+    const emitAckSpy = vi
+      .spyOn(socketClient, 'emitAck')
+      .mockResolvedValue({ ok: true, data: { left: true } });
+
+    render(
+      <MemoryRouter>
+        <ActiveRoomPrompt />
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(screen.getByTestId('active-room-banner')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Leave room/i }));
+    expect(emitAckSpy).toHaveBeenCalled();
+    expect(useRoomStore.getState().room).toBeNull();
+    expect(screen.queryByTestId('active-room-banner')).not.toBeInTheDocument();
 
     emitAckSpy.mockRestore();
   });

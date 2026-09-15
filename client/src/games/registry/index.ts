@@ -3,7 +3,7 @@ import type { ClientGameModule } from './types';
 /**
  * Client game registry — lazily loaded, one Vite chunk per game.
  *
- * All 40 games used to be imported eagerly, which put every game's renderer
+ * All 38 games used to be imported eagerly, which put every game's renderer
  * (including the chess engine, ludo board and canvas games) into the initial
  * bundle and made the Home page download ~850 KB of JavaScript before showing a
  * single card. Each game is now a dynamic import, so its chunk is fetched only
@@ -29,7 +29,6 @@ const loaders: Record<string, GameLoader> = {
   'connect-four': () => import('../connect-four').then((m) => m.connectFourClient),
   'couple-memory': () => import('../couple-memory').then((m) => m.coupleMemoryClient),
   'couple-sync': () => import('../couple-sync').then((m) => m.coupleSyncClient),
-  'domino-mind': () => import('../domino-mind').then((m) => m.dominoMindClient),
   'dots-and-boxes': () => import('../dots-and-boxes').then((m) => m.dotsAndBoxesClient),
   'draw-guess-battle': () => import('../draw-guess-battle').then((m) => m.drawGuessClient),
   'fake-door-battle': () => import('../fake-door-battle').then((m) => m.fakeDoorClient),
@@ -41,7 +40,6 @@ const loaders: Record<string, GameLoader> = {
   'maze-race-2d': () => import('../maze-race-2d').then((m) => m.mazeRaceClient),
   'memory-match': () => import('../memory-match').then((m) => m.memoryMatchClient),
   'mirror-grid': () => import('../mirror-grid').then((m) => m.mirrorGridClient),
-  'one-button-battle': () => import('../one-button-battle').then((m) => m.oneButtonClient),
   'paddle-duel': () => import('../paddle-duel').then((m) => m.paddleDuelClient),
   'pattern-memory-battle': () => import('../pattern-memory-battle').then((m) => m.patternMemoryClient),
   'reaction-race': () => import('../reaction-race').then((m) => m.reactionRaceClient),

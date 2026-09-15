@@ -17,6 +17,12 @@ import { actionAccepted, actionRejected } from '../GameModule';
  * The platform ticks `update()` on a fixed clock (GAME_TICK_MS); each tick the
  * server moves every living snake one cell, resolves food/collisions and
  * broadcasts. Clients only send turn intents — never positions, never scores.
+ *
+ * Fair-collision design: every snake has 3 lives. Hitting a wall (or its own
+ * body) costs one life and respawns the snake safely with a short grace
+ * period; only the last life eliminates. Snakes pass through EACH OTHER —
+ * snake-vs-snake contact never costs a life — so accidental deaths caused by
+ * the rival are impossible and the match stays a fast, fun food race.
  */
 
 export type SnakePhase = 'idle' | 'playing' | 'finished';
@@ -39,6 +45,12 @@ export interface SnakePlayerState {
   growPending: number;
   disconnected: boolean;
   left: boolean;
+  /** Lives remaining — starts at START_LIVES, eliminated at 0. */
+  lives: number;
+  /** Seat order at match start — decides the respawn corner. */
+  spawnIndex: number;
+  /** Grace steps after a respawn during which crashes are forgiven. */
+  safeSteps: number;
 }
 
 export interface SnakeFood {
@@ -71,6 +83,10 @@ const MATCH_MS = 3 * 60 * 1000;
 const FOOD_COUNT = 2;
 const FOOD_POINTS = 10;
 const AI_REQUEST_INTERVAL_MS = 280;
+/** Every snake starts with exactly 3 lives (server authoritative). */
+export const SNAKE_START_LIVES = 3;
+/** Crash-forgiving grace steps after each respawn (5 × 250 ms ≈ 1.25 s). */
+export const SNAKE_RESPAWN_SAFE_STEPS = 5;
 
 const DIRECTIONS: Record<SnakeDirection, { dx: number; dy: number }> = {
   up: { dx: 0, dy: -1 },
@@ -116,8 +132,27 @@ export function spawnFood(state: SnakeBattleState, ctx: GameContext): void {
 
 
 interface StepOutcome {
+  /** Fully eliminated this step (last life lost). */
   deaths: string[];
+  /** Lost a life but respawned (lives remain). */
+  livesLost: string[];
   ate: string[];
+}
+
+/** Starting (and respawn) placement for a seat. Exported for tests. */
+export function spawnFor(index: number): { body: SnakeSegment[]; direction: SnakeDirection } {
+  const left = index % 2 === 0;
+  const y = Math.floor(ROWS / 2);
+  return left
+    ? { body: [{ x: 4, y }, { x: 3, y }, { x: 2, y }], direction: 'right' }
+    : {
+        body: [
+          { x: COLS - 5, y },
+          { x: COLS - 4, y },
+          { x: COLS - 3, y },
+        ],
+        direction: 'left',
+      };
 }
 
 /**
@@ -128,7 +163,7 @@ export function stepSnakes(state: SnakeBattleState, ctx: GameContext): StepOutco
   const aliveIds = Object.entries(state.snakes)
     .filter(([, snake]) => snake.alive)
     .map(([id]) => id);
-  const outcome: StepOutcome = { deaths: [], ate: [] };
+  const outcome: StepOutcome = { deaths: [], livesLost: [], ate: [] };
   if (aliveIds.length === 0) return outcome;
 
   // 1) Resolve every turn (validated against the queued direction to stop
@@ -161,44 +196,57 @@ export function stepSnakes(state: SnakeBattleState, ctx: GameContext): StepOutco
     postBodies.set(id, body);
   }
 
-  // 4) Deaths: walls, head-to-head, bodies. A snake never collides with its
-  //    own NEW head — only with the rest of its (post-move) body.
-  const dead = new Set<string>();
+  // 4) Crashes: walls and the snake's OWN body only. Snakes pass through EACH
+  //    OTHER — snake-vs-snake contact never costs a life, so the rival can
+  //    never cause a frustrating accidental death. A snake never collides with
+  //    its own NEW head — only with the rest of its (post-move) body.
+  //    Respawn-grace snakes skip crash checks; an out-of-bounds head is
+  //    clamped inside so the grace can never strand a snake off-grid.
+  const crashed = new Map<string, 'wall' | 'self'>();
   for (const id of aliveIds) {
+    const snake = state.snakes[id]!;
     const plan = plans.get(id)!;
+    if (snake.safeSteps > 0) {
+      plan.head.x = Math.min(state.cols - 1, Math.max(0, plan.head.x));
+      plan.head.y = Math.min(state.rows - 1, Math.max(0, plan.head.y));
+      const body: SnakeSegment[] = [plan.head, ...snake.body];
+      if (!plan.willGrow) body.pop();
+      postBodies.set(id, body);
+      continue;
+    }
     if (plan.head.x < 0 || plan.head.y < 0 || plan.head.x >= state.cols || plan.head.y >= state.rows) {
-      dead.add(id);
+      crashed.set(id, 'wall');
       continue;
     }
     const ownRest = postBodies.get(id)!.slice(1);
     if (ownRest.some((cell) => cell.x === plan.head.x && cell.y === plan.head.y)) {
-      dead.add(id);
-      continue;
-    }
-    for (const other of aliveIds) {
-      if (other === id) continue;
-      const otherPlan = plans.get(other)!;
-      if (otherPlan.head.x === plan.head.x && otherPlan.head.y === plan.head.y) {
-        dead.add(id); // simultaneous head-to-head kills both
-        break;
-      }
-      if (postBodies.get(other)!.some((cell) => cell.x === plan.head.x && cell.y === plan.head.y)) {
-        dead.add(id);
-        break;
-      }
+      crashed.set(id, 'self');
     }
   }
 
-  // 5) Apply.
+  // 5) Apply: a crash costs ONE life and respawns safely while lives remain;
+  //    only the last life eliminates.
   for (const id of aliveIds) {
     const snake = state.snakes[id]!;
     const plan = plans.get(id)!;
-    if (dead.has(id)) {
-      snake.alive = false;
-      snake.deathStep = state.stepIndex;
-      snake.diedAt = ctx.now();
+    if (snake.safeSteps > 0) snake.safeSteps -= 1;
+    if (crashed.has(id)) {
+      snake.lives -= 1;
       snake.pendingDirection = null;
-      outcome.deaths.push(id);
+      if (snake.lives <= 0) {
+        snake.lives = 0;
+        snake.alive = false;
+        snake.deathStep = state.stepIndex;
+        snake.diedAt = ctx.now();
+        outcome.deaths.push(id);
+      } else {
+        const spawn = spawnFor(snake.spawnIndex);
+        snake.body = spawn.body.map((segment) => ({ ...segment }));
+        snake.direction = spawn.direction;
+        snake.growPending = 0;
+        snake.safeSteps = SNAKE_RESPAWN_SAFE_STEPS;
+        outcome.livesLost.push(id);
+      }
       continue;
     }
     snake.body = postBodies.get(id)!;
@@ -215,7 +263,19 @@ export function stepSnakes(state: SnakeBattleState, ctx: GameContext): StepOutco
 
   state.stepIndex += 1;
   if (outcome.deaths.length > 0) state.lastEvent = `death:${outcome.deaths.join('+')}`;
+  else if (outcome.livesLost.length > 0) state.lastEvent = `life:${outcome.livesLost.join('+')}`;
   else if (outcome.ate.length > 0) state.lastEvent = `food:${outcome.ate.join('+')}`;
+  else {
+    // Informational only: heads overlapping is a harmless pass-through.
+    const heads = aliveIds.map((id) => state.snakes[id]!.body[0]!);
+    const bumped =
+      heads.length > 1 &&
+      heads.some(
+        (head, index) =>
+          heads.findIndex((other) => other.x === head.x && other.y === head.y) !== index,
+      );
+    if (bumped) state.lastEvent = `bump:${aliveIds.join('+')}`;
+  }
   return outcome;
 }
 
@@ -339,15 +399,12 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
       rows: ROWS,
       snakes: Object.fromEntries(
         players.map((player, index) => {
-          const left = index % 2 === 0;
-          const y = Math.floor(ROWS / 2);
+          const spawn = spawnFor(index);
           return [
             player.id,
             {
-              body: left
-                ? [{ x: 4, y }, { x: 3, y }, { x: 2, y }]
-                : [{ x: COLS - 5, y }, { x: COLS - 4, y }, { x: COLS - 3, y }],
-              direction: left ? 'right' : 'left',
+              body: spawn.body.map((segment) => ({ ...segment })),
+              direction: spawn.direction,
               pendingDirection: null,
               alive: false,
               deathStep: null,
@@ -357,6 +414,9 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
               growPending: 0,
               disconnected: false,
               left: false,
+              lives: SNAKE_START_LIVES,
+              spawnIndex: index,
+              safeSteps: 0,
             } satisfies SnakePlayerState,
           ];
         }),
@@ -388,6 +448,9 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
         growPending: 0,
         disconnected: false,
         left: false,
+        lives: SNAKE_START_LIVES,
+        spawnIndex: Object.keys(state.snakes).length,
+        safeSteps: 0,
       };
     }
   },
@@ -405,6 +468,8 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
       return;
     }
     if (snake.alive) {
+      // Intentionally leaving forfeits the seat: all lives are gone at once.
+      snake.lives = 0;
       snake.alive = false;
       snake.deathStep = state.stepIndex;
       snake.diedAt = ctx.now();
@@ -419,13 +484,10 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
     if (state.phase === 'playing') return;
     state.snakes = {};
     ctx.players.forEach((player, index) => {
-      const left = index % 2 === 0;
-      const y = Math.floor(ROWS / 2);
+      const spawn = spawnFor(index);
       state.snakes[player.id] = {
-        body: left
-          ? [{ x: 4, y }, { x: 3, y }, { x: 2, y }]
-          : [{ x: COLS - 5, y }, { x: COLS - 4, y }, { x: COLS - 3, y }],
-        direction: left ? 'right' : 'left',
+        body: spawn.body.map((segment) => ({ ...segment })),
+        direction: spawn.direction,
         pendingDirection: null,
         alive: true,
         deathStep: null,
@@ -435,6 +497,9 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
         growPending: 0,
         disconnected: false,
         left: false,
+        lives: SNAKE_START_LIVES,
+        spawnIndex: index,
+        safeSteps: 0,
       };
     });
 
@@ -513,7 +578,7 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
       state.accumulatorMs -= state.stepMs;
       guard += 1;
       const outcome = stepSnakes(state, ctx);
-      if (outcome.deaths.length > 0 || outcome.ate.length > 0) {
+      if (outcome.deaths.length > 0 || outcome.livesLost.length > 0 || outcome.ate.length > 0) {
         ctx.markStateChanged();
         endIfOver(state, ctx);
       }
@@ -547,27 +612,33 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
   },
 
   getResult(state, ctx): GameResultDraft {
-    // Ranking: alive beats dead; later death beats earlier death; then score.
+    // Ranking: alive beats dead; later death beats earlier death; then more
+    // lives remaining; then score.
     const survivalStep = (id: string): number => {
       const snake = state.snakes[id];
       if (!snake) return -1;
       if (snake.alive) return Number.MAX_SAFE_INTEGER;
       return snake.deathStep ?? -1;
     };
+    const livesOf = (id: string): number => state.snakes[id]?.lives ?? 0;
     const ranked = [...ctx.players].sort((a, b) => {
       const survivalDiff = survivalStep(b.id) - survivalStep(a.id);
       if (survivalDiff !== 0) return survivalDiff;
+      const livesDiff = livesOf(b.id) - livesOf(a.id);
+      if (livesDiff !== 0) return livesDiff;
       const scoreDiff = (state.snakes[b.id]?.score ?? 0) - (state.snakes[a.id]?.score ?? 0);
       if (scoreDiff !== 0) return scoreDiff;
       return a.seatIndex - b.seatIndex;
     });
 
     const bestSurvival = ranked.length > 0 ? survivalStep(ranked[0]!.id) : -1;
+    const bestLives = ranked.length > 0 ? livesOf(ranked[0]!.id) : 0;
     const bestScore = ranked.length > 0 ? (state.snakes[ranked[0]!.id]?.score ?? 0) : 0;
     const winners = ranked
       .filter(
         (player) =>
           survivalStep(player.id) === bestSurvival &&
+          livesOf(player.id) === bestLives &&
           (state.snakes[player.id]?.score ?? 0) === bestScore,
       )
       .map((player) => player.id);
@@ -584,6 +655,7 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
           survivedSteps: snake?.alive ? state.stepIndex : (snake?.deathStep ?? 0),
           food: snake?.foodEaten ?? 0,
           alive: snake?.alive ? 1 : 0,
+          lives: snake?.lives ?? 0,
         },
       };
     });
@@ -619,6 +691,8 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
               growPending: 0,
               disconnected: false,
               left: false,
+              lives: SNAKE_START_LIVES,
+              safeSteps: 0,
             } satisfies SnakePlayerState,
           ];
         }),
@@ -668,6 +742,9 @@ export const snakeBattleGame: GameModule<SnakeBattleState> = {
                   score: snake.score,
                   foodEaten: snake.foodEaten,
                   disconnected: snake.disconnected,
+                  lives: snake.lives,
+                  maxLives: SNAKE_START_LIVES,
+                  safe: snake.safeSteps > 0,
                 }
               : null,
           ];
@@ -699,7 +776,9 @@ function computeSnakeWinners(state: SnakeBattleState): string[] {
   const survivalStep = (snake: SnakePlayerState): number =>
     snake.alive ? Number.MAX_SAFE_INTEGER : (snake.deathStep ?? -1);
   const bestSurvival = Math.max(...entries.map(([, snake]) => survivalStep(snake)));
-  const contenders = entries.filter(([, snake]) => survivalStep(snake) === bestSurvival);
+  const survivors = entries.filter(([, snake]) => survivalStep(snake) === bestSurvival);
+  const bestLives = Math.max(...survivors.map(([, snake]) => snake.lives));
+  const contenders = survivors.filter(([, snake]) => snake.lives === bestLives);
   const bestScore = Math.max(...contenders.map(([, snake]) => snake.score));
   return contenders.filter(([, snake]) => snake.score === bestScore).map(([id]) => id);
 }

@@ -134,6 +134,21 @@ export class SocketManager {
     this.emitToSocket(player.socketId, event, payload);
   }
 
+  /**
+   * Broadcasts to EVERY connected socket.
+   *
+   * Used for the public room list (`room:list`): every Home screen updates the
+   * moment a public room appears, fills or closes, with no polling. The payload
+   * must only ever contain safe public summaries (see `RoomManager.listRooms` —
+   * private and Quick Play rooms are never enumerable).
+   */
+  emitToAll(event: keyof ServerToClientEvents, payload: unknown): void {
+    const emitter = this.io as unknown as
+      | { emit: (name: string, body: unknown) => void }
+      | null;
+    emitter?.emit(event, payload);
+  }
+
   /** Per-viewer room snapshot (hidden game data never leaves the server). */
   broadcastRoomState(room: Room, force = false): void {
     if (!this.io) return;

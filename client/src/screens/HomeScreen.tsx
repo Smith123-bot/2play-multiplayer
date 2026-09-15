@@ -15,8 +15,8 @@ import { useStatisticsStore } from '../stores/statisticsStore';
 import { usePopularityStore } from '../stores/popularityStore';
 import { useSessionStore } from '../stores/sessionStore';
 import { useRoomActions } from '../hooks/useRoomActions';
+import { usePublicRooms } from '../hooks/usePublicRooms';
 import { useIdentityGate } from '../hooks/useIdentityGate';
-import type { RoomSummary } from '@2play/shared';
 import { APP_CONFIG } from '../core/config';
 import { useConnectionStore } from '../stores/connectionStore';
 import { formatCategory } from '../utils/format';
@@ -38,9 +38,10 @@ export function HomeScreen() {
   const popularity = usePopularityStore((store) => store.popularity);
   const loadPopularity = usePopularityStore((store) => store.load);
   const connection = useConnectionStore((store) => store.state);
-  const { listRooms } = useRoomActions();
-  const [publicRooms, setPublicRooms] = useState<RoomSummary[]>([]);
-  const [roomsLoading, setRoomsLoading] = useState(false);
+  const { joinRoom } = useRoomActions();
+  /** Live public listing: server pushes keep it fresh, no polling needed. */
+  const { rooms: publicRooms, loading: roomsLoading, refresh: refreshRooms } = usePublicRooms();
+  const [joiningRoomId, setJoiningRoomId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadGames();
@@ -49,23 +50,24 @@ export function HomeScreen() {
     void loadPopularity();
   }, [loadGames, loadFavorites, loadStatistics, loadPopularity]);
 
-  /** Public rooms are the social heartbeat of the home page — kept fresh. */
-  const refreshRooms = useCallback(async () => {
-    setRoomsLoading(true);
-    try {
-      const rooms = await listRooms();
-      setPublicRooms(rooms);
-    } finally {
-      setRoomsLoading(false);
-    }
-  }, [listRooms]);
-
-  useEffect(() => {
-    void refreshRooms();
-    // Keep the list live so a friend's room never needs a page reload to join.
-    const timer = window.setInterval(() => void refreshRooms(), 15_000);
-    return () => window.clearInterval(timer);
-  }, [refreshRooms]);
+  /**
+   * Joins a public room straight from Home using the existing Join Room logic,
+   * then opens the room — never a detour through the generic Join screen.
+   */
+  const joinPublicRoom = useCallback(
+    (roomId: string) => {
+      gate(async () => {
+        setJoiningRoomId(roomId);
+        try {
+          const room = await joinRoom({ roomId });
+          if (room) navigate(`/room/${room.id}`);
+        } finally {
+          setJoiningRoomId((current) => (current === roomId ? null : current));
+        }
+      });
+    },
+    [gate, joinRoom, navigate],
+  );
 
   const featured = games.filter((game) => game.featured);
 
@@ -255,13 +257,14 @@ export function HomeScreen() {
                     >
                       {room.playerCount}/{room.maxPlayers}
                     </span>{' '}
-                    players
+                    players · {room.status === 'LOBBY' ? 'Open' : room.status === 'READY' ? 'Starting soon' : 'Waiting'}
                   </p>
                 </div>
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => gate(() => navigate(`/join?code=${room.id}`))}
+                  loading={joiningRoomId === room.id}
+                  onClick={() => joinPublicRoom(room.id)}
                 >
                   Join
                 </Button>

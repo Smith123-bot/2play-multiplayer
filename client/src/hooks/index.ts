@@ -6,3 +6,4 @@ export * from './useMediaQuery';
 export * from './useAudioUnlock';
 export * from './useIdentityGate';
 export * from './useLeaveRoomOnBackNavigation';
+export * from './usePublicRooms';

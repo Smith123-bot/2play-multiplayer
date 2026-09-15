@@ -93,7 +93,11 @@ const CASES: GameCase[] = [
       Array.isArray(state.foods) &&
       Boolean(state.snakes) &&
       typeof state.stepMs === 'number' &&
-      typeof state.endsAt === 'number',
+      typeof state.endsAt === 'number' &&
+      // Every snake starts with exactly 3 lives and a respawn-grace flag.
+      Object.values(state.snakes as Record<string, { lives: unknown; maxLives: unknown; safe: unknown } | null>).every(
+        (snake) => snake !== null && snake.lives === 3 && snake.maxLives === 3 && snake.safe === false,
+      ),
     action: { type: 'turn', payload: { direction: 'up' } },
   },
   {
@@ -219,15 +223,6 @@ const CASES: GameCase[] = [
       typeof state.round === 'number' &&
       typeof state.cols === 'number',
     action: { type: 'TRIGGER_NODE', payload: { nodeId: '0,0' } },
-  },
-  {
-    id: 'one-button-battle',
-    expect: (state) =>
-      Boolean(state.players) &&
-      typeof state.currentIndex === 'number' &&
-      typeof state.totalEvents === 'number' &&
-      typeof state.endsAt === 'number',
-    action: { type: 'tap' },
   },
   {
     id: 'split-world',
@@ -397,17 +392,6 @@ const CASES: GameCase[] = [
       (state.circuits as number) > 0 &&
       Boolean(state.players),
     action: { type: 'rotate', payload: { tileId: 't0-0' } },
-  },
-  {
-    id: 'domino-mind',
-    maxPlayers: 2,
-    expect: (state) =>
-      Array.isArray(state.pieces) &&
-      (state.pieces as unknown[]).length > 0 &&
-      Array.isArray(state.requiredTargets) &&
-      typeof state.budget === 'number' &&
-      Boolean(state.players),
-    action: { type: 'push' },
   },
   {
     id: 'rock-paper-scissors',

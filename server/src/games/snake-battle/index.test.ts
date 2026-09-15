@@ -27,6 +27,9 @@ function makeSnake(overrides: Partial<SnakePlayerState> = {}): SnakePlayerState 
     growPending: 0,
     disconnected: false,
     left: false,
+    lives: 3,
+    spawnIndex: 0,
+    safeSteps: 0,
     ...overrides,
   };
 }
@@ -52,7 +55,14 @@ describe('Snake Battle', () => {
   const publicState = (viewerId?: string) =>
     platform.gameManager.getPublicState(room, viewerId) as {
       phase: string;
-      snakes: Record<string, { body: Array<{ x: number; y: number }>; alive: boolean; score: number } | null>;
+      snakes: Record<string, {
+        body: Array<{ x: number; y: number }>;
+        alive: boolean;
+        score: number;
+        lives: number;
+        maxLives: number;
+        safe: boolean;
+      } | null>;
       foods: Array<{ x: number; y: number }>;
       endsAt: number | null;
     };
@@ -74,6 +84,10 @@ describe('Snake Battle', () => {
     expect(a.body[0]!.y).toBe(b.body[0]!.y);
     expect(state().foods).toHaveLength(2);
     expect(state().startedAt).toBeGreaterThan(0);
+    // Every snake starts with exactly 3 lives.
+    expect(a.lives).toBe(3);
+    expect(b.lives).toBe(3);
+    expect(a.safeSteps).toBe(0);
   });
 
   /* ---------------------------------------------------------------- */
@@ -136,7 +150,7 @@ describe('Snake Battle', () => {
     expect(snakeState.foods.some((food) => food.x === 6 && food.y === 8)).toBe(false);
   });
 
-  it('kills on wall collision, self collision and body collision', () => {
+  it('a wall or self crash costs one life and respawns safely while lives remain', () => {
     const ctx = context();
     const build = (snake: SnakePlayerState): SnakeBattleState => ({
       phase: 'playing',
@@ -155,34 +169,70 @@ describe('Snake Battle', () => {
       nextAIRequestAt: {},
     });
 
+    // Wall crash with lives remaining: lose one life, stay alive, respawn.
     const wall = build(makeSnake({ body: [{ x: 16, y: 0 }], direction: 'right' }));
-    stepSnakes(wall, ctx);
-    expect(wall.snakes.a!.alive).toBe(false);
-    expect(wall.snakes.a!.deathStep).toBe(0);
+    const wallOutcome = stepSnakes(wall, ctx);
+    expect(wallOutcome.livesLost).toEqual(['a']);
+    expect(wallOutcome.deaths).toEqual([]);
+    expect(wall.snakes.a!.alive).toBe(true);
+    expect(wall.snakes.a!.lives).toBe(2);
+    expect(wall.snakes.a!.deathStep).toBeNull();
+    expect(wall.snakes.a!.body).toHaveLength(3); // fresh spawn body
+    expect(wall.snakes.a!.safeSteps).toBeGreaterThan(0); // grace period
+    expect(wall.lastEvent).toBe('life:a');
 
-    // Self collision: the next head lands on a non-tail body cell.
+    // Self collision: the next head lands on a non-tail body cell — same deal.
     const hook = [
       { x: 4, y: 4 }, { x: 5, y: 4 }, { x: 5, y: 5 }, { x: 4, y: 5 }, { x: 3, y: 5 },
     ];
-    const self = build(makeSnake({ body: hook, direction: 'down' }));
-    stepSnakes(self, ctx);
-    expect(self.snakes.a!.alive).toBe(false);
-
-    const other = build(makeSnake({ body: [{ x: 5, y: 8 }] }));
-    other.snakes.b = makeSnake({ body: [{ x: 6, y: 8 }, { x: 6, y: 9 }], direction: 'up' });
-    stepSnakes(other, ctx);
-    expect(other.snakes.a!.alive).toBe(false); // a ran into b's body
-    expect(other.snakes.b!.alive).toBe(true);
+    const self = build(makeSnake({ body: hook, direction: 'down', lives: 2 }));
+    const selfOutcome = stepSnakes(self, ctx);
+    expect(selfOutcome.livesLost).toEqual(['a']);
+    expect(self.snakes.a!.alive).toBe(true);
+    expect(self.snakes.a!.lives).toBe(1);
   });
 
-  it('simultaneous head-to-head kills both snakes', () => {
+  it('snakes pass through each other — rival contact never costs a life', () => {
+    const ctx = context();
+    const build = (snakes: Record<string, SnakePlayerState>): SnakeBattleState => ({
+      phase: 'playing',
+      cols: 17,
+      rows: 17,
+      snakes,
+      foods: [],
+      stepMs: 250,
+      stepIndex: 0,
+      accumulatorMs: 0,
+      startedAt: 1,
+      endsAt: 2,
+      durationMs: 1000,
+      finishReason: null,
+      lastEvent: null,
+      nextAIRequestAt: {},
+    });
+
+    // a runs straight through b's body: nothing happens to either snake.
+    const through = build({
+      a: makeSnake({ body: [{ x: 5, y: 8 }] }),
+      b: makeSnake({ body: [{ x: 6, y: 8 }, { x: 6, y: 9 }], direction: 'up', spawnIndex: 1 }),
+    });
+    const throughOutcome = stepSnakes(through, ctx);
+    expect(throughOutcome.deaths).toEqual([]);
+    expect(throughOutcome.livesLost).toEqual([]);
+    expect(through.snakes.a!.alive).toBe(true);
+    expect(through.snakes.b!.alive).toBe(true);
+    expect(through.snakes.a!.lives).toBe(3);
+    expect(through.snakes.b!.lives).toBe(3);
+  });
+
+  it('simultaneous head-to-head is a harmless pass-through, never a double kill', () => {
     const snakeState: SnakeBattleState = {
       phase: 'playing',
       cols: 17,
       rows: 17,
       snakes: {
         a: makeSnake({ body: [{ x: 7, y: 8 }, { x: 6, y: 8 }], direction: 'right' }),
-        b: makeSnake({ body: [{ x: 9, y: 8 }, { x: 10, y: 8 }], direction: 'left' }),
+        b: makeSnake({ body: [{ x: 9, y: 8 }, { x: 10, y: 8 }], direction: 'left', spawnIndex: 1 }),
       },
       foods: [],
       stepMs: 250,
@@ -195,11 +245,66 @@ describe('Snake Battle', () => {
       lastEvent: null,
       nextAIRequestAt: {},
     };
-    stepSnakes(snakeState, context());
+    const outcome = stepSnakes(snakeState, context());
+    expect(outcome.deaths).toEqual([]);
+    expect(outcome.livesLost).toEqual([]);
+    expect(snakeState.snakes.a!.alive).toBe(true);
+    expect(snakeState.snakes.b!.alive).toBe(true);
+    expect(snakeState.snakes.a!.lives).toBe(3);
+    expect(snakeState.snakes.b!.lives).toBe(3);
+    expect(snakeState.snakes.a!.deathStep).toBeNull();
+  });
+
+  it('the last life eliminates; respawn grace forgives crashes until it expires', () => {
+    const ctx = context();
+    const snakeState: SnakeBattleState = {
+      phase: 'playing',
+      cols: 17,
+      rows: 17,
+      snakes: {
+        a: makeSnake({ body: [{ x: 16, y: 0 }], direction: 'right', lives: 1 }),
+      },
+      foods: [],
+      stepMs: 250,
+      stepIndex: 7,
+      accumulatorMs: 0,
+      startedAt: 1,
+      endsAt: 2,
+      durationMs: 1000,
+      finishReason: null,
+      lastEvent: null,
+      nextAIRequestAt: {},
+    };
+    const outcome = stepSnakes(snakeState, ctx);
+    expect(outcome.deaths).toEqual(['a']);
     expect(snakeState.snakes.a!.alive).toBe(false);
-    expect(snakeState.snakes.b!.alive).toBe(false);
-    expect(snakeState.snakes.a!.deathStep).toBe(42);
-    expect(snakeState.snakes.b!.deathStep).toBe(42);
+    expect(snakeState.snakes.a!.lives).toBe(0);
+    expect(snakeState.snakes.a!.deathStep).toBe(7);
+    expect(snakeState.lastEvent).toBe('death:a');
+
+    // Grace: a respawned snake aimed at the wall survives while safeSteps last.
+    const graced: SnakeBattleState = {
+      ...snakeState,
+      snakes: {
+        a: makeSnake({ body: [{ x: 16, y: 8 }], direction: 'right', lives: 2, safeSteps: 2 }),
+      },
+      stepIndex: 8,
+    };
+    stepSnakes(graced, ctx);
+    expect(graced.snakes.a!.alive).toBe(true);
+    expect(graced.snakes.a!.lives).toBe(2);
+    expect(graced.snakes.a!.safeSteps).toBe(1);
+    // The head was clamped inside the grid instead of dying off-grid.
+    expect(graced.snakes.a!.body[0]!.x).toBe(16);
+
+    // Once the grace expires the same wall costs the next life.
+    graced.snakes.a!.safeSteps = 0;
+    graced.snakes.a!.body = [{ x: 16, y: 8 }];
+    graced.snakes.a!.direction = 'right';
+    graced.snakes.a!.pendingDirection = null;
+    const after = stepSnakes(graced, ctx);
+    expect(after.livesLost).toEqual(['a']);
+    expect(graced.snakes.a!.lives).toBe(1);
   });
 
   it('reverse directions are detected', () => {
@@ -307,6 +412,7 @@ describe('Snake Battle', () => {
 
     snakeBattleGame.playerLeft(playerId, state(), context(), 'leave');
     expect(state().snakes[playerId]!.alive).toBe(false);
+    expect(state().snakes[playerId]!.lives).toBe(0); // leaving forfeits all lives
     expect(state().phase).toBe('playing'); // survivor still racing
 
     snakeBattleGame.playerLeft(players[1]!.id, state(), context(), 'leave');
@@ -334,14 +440,30 @@ describe('Snake Battle', () => {
     state().snakes[a]!.alive = false;
     state().snakes[a]!.deathStep = 10;
     state().snakes[a]!.score = 500;
+    state().snakes[a]!.lives = 0;
     state().phase = 'finished';
     let draft = snakeBattleGame.getResult(state(), context());
     expect(draft.winners).toEqual([b]);
     expect(draft.rankings[0]!.playerId).toBe(b);
 
+    // Both alive at the whistle with equal scores → more lives remaining wins.
+    state().snakes[a]!.alive = true;
+    state().snakes[a]!.deathStep = null;
+    state().snakes[a]!.lives = 1;
+    state().snakes[a]!.score = 100;
+    state().snakes[b]!.lives = 3;
+    state().snakes[b]!.score = 100;
+    draft = snakeBattleGame.getResult(state(), context());
+    expect(draft.winners).toEqual([b]);
+
     // Both died on the same step → higher score wins.
+    state().snakes[a]!.alive = false;
+    state().snakes[a]!.deathStep = 10;
+    state().snakes[a]!.lives = 0;
+    state().snakes[a]!.score = 500;
     state().snakes[b]!.alive = false;
     state().snakes[b]!.deathStep = 10;
+    state().snakes[b]!.lives = 0;
     state().snakes[b]!.score = 50;
     draft = snakeBattleGame.getResult(state(), context());
     expect(draft.winners).toEqual([a]);
@@ -385,6 +507,8 @@ describe('Snake Battle', () => {
     for (const snake of Object.values(next.snakes)) {
       expect(snake.score).toBe(0);
       expect(snake.foodEaten).toBe(0);
+      expect(snake.lives).toBe(3);
+      expect(snake.safeSteps).toBe(0);
     }
     expect(snakeBattleGame.isGameFinished(next)).toBe(false);
   });
@@ -473,6 +597,9 @@ describe('Snake Battle', () => {
     for (const player of players) {
       expect(view.snakes[player.id]!.body).toHaveLength(3);
       expect(view.snakes[player.id]!.alive).toBe(true);
+      expect(view.snakes[player.id]!.lives).toBe(3);
+      expect(view.snakes[player.id]!.maxLives).toBe(3);
+      expect(view.snakes[player.id]!.safe).toBe(false);
     }
     expect(view.foods).toHaveLength(2);
     expect(view.endsAt).toBeGreaterThan(0);

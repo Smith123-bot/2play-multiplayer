@@ -408,7 +408,7 @@ export const SNAKE_BATTLE_METADATA = {
   id: 'snake-battle',
   name: 'Snake Battle',
   description:
-    'Two snakes, one arena. Grab the food, cut off your rival and be the last serpent sliding. The server moves every snake on a fixed clock.',
+    'Two snakes, one arena, three lives each. Grab the food, dodge the walls and outlast your rival — snakes pass through each other, so only your own crashes cost lives. The server moves every snake on a fixed clock.',
   category: 'reflex' as const,
   icon: '🐍',
   thumbnail: '🐍',
@@ -424,24 +424,27 @@ export const SNAKE_BATTLE_METADATA = {
     'Both snakes slide on the same 17x17 grid, one cell every quarter second.',
     'Turn up, down, left or right — reversing into yourself is rejected by the server.',
     'Eating food grows your snake by one segment and scores 10 points.',
-    'Hitting a wall, any snake body or another head kills your snake instantly.',
-    'A dead snake is out, but the survivor keeps eating until the clock or their own crash.',
-    'Survive longer to win; if both die on the same step the higher score takes it.',
+    'Every snake starts with exactly 3 lives, shown in the arena.',
+    'Hitting a wall or your own body costs 1 life and respawns you safely with a short grace period.',
+    'Snakes pass through EACH OTHER — rival contact never costs a life.',
+    'You are eliminated only when all 3 lives are gone; the survivor keeps eating until the clock.',
+    'Survive longer to win; ties break by lives remaining, then score.',
   ],
-  scoring: '10 points per food. Survival beats score; score breaks survival ties.',
-  winCondition: 'Outlive your rival (or outhunt them on the fatal step).',
+  scoring: '10 points per food. Survival beats lives, lives beat score; score breaks the rest.',
+  winCondition: 'Outlast your rival — or finish with more lives, then more food.',
   tags: ['reflex', 'arcade', 'classic', '2 players'],
   featured: false,
   howToPlay: {
     controls: { mobile: 'Swipe across the board or use the on-screen D-pad.', desktop: 'Arrow keys or WASD to steer.' },
     turnSystem: 'Simultaneous and real-time — both snakes move on the same server step, so there are no turns.',
-    timeLimit: 'A 3-minute arena clock, with both snakes advancing one cell every 250 ms. Your own run ends the moment you crash.',
-    winCondition: 'Outlive your rival. If both snakes die on the same step the higher score takes it; if scores are level too, the match is a draw.',
+    timeLimit: 'A 3-minute arena clock, with both snakes advancing one cell every 250 ms. Losing a life respawns you; only the third one ends your run.',
+    winCondition: 'Outlast your rival. If both snakes are eliminated on the same step — or both survive the clock — more lives remaining wins, then the higher score; if those are level too, the match is a draw.',
     specialRules: [
       'The 17×17 grid is shared and the server owns both snakes and every step.',
       'Reversing directly into your own body is rejected by the server.',
-      'Hitting a wall, any snake body or the other head kills your snake instantly.',
-      'A dead snake is out, but the survivor keeps eating until the clock ends or it crashes too.',
+      'Each snake has 3 lives: a wall or self crash costs one life and respawns you with a short grace period.',
+      'Snakes pass through each other — the rival can never cost you a life.',
+      'An eliminated snake is out, but the survivor keeps eating until the clock ends.',
     ],
   },
   version: '1.0.0',
@@ -630,7 +633,7 @@ export const DRAW_GUESS_METADATA = {
   id: 'draw-guess-battle',
   name: 'Draw & Guess Battle',
   description:
-    'Take turns as the drawer. Sketch a secret word on a 2D canvas while everyone else races to guess it. The word never leaves the server.',
+    'Take turns as the drawer. Sketch an easy, funny secret word from a 900+ prompt pool on a smooth 2D canvas while everyone else races to guess it. The word never leaves the server.',
   category: 'word' as const,
   icon: '🎨',
   thumbnail: '🎨',
@@ -644,6 +647,7 @@ export const DRAW_GUESS_METADATA = {
   controls: 'Draw with your finger or mouse. Type guesses and press Enter. Brush, eraser and a simple palette.',
   rules: [
     'Each round one player is the drawer and receives a secret word nobody else can see.',
+    'Words come from a 900+ pool of easy, funny prompts across 18 categories — never repeated until the deck runs out.',
     'The drawer sketches on a shared 2D canvas; strokes are sent as points, never a screenshot.',
     'Everyone else types guesses. The first correct guess scores the most; later solvers score less.',
     'The drawer earns a bonus for every unique solver.',
@@ -663,6 +667,7 @@ export const DRAW_GUESS_METADATA = {
     winCondition: 'Highest score across all drawing rounds wins. Equal totals are a draw.',
     specialRules: [
       'The drawer receives a secret word nobody else can see.',
+      'Words come from a 900+ pool of easy, funny prompts across 18 categories, never repeated until the deck runs out.',
       'Strokes are sent as points on a shared 2D canvas, never a screenshot.',
       'The first correct guess scores the most; later solvers score progressively less.',
       'The drawer earns a bonus for every unique solver.',
@@ -1021,47 +1026,6 @@ export const CHAIN_REACTION_METADATA = {
       'Triggering a node chains into same-colour neighbours; arrows continue in their direction; blockers never chain.',
       'You get exactly two triggers per round.',
       'Clients submit a node id — the chain length and the score are computed by the server.',
-    ],
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
-export const ONE_BUTTON_METADATA = {
-  id: 'one-button-battle',
-  name: 'One Button Battle',
-  description:
-    'One button, many contexts. Jump, dash, dodge, switch, collect or shield — only if you press in the window.',
-  category: 'reflex' as const,
-  icon: '🔘',
-  thumbnail: '🔘',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 120,
-  difficulty: 'medium' as const,
-  controls: 'One large action button, or Space. Timing is everything.',
-  rules: [
-    'A sequence of events approaches. The current context (jump, dash, dodge, switch, collect, shield) is shown.',
-    'Press in the timing window to succeed. Early or late presses miss and break your streak.',
-    'The server owns the window, the context and the score. Clients only send tap.',
-    'Highest score after the sequence wins.',
-  ],
-  scoring: 'Hit +20 plus 5 per streak step. Misses score 0 and reset the streak.',
-  winCondition: 'Score the most points across the event sequence.',
-  tags: ['reflex', 'timing', 'party', '2-4 players'],
-  featured: true,
-  howToPlay: {
-    controls: { mobile: 'Tap the single big button when the cue tells you to.', desktop: 'Press Space or click the single button when the cue tells you to.' },
-    turnSystem: 'Simultaneous — every player faces the same cue sequence at the same moment, with one button each.',
-    timeLimit: 'A 48-second event sequence. Each cue gives a 0.9 s timing window, with a 1.2 s lead-in and 2.4 s between events.',
-    winCondition: 'Highest score after the sequence wins. Equal scores are a draw.',
-    specialRules: [
-      'The current context (jump, dash, dodge, switch, collect, shield) is shown before each cue.',
-      'Pressing inside the window succeeds; an early or late press misses and breaks your streak.',
-      'The server owns the window, the context and the score — a client only ever sends a tap.',
     ],
   },
   version: '1.0.0',
@@ -1800,66 +1764,6 @@ export const FUSE_METADATA = {
 } satisfies GameMetadata;
 
 
-export const DOMINO_MIND_METADATA = {
-  id: 'domino-mind',
-  name: 'Domino Mind',
-  description:
-    'Place dominoes to build a chain reaction, then push the starter and watch the cascade hit every target.',
-  category: 'strategy' as const,
-  icon: '🁣',
-  thumbnail: '🁣',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 480,
-  difficulty: 'hard' as const,
-  controls: 'Tap an empty cell to place a domino, tap a placed one to rotate, then press Push.',
-  rules: [
-    'Each level has a start domino, some targets, and a small budget of dominoes you may place.',
-    'A falling domino topples the first standing piece within reach along the way it faces.',
-    'Only the START domino can be pushed \u2014 you must build a route to everything else.',
-    'Splitters also topple sideways. Blockers stop a chain dead and never fall.',
-    'The level is solved when every target has fallen and no forbidden domino has.',
-  ],
-  scoring: 'Level solved +250, placement bonus up to +120, plus a speed bonus. Each failed attempt costs 15.',
-  winCondition: 'Highest total score after the final level. Fastest server-recorded solve breaks a tie.',
-  tags: ['puzzle', 'logic', 'chain-reaction', 'race', '2-4 players'],
-  featured: true,
-  hasRounds: true,
-  defaultRounds: 5,
-  howToPlay: {
-    turnSystem: 'Simultaneous — everyone builds their own domino chain against the same level clock; there are no turns.',
-    objective: 'Build a chain reaction that knocks over every target when you push the start domino.',
-    steps: [
-      'Find the START domino \u2014 it is the only one you are allowed to push.',
-      'Tap an empty cell to place one of your dominoes, facing the way it should fall.',
-      'Tap a domino you placed to rotate it, or remove it to get the budget back.',
-      'Press Push to run the chain reaction.',
-      'If it stops short, adjust your layout and try again \u2014 failing does not end the level.',
-    ],
-    controls: {
-      mobile: 'Tap an empty cell to place, tap your domino to rotate, then tap Push.',
-      desktop: 'Click to place and rotate; click Push to run the cascade.',
-    },
-    scoring:
-      'Solving a level scores 250 plus a placement bonus (120/70/40/20) and a speed bonus of up to 150. Each failed attempt costs 15, so think before you push.',
-    winCondition: 'The highest total score after the last level wins.',
-    timeLimit: 'Each level has its own clock, from 90 seconds to just over 3 minutes.',
-    specialRules: [
-      'A domino topples the FIRST standing piece within reach along its facing \u2014 it cannot reach past one.',
-      'Splitters also topple the two perpendicular directions.',
-      'Blockers absorb a fall and stop the chain; they never topple.',
-      'Forbidden dominoes must stay standing, so aim carefully.',
-      'The cascade is simulated from your actual layout \u2014 change it and the result changes.',
-    ],
-    playerCount: '2\u20134 players',
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
 /**
  * Every shipped game, in registration order.
  *
@@ -1955,7 +1859,6 @@ export const ALL_GAME_METADATA: readonly GameMetadata[] = [
   FAKE_DOOR_METADATA,
   MAGNET_THIEF_METADATA,
   CHAIN_REACTION_METADATA,
-  ONE_BUTTON_METADATA,
   SPLIT_WORLD_METADATA,
   LUDO_METADATA,
   ARROW_PUZZLE_METADATA,
@@ -1970,6 +1873,5 @@ export const ALL_GAME_METADATA: readonly GameMetadata[] = [
   SIM_METADATA,
   MIRROR_GRID_METADATA,
   FUSE_METADATA,
-  DOMINO_MIND_METADATA,
   ROCK_PAPER_SCISSORS_METADATA,
 ] as const;

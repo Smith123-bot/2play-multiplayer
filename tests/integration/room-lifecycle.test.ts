@@ -86,6 +86,89 @@ describe('room lifecycle over sockets', () => {
     }
   });
 
+  it('pushes public room list updates live: created rooms appear and closed rooms disappear without polling', async () => {
+    const watcher = connect(server.url);
+    const host = connect(server.url);
+    try {
+      await once(watcher, 'connect');
+      await once(host, 'connect');
+      await authenticate(watcher, 'RoomWatcher');
+      await authenticate(host, 'LiveHostOne');
+
+      // A newly created public room is pushed to every connected client.
+      const appearPromise = once<{ rooms: Array<{ id: string; isPrivate: boolean }> }>(
+        watcher,
+        'room:list',
+      );
+      const created = await emitAck<{ room: RoomState }>(host, 'room:create', {
+        gameId: 'reaction-race',
+        maxPlayers: 4,
+        isPrivate: false,
+      });
+      expect(created.ok).toBe(true);
+      const roomId = created.data?.room.id;
+      expect(roomId).toMatch(/^[A-Z0-9]{6}$/);
+
+      const appeared = await appearPromise;
+      expect(appeared.rooms.some((room) => room.id === roomId)).toBe(true);
+      expect(appeared.rooms.every((room) => room.isPrivate === false)).toBe(true);
+
+      // When the room closes (last player leaves), a push arrives that no longer
+      // lists it. The leave emits player-left before the close, so the first
+      // push can still show the briefly-empty room — wait for the push that
+      // reflects the closed room instead of asserting on the first one.
+      const disappearedPromise = new Promise<{ rooms: Array<{ id: string }> }>(
+        (resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error('timeout waiting for room to disappear from "room:list"')),
+            5000,
+          );
+          const handler = (payload: { rooms: Array<{ id: string }> }) => {
+            if (!payload.rooms.some((room) => room.id === roomId)) {
+              clearTimeout(timer);
+              watcher.off('room:list', handler);
+              resolve(payload);
+            }
+          };
+          watcher.on('room:list', handler);
+        },
+      );
+      const left = await emitAck<{ left: boolean }>(host, 'room:leave', {});
+      expect(left.ok).toBe(true);
+      const disappeared = await disappearedPromise;
+      expect(disappeared.rooms.some((room) => room.id === roomId)).toBe(false);
+    } finally {
+      watcher.close();
+      host.close();
+    }
+  });
+
+  it('never exposes private rooms through pushes or listing', async () => {
+    const watcher = connect(server.url);
+    const host = connect(server.url);
+    try {
+      await once(watcher, 'connect');
+      await once(host, 'connect');
+      await authenticate(watcher, 'PrivacyWatch');
+      await authenticate(host, 'PrivateHost');
+
+      const created = await emitAck<{ room: RoomState }>(host, 'room:create', {
+        gameId: 'reaction-race',
+        maxPlayers: 4,
+        isPrivate: true,
+      });
+      expect(created.ok).toBe(true);
+      const privateId = created.data?.room.id;
+
+      const listed = await emitAck<{ rooms: Array<{ id: string }> }>(watcher, 'room:list', {});
+      expect(listed.ok).toBe(true);
+      expect(listed.data?.rooms.some((room) => room.id === privateId)).toBe(false);
+    } finally {
+      watcher.close();
+      host.close();
+    }
+  });
+
   it('rejects invalid room codes with a typed error', async () => {
     const socket = connect(server.url);
     try {
@@ -201,7 +284,6 @@ describe('room lifecycle over sockets', () => {
       'connect-four',
       'couple-memory',
       'couple-sync',
-      'domino-mind',
       'dots-and-boxes',
       'draw-guess-battle',
       'fake-door-battle',
@@ -213,7 +295,6 @@ describe('room lifecycle over sockets', () => {
       'maze-race-2d',
       'memory-match',
       'mirror-grid',
-      'one-button-battle',
       'paddle-duel',
       'pattern-memory-battle',
       'reaction-race',

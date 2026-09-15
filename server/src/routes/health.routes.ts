@@ -3,6 +3,15 @@ import { APP_NAME, APP_VERSION } from '@2play/shared';
 import type { Platform } from '../core/Platform';
 import { env, isProduction } from '../config/env';
 
+/**
+ * GET /healthz — bare liveness probe for uptime monitors and Render health
+ * checks. Deliberately static: no database, no rooms, no games, no platform
+ * access of any kind, so it answers 200 whenever the process can serve HTTP.
+ */
+export function healthzHandler(_req: Request, res: Response): void {
+  res.status(200).json({ status: 'ok' });
+}
+
 /** GET /api/health — liveness, environment and database status. No secrets. */
 export function createHealthRouter(platform: Platform): Router {
   const router = Router();

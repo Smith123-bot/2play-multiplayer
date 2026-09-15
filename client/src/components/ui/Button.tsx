@@ -2,7 +2,16 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'outline';
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'ghost'
+  | 'danger'
+  | 'success'
+  | 'outline'
+  | 'create'
+  | 'join'
+  | 'rooms';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -22,6 +31,14 @@ const VARIANTS: Record<ButtonVariant, string> = {
   danger: 'bg-danger/90 text-white hover:bg-danger',
   success: 'bg-success text-white hover:bg-success/90',
   outline: 'border border-primary-400/60 text-primary-200 hover:bg-primary-500/10',
+  // Hero gradient family (same structure as primary, hue-rotated so the Home
+  // actions share one premium language while staying distinguishable).
+  create:
+    'bg-gradient-to-r from-secondary-500 to-accent-500 text-white shadow-lg shadow-secondary-500/25 hover:from-secondary-400 hover:to-accent-400',
+  join:
+    'bg-gradient-to-r from-accent-500 to-primary-500 text-white shadow-lg shadow-accent-500/25 hover:from-accent-400 hover:to-primary-400',
+  rooms:
+    'bg-gradient-to-br from-primary-500 to-accent-500 text-white shadow-lg shadow-accent-500/25 hover:from-primary-400 hover:to-accent-400',
 };
 
 const SIZES: Record<ButtonSize, string> = {

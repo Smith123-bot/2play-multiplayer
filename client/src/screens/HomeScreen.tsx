@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, BarChart3, Heart, Plus, RefreshCw, Sparkles, Users, Zap } from 'lucide-react';
+import { ArrowRight, BarChart3, Heart, LogIn, Plus, RefreshCw, Sparkles, Users, Zap } from 'lucide-react';
 import { GameCard } from '../components/game/GameCard';
 import { ActiveRoomPrompt } from '../components/room/ActiveRoomPrompt';
 import { PublicRoomsModal } from '../components/room/PublicRoomsModal';
@@ -177,18 +177,23 @@ export function HomeScreen() {
             </Button>
             <Button
               size="lg"
-              variant="secondary"
+              variant="create"
               onClick={() => gate(() => navigate('/create'))}
               icon={<Plus className="h-4 w-4" />}
             >
               Create room
             </Button>
-            <Button size="lg" variant="ghost" onClick={() => gate(() => navigate('/join'))}>
+            <Button
+              size="lg"
+              variant="join"
+              onClick={() => gate(() => navigate('/join'))}
+              icon={<LogIn className="h-4 w-4" />}
+            >
               Join room
             </Button>
             <Button
               size="lg"
-              variant="ghost"
+              variant="rooms"
               onClick={() => setRoomsOpen(true)}
               icon={<Users className="h-4 w-4" />}
             >

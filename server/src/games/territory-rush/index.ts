@@ -12,18 +12,29 @@ import type {
 import { actionAccepted, actionRejected } from '../GameModule';
 
 /**
- * Territory Rush — real-time grid capture.
- *
- * Clients send only `turn` intents. The server steps every player one cell,
- * validates trails, flood-fills enclosed regions and owns the percentages.
+ * Features: Kill attribution, dynamic neutralisation on death,
+ * visual theme palettes, leaderboard tracking, and combat event logs.
  */
 
 export type RushPhase = 'idle' | 'playing' | 'finished';
 export type RushDirection = 'up' | 'down' | 'left' | 'right';
 
+export interface RushEvent {
+  id: string;
+  type: 'kill' | 'cut' | 'capture' | 'suicide' | 'lead_change' | 'stage';
+  killerId?: string;
+  victimId?: string;
+  playerId?: string;
+  cellsGained?: number;
+  message: string;
+  timestamp: number;
+}
+
 export interface RushRunner {
   x: number;
   y: number;
+  prevX: number;
+  prevY: number;
   direction: RushDirection;
   pending: RushDirection | null;
   alive: boolean;
@@ -31,12 +42,15 @@ export interface RushRunner {
   trail: number[];
   home: number[];
   owner: number;
+  kills: number;
+  killStreak: number;
   captures: number;
   deaths: number;
   largestCapture: number;
   latestInputSeq: number;
   disconnected: boolean;
   left: boolean;
+  colorIndex: number;
 }
 
 export interface TerritoryRushState {
@@ -57,16 +71,27 @@ export interface TerritoryRushState {
   durationMs: number;
   finishReason: GameFinishReason | null;
   lastEvent: string | null;
+  events: RushEvent[];
+  leaderId: string | null;
   nextAIRequestAt: Record<string, number>;
 }
 
-export const RUSH_COLS = 40;
-export const RUSH_ROWS = 24;
-const STEP_MS = 250;
+export const RUSH_COLS = 42;
+export const RUSH_ROWS = 26;
+const STEP_MS = 220;
 const MATCH_MS = 3 * 60 * 1000;
-const FREEZE_MS = 900;
+const FREEZE_MS = 1200;
 const HOME_RADIUS = 1;
-const AI_INTERVAL: Record<AIDifficulty, number> = { easy: 420, medium: 260, hard: 140 };
+const AI_INTERVAL: Record<AIDifficulty, number> = { easy: 380, medium: 220, hard: 120 };
+
+export const PALETTES = [
+  { id: 0, name: 'Cyber Red', hex: '#FF4757', trail: '#FF6B81', fill: '#2F3542' },
+  { id: 1, name: 'Neon Mint', hex: '#2ED573', trail: '#7BED9F', fill: '#1E272E' },
+  { id: 2, name: 'Royal Sky', hex: '#1E90FF', trail: '#70A1FF', fill: '#2F3542' },
+  { id: 3, name: 'Amber Gold', hex: '#FFA502', trail: '#ECCC68', fill: '#1E272E' },
+  { id: 4, name: 'Electric Purple', hex: '#9B59B6', trail: '#BE2EDD', fill: '#2F3542' },
+  { id: 5, name: 'Vibrant Coral', hex: '#FF6348', trail: '#FFA502', fill: '#1E272E' },
+];
 
 const DELTA: Record<RushDirection, { dx: number; dy: number }> = {
   up: { dx: 0, dy: -1 },
@@ -74,7 +99,9 @@ const DELTA: Record<RushDirection, { dx: number; dy: number }> = {
   left: { dx: -1, dy: 0 },
   right: { dx: 1, dy: 0 },
 };
+
 const ALL_DIRS: RushDirection[] = ['up', 'down', 'left', 'right'];
+
 const REVERSE: Record<RushDirection, RushDirection> = {
   up: 'down',
   down: 'up',
@@ -96,7 +123,9 @@ export function encodeGrid(grid: number[]): string {
 
 export function countCells(grid: number[], owner: number): number {
   let n = 0;
-  for (const cell of grid) if (cell === owner) n += 1;
+  for (let i = 0; i < grid.length; i += 1) {
+    if (grid[i] === owner) n += 1;
+  }
   return n;
 }
 
@@ -109,11 +138,16 @@ function spawnAnchor(
   cols: number,
   rows: number,
 ): { x: number; y: number; direction: RushDirection } {
-  const inset = 2;
-  if (seat === 0) return { x: inset, y: inset, direction: 'right' };
-  if (seat === 1) return { x: cols - 1 - inset, y: inset, direction: 'left' };
-  if (seat === 2) return { x: inset, y: rows - 1 - inset, direction: 'right' };
-  return { x: cols - 1 - inset, y: rows - 1 - inset, direction: 'left' };
+  const inset = 3;
+  const positions: Array<{ x: number; y: number; direction: RushDirection }> = [
+    { x: inset, y: inset, direction: 'right' },
+    { x: cols - 1 - inset, y: inset, direction: 'left' },
+    { x: inset, y: rows - 1 - inset, direction: 'right' },
+    { x: cols - 1 - inset, y: rows - 1 - inset, direction: 'left' },
+    { x: Math.floor(cols / 2), y: inset, direction: 'down' },
+    { x: Math.floor(cols / 2), y: rows - 1 - inset, direction: 'up' },
+  ];
+  return positions[seat % positions.length]!;
 }
 
 export function paintHome(
@@ -147,8 +181,7 @@ function allHomes(state: TerritoryRushState): Set<number> {
 }
 
 /**
- * Paint the trail as `owner`, then flood-fill empty space from the map border.
- * Anything empty (or stealable) that the border flood cannot reach is enclosed.
+ * Enclosed area capture using inverse flood fill from outer edges.
  */
 export function captureEnclosed(
   grid: number[],
@@ -165,12 +198,14 @@ export function captureEnclosed(
   const total = cols * rows;
   const outside = new Uint8Array(total);
   const queue: number[] = [];
+
   const tryPush = (i: number) => {
     if (i < 0 || i >= total || outside[i] === 1 || protectedCells.has(i)) return;
-    if (grid[i] !== 0) return;
+    if (grid[i] !== 0 && grid[i] === owner) return;
     outside[i] = 1;
     queue.push(i);
   };
+
   for (let x = 0; x < cols; x += 1) {
     tryPush(x);
     tryPush(x + (rows - 1) * cols);
@@ -179,6 +214,7 @@ export function captureEnclosed(
     tryPush(y * cols);
     tryPush(y * cols + cols - 1);
   }
+
   while (queue.length > 0) {
     const i = queue.pop()!;
     const x = i % cols;
@@ -188,17 +224,36 @@ export function captureEnclosed(
     if (y > 0) tryPush(i - cols);
     if (y + 1 < rows) tryPush(i + cols);
   }
+
   for (let i = 0; i < total; i += 1) {
     if (protectedCells.has(i) && grid[i] !== owner) continue;
     if (outside[i] === 1) continue;
-    if (grid[i] === 0 || grid[i] !== owner) grid[i] = owner;
+    grid[i] = owner;
   }
   return Math.max(0, countCells(grid, owner) - before);
+}
+
+/**
+ * In true Paper.io fashion, eliminating a player wipes out their conquered land,
+ * resetting contested areas back to neutral (0) while protecting other players' homes.
+ */
+function wipePlayerTerritory(
+  grid: number[],
+  owner: number,
+  homeCells: number[],
+): void {
+  const homeSet = new Set(homeCells);
+  for (let i = 0; i < grid.length; i += 1) {
+    if (grid[i] === owner && !homeSet.has(i)) {
+      grid[i] = 0;
+    }
+  }
 }
 
 function respawn(runner: RushRunner, now: number): void {
   runner.trail = [];
   runner.alive = true;
+  runner.killStreak = 0;
   runner.frozenUntil = now + FREEZE_MS;
   runner.deaths += 1;
 }
@@ -207,11 +262,17 @@ function placeOnHome(runner: RushRunner, cols: number): void {
   const mid = runner.home[Math.floor(runner.home.length / 2)] ?? 0;
   runner.x = mid % cols;
   runner.y = (mid / cols) | 0;
+  runner.prevX = runner.x;
+  runner.prevY = runner.y;
   runner.trail = [];
 }
 
-function trailSet(runner: RushRunner): Set<number> {
-  return new Set(runner.trail);
+function pushEvent(state: TerritoryRushState, event: Omit<RushEvent, 'id'>): void {
+  const id = `${event.timestamp}-${Math.random().toString(36).substring(2, 7)}`;
+  state.events.push({ ...event, id });
+  if (state.events.length > 8) {
+    state.events.shift();
+  }
 }
 
 export function stepTerritory(
@@ -232,6 +293,8 @@ export function stepTerritory(
 
   for (const id of ids) {
     const runner = state.runners[id]!;
+    runner.prevX = runner.x;
+    runner.prevY = runner.y;
     if (runner.pending) {
       runner.direction = runner.pending;
       runner.pending = null;
@@ -266,28 +329,38 @@ export function stepTerritory(
   }
 
   const dead = new Set<string>();
+  const killMap = new Map<string, string>(); // victimId -> killerId
+
   for (const id of ids) {
     const runner = state.runners[id]!;
     const plan = plans.get(id)!;
     if (plan.stay) continue;
-    const ownTrail = trailSet(runner);
-    if (ownTrail.has(plan.i)) {
+
+    // Self-trail intersection
+    if (runner.trail.includes(plan.i)) {
       dead.add(id);
+      pushEvent(state, {
+        type: 'suicide',
+        playerId: id,
+        message: 'Self-elimination!',
+        timestamp: now,
+      });
       continue;
     }
+
+    // Slicing opponents' trails
     for (const otherId of ids) {
       if (otherId === id) continue;
       const other = state.runners[otherId]!;
       if (other.trail.includes(plan.i)) {
         dead.add(otherId);
-        // Two cutters can cross the same trail on one step — record the
-        // victim once so the event and the UI never double-count the cut.
+        killMap.set(otherId, id);
         if (!outcome.cuts.includes(otherId)) outcome.cuts.push(otherId);
       }
     }
   }
 
-  // Head-to-head on the same destination: trailing players die.
+  // Head-to-head collisions: player outside territory dies
   const dest = new Map<number, string[]>();
   for (const id of ids) {
     if (dead.has(id)) continue;
@@ -297,31 +370,54 @@ export function stepTerritory(
     list.push(id);
     dest.set(plan.i, list);
   }
+
   for (const occupiers of dest.values()) {
     if (occupiers.length < 2) continue;
     for (const id of occupiers) {
       const runner = state.runners[id]!;
       const onLand =
         grid[cellIndex(cols, runner.x, runner.y)] === runner.owner && runner.trail.length === 0;
-      if (!onLand) dead.add(id);
+      if (!onLand) {
+        dead.add(id);
+      }
     }
   }
 
-  for (const id of dead) {
-    const runner = state.runners[id]!;
-    respawn(runner, now);
-    placeOnHome(runner, cols);
+  // Process eliminations & rewards
+  for (const victimId of dead) {
+    const victim = state.runners[victimId]!;
+    const killerId = killMap.get(victimId);
+    if (killerId) {
+      const killer = state.runners[killerId];
+      if (killer) {
+        killer.kills += 1;
+        killer.killStreak += 1;
+        pushEvent(state, {
+          type: 'kill',
+          killerId,
+          victimId,
+          message: killer.killStreak > 1 ? `Multi-Kill x${killer.killStreak}!` : 'Slashed!',
+          timestamp: now,
+        });
+      }
+    }
+    wipePlayerTerritory(grid, victim.owner, victim.home);
+    respawn(victim, now);
+    placeOnHome(victim, cols);
   }
 
+  // Process movement & territory captures
   for (const id of ids) {
     if (dead.has(id)) continue;
     const runner = state.runners[id]!;
     const plan = plans.get(id)!;
     if (plan.stay) continue;
+
     const fromOwned = grid[cellIndex(cols, runner.x, runner.y)] === runner.owner;
     const toOwned = grid[plan.i] === runner.owner;
     runner.x = plan.x;
     runner.y = plan.y;
+
     if (!toOwned) {
       if (fromOwned && runner.trail.length === 0) runner.trail = [plan.i];
       else runner.trail.push(plan.i);
@@ -332,14 +428,41 @@ export function stepTerritory(
       runner.captures += 1;
       runner.largestCapture = Math.max(runner.largestCapture, gained);
       outcome.captures.push(id);
+
+      const total = cols * rows;
+      const pct = Math.round((gained / total) * 100);
+      pushEvent(state, {
+        type: 'capture',
+        playerId: id,
+        cellsGained: gained,
+        message: gained > 15 ? `Huge Claim (+${pct}%)!` : `+${gained} cells`,
+        timestamp: now,
+      });
       state.lastEvent = `capture:${id}:${gained}`;
     }
   }
 
-  state.stepIndex += 1;
-  if (outcome.cuts.length > 0 && outcome.captures.length === 0) {
-    state.lastEvent = `cut:${outcome.cuts.join('+')}`;
+  // Track dynamic leader
+  let currentLeader: string | null = null;
+  let maxScore = -1;
+  for (const [id, runner] of Object.entries(state.runners)) {
+    const score = countCells(grid, runner.owner);
+    if (score > maxScore) {
+      maxScore = score;
+      currentLeader = id;
+    }
   }
+  if (currentLeader && currentLeader !== state.leaderId) {
+    state.leaderId = currentLeader;
+    pushEvent(state, {
+      type: 'lead_change',
+      playerId: currentLeader,
+      message: 'New Leader crowned!',
+      timestamp: now,
+    });
+  }
+
+  state.stepIndex += 1;
   return outcome;
 }
 
@@ -368,6 +491,8 @@ function makeRunner(
   return {
     x: spawn.x,
     y: spawn.y,
+    prevX: spawn.x,
+    prevY: spawn.y,
     direction: spawn.direction,
     pending: null,
     alive: true,
@@ -375,12 +500,15 @@ function makeRunner(
     trail: [],
     home,
     owner,
+    kills: 0,
+    killStreak: 0,
     captures: 0,
     deaths: 0,
     largestCapture: 0,
     latestInputSeq: -1,
     disconnected: false,
     left: false,
+    colorIndex: seat % PALETTES.length,
   };
 }
 
@@ -407,10 +535,11 @@ export function buildRushWalls(
       [cols * 0.65, rows * 0.35],
       [cols * 0.35, rows * 0.65],
     ]) {
-      add(Math.floor(cx), Math.floor(cy));
-      add(Math.floor(cx) + 1, Math.floor(cy));
-      add(Math.floor(cx), Math.floor(cy) + 1);
-      add(Math.floor(cx) + 1, Math.floor(cy) + 1);
+      for (let ox = 0; ox < 2; ox += 1) {
+        for (let oy = 0; oy < 2; oy += 1) {
+          add(Math.floor(cx) + ox, Math.floor(cy) + oy);
+        }
+      }
     }
   }
   return [...walls];
@@ -419,9 +548,7 @@ export function buildRushWalls(
 export const territoryRushGame: GameModule<TerritoryRushState> = {
   metadata: TERRITORY_RUSH_METADATA,
 
-  initialize(): void {
-    // Stateless module.
-  },
+  initialize(): void {},
 
   createInitialState(players): TerritoryRushState {
     const cols = RUSH_COLS;
@@ -449,6 +576,8 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       durationMs: MATCH_MS,
       finishReason: null,
       lastEvent: null,
+      events: [],
+      leaderId: null,
       nextAIRequestAt: {},
     };
   },
@@ -459,9 +588,7 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
     state.runners[player.id] = makeRunner(seat, seat + 1, state.cols, state.rows, state.grid);
   },
 
-  playerReady(): void {
-    // No per-player readiness behaviour.
-  },
+  playerReady(): void {},
 
   playerLeft(playerId, state, ctx, reason): void {
     const runner = state.runners[playerId];
@@ -472,6 +599,7 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
     }
     runner.left = true;
     runner.trail = [];
+    wipePlayerTerritory(state.grid, runner.owner, []);
     const remaining = Object.values(state.runners).filter((entry) => !entry.left);
     if (remaining.length === 0) finishTerritory(state, ctx, 'abandoned');
   },
@@ -503,6 +631,8 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
     state.endsAt = state.startedAt + state.durationMs;
     state.finishReason = null;
     state.lastEvent = 'start';
+    state.events = [];
+    state.leaderId = null;
     state.nextAIRequestAt = {};
     ctx.markStateChanged();
     ctx.schedule(
@@ -515,15 +645,14 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
 
   validateAction(playerId, action, state): ValidationResult {
     if (action.type !== 'turn') return { valid: false, reason: 'Unknown action.' };
-    if (state.phase !== 'playing') return { valid: false, reason: 'The match is not running.' };
+    if (state.phase !== 'playing') return { valid: false, reason: 'Match is not active.' };
     const direction = action.payload?.direction;
-    if (!isRushDirection(direction))
-      return { valid: false, reason: 'Use up, down, left or right.' };
+    if (!isRushDirection(direction)) return { valid: false, reason: 'Invalid direction.' };
     const runner = state.runners[playerId];
-    if (!runner || runner.left) return { valid: false, reason: 'You are not in this match.' };
+    if (!runner || runner.left) return { valid: false, reason: 'Runner not active.' };
     const effective = runner.pending ?? runner.direction;
     if (REVERSE[effective] === direction)
-      return { valid: false, reason: 'You cannot reverse instantly.' };
+      return { valid: false, reason: 'Cannot reverse directly.' };
     const sequence = action.payload?.sequence;
     if (
       sequence !== undefined &&
@@ -531,7 +660,7 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
     )
       return { valid: false, reason: 'Invalid input sequence.' };
     if (typeof sequence === 'number' && sequence <= runner.latestInputSeq)
-      return { valid: false, reason: 'Stale input.' };
+      return { valid: false, reason: 'Stale sequence.' };
     return { valid: true };
   },
 
@@ -540,7 +669,7 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
     const direction = action.payload?.direction;
     if (!isRushDirection(direction)) return actionRejected('Invalid direction.');
     const runner = state.runners[playerId];
-    if (!runner || state.phase !== 'playing') return actionRejected('You cannot steer right now.');
+    if (!runner || state.phase !== 'playing') return actionRejected('Steering locked.');
     const sequence = action.payload?.sequence;
     if (
       sequence !== undefined &&
@@ -551,7 +680,7 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       return actionRejected('Stale input.');
     if (typeof sequence === 'number') runner.latestInputSeq = sequence;
     const effective = runner.pending ?? runner.direction;
-    if (REVERSE[effective] === direction) return actionRejected('You cannot reverse instantly.');
+    if (REVERSE[effective] === direction) return actionRejected('Cannot reverse directly.');
     if (effective === direction) return actionAccepted(false);
     runner.pending = direction;
     return actionAccepted(false);
@@ -562,16 +691,20 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
     const now = ctx.now();
     if (state.nextStageAt !== null && now >= state.nextStageAt && state.stage < 3) {
       state.stage += 1;
-      state.stepMs = state.stage === 2 ? 220 : 190;
+      state.stepMs = state.stage === 2 ? 190 : 160;
       state.nextStageAt = state.startedAt! + (state.durationMs * state.stage) / 3;
       state.lastEvent = `stage:${state.stage}`;
+      pushEvent(state, {
+        type: 'stage',
+        message: `Speed Rush Stage ${state.stage}!`,
+        timestamp: now,
+      });
       ctx.markStateChanged();
     }
     for (const player of ctx.players) {
       if (!player.isAI) continue;
       const runner = state.runners[player.id];
       if (!runner || runner.left) continue;
-      const now = ctx.now();
       const difficulty = player.aiDifficulty ?? 'medium';
       if (now >= (state.nextAIRequestAt[player.id] ?? 0)) {
         ctx.requestAI(player.id, 40);
@@ -584,14 +717,11 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       state.accumulatorMs -= state.stepMs;
       guard += 1;
       stepTerritory(state, ctx);
-      // Every authoritative movement step must reach all clients, not only captures.
       ctx.markStateChanged();
     }
   },
 
-  tick(): void {
-    // Handled by update().
-  },
+  tick(): void {},
 
   calculateScore(playerId, state): number {
     const runner = state.runners[playerId];
@@ -626,9 +756,9 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       const cellsA = countCells(state.grid, state.runners[a.id]?.owner ?? -1);
       const cellsB = countCells(state.grid, state.runners[b.id]?.owner ?? -1);
       if (cellsB !== cellsA) return cellsB - cellsA;
-      const cap = (state.runners[b.id]?.captures ?? 0) - (state.runners[a.id]?.captures ?? 0);
-      if (cap !== 0) return cap;
-      return (state.runners[a.id]?.deaths ?? 0) - (state.runners[b.id]?.deaths ?? 0);
+      const kills = (state.runners[b.id]?.kills ?? 0) - (state.runners[a.id]?.kills ?? 0);
+      if (kills !== 0) return kills;
+      return (state.runners[b.id]?.captures ?? 0) - (state.runners[a.id]?.captures ?? 0);
     });
     const top = countCells(state.grid, state.runners[ranked[0]?.id ?? '']?.owner ?? -1);
     const winners = ranked
@@ -636,7 +766,8 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       .map((player) => player.id);
     const total = state.cols * state.rows;
     const rankings: RankingDraft[] = ranked.map((player, index) => {
-      const cells = countCells(state.grid, state.runners[player.id]?.owner ?? -1);
+      const runner = state.runners[player.id];
+      const cells = countCells(state.grid, runner?.owner ?? -1);
       return {
         playerId: player.id,
         rank: index + 1,
@@ -646,9 +777,10 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
         stats: {
           cells,
           percent: Math.round((cells / Math.max(1, total)) * 100),
-          captures: state.runners[player.id]?.captures ?? 0,
-          deaths: state.runners[player.id]?.deaths ?? 0,
-          largestCapture: state.runners[player.id]?.largestCapture ?? 0,
+          kills: runner?.kills ?? 0,
+          captures: runner?.captures ?? 0,
+          deaths: runner?.deaths ?? 0,
+          largestCapture: runner?.largestCapture ?? 0,
         },
       };
     });
@@ -662,8 +794,7 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
 
   reset(state): TerritoryRushState {
     const seats = Object.keys(state.runners);
-    const cols = state.cols;
-    const rows = state.rows;
+    const { cols, rows } = state;
     const grid = new Array<number>(cols * rows).fill(0);
     const runners: Record<string, RushRunner> = {};
     seats.forEach((id, index) => {
@@ -685,6 +816,8 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       endsAt: null,
       finishReason: null,
       lastEvent: null,
+      events: [],
+      leaderId: null,
       nextAIRequestAt: {},
     };
   },
@@ -697,6 +830,25 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
 
   getPublicState(state, _viewerId, ctx) {
     const total = state.cols * state.rows;
+    const runnerEntries = Object.entries(state.runners);
+
+    // Compute live ranked leaderboard
+    const leaderboard = runnerEntries
+      .map(([id, runner]) => {
+        const cells = countCells(state.grid, runner.owner);
+        const percent = Math.round((cells / Math.max(1, total)) * 1000) / 10;
+        return {
+          id,
+          cells,
+          percent,
+          kills: runner.kills,
+          alive: runner.alive,
+          colorIndex: runner.colorIndex,
+          isLeader: state.leaderId === id,
+        };
+      })
+      .sort((a, b) => b.cells - a.cells);
+
     return {
       phase: state.phase,
       cols: state.cols,
@@ -708,32 +860,44 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
       nextStageAt: state.nextStageAt,
       stepMs: state.stepMs,
       stepIndex: state.stepIndex,
+      stepProgress: Math.min(1, state.accumulatorMs / state.stepMs),
       startedAt: state.startedAt,
       endsAt: state.endsAt,
       durationMs: state.durationMs,
       finishReason: state.finishReason,
       lastEvent: state.lastEvent,
+      events: state.events,
+      leaderId: state.leaderId,
+      leaderboard,
+      palettes: PALETTES,
       serverTime: ctx.now(),
       totalCells: total,
       runners: Object.fromEntries(
-        Object.entries(state.runners).map(([id, runner]) => {
+        runnerEntries.map(([id, runner]) => {
           const cells = countCells(state.grid, runner.owner);
           return [
             id,
             {
               x: runner.x,
               y: runner.y,
+              prevX: runner.prevX,
+              prevY: runner.prevY,
               direction: runner.direction,
               owner: runner.owner,
               trail: runner.trail.map((i) => ({ x: i % state.cols, y: (i / state.cols) | 0 })),
               cells,
               percent: Math.round((cells / Math.max(1, total)) * 1000) / 10,
+              kills: runner.kills,
+              killStreak: runner.killStreak,
               captures: runner.captures,
               deaths: runner.deaths,
               largestCapture: runner.largestCapture,
               latestInputSeq: runner.latestInputSeq,
               frozenUntil: runner.frozenUntil,
+              isInvulnerable: ctx.now() < runner.frozenUntil,
               disconnected: runner.disconnected,
+              color: PALETTES[runner.colorIndex] ?? PALETTES[0],
+              isLeader: state.leaderId === id,
             },
           ];
         }),
@@ -744,51 +908,74 @@ export const territoryRushGame: GameModule<TerritoryRushState> = {
   getAIMove(playerId, difficulty, state, ctx): GameAction | null {
     if (state.phase !== 'playing') return null;
     const runner = state.runners[playerId];
-    if (!runner || runner.left) return null;
+    if (!runner || runner.left || !runner.alive) return null;
     const { cols, rows, grid } = state;
+
     const options = ALL_DIRS.filter((dir) => dir !== REVERSE[runner.direction]);
     const safe = options.filter((dir) => {
-      const n = { x: runner.x + DELTA[dir].dx, y: runner.y + DELTA[dir].dy };
-      if (!inBounds(cols, rows, n.x, n.y)) return false;
-      const i = cellIndex(cols, n.x, n.y);
-      if (state.walls.includes(i) || runner.trail.includes(i)) return false;
-      return true;
+      const nx = runner.x + DELTA[dir].dx;
+      const ny = runner.y + DELTA[dir].dy;
+      if (!inBounds(cols, rows, nx, ny)) return false;
+      const i = cellIndex(cols, nx, ny);
+      return !state.walls.includes(i) && !runner.trail.includes(i);
     });
+
     const pool = safe.length > 0 ? safe : options;
-    // Steering candidates must stay on the map: `options` can hold
-    // wall-facing directions, and an out-of-bounds grid read is `undefined`
-    // (never the owner), which used to make the AI *prefer* walls.
-    const onMap = pool.filter((dir) => {
-      const n = { x: runner.x + DELTA[dir].dx, y: runner.y + DELTA[dir].dy };
-      return inBounds(cols, rows, n.x, n.y);
-    });
+    const onMap = pool.filter((dir) => inBounds(cols, rows, runner.x + DELTA[dir].dx, runner.y + DELTA[dir].dy));
     const steerPool = onMap.length > 0 ? onMap : pool;
+
+    // Easy AI: random behavior
     if (difficulty === 'easy' && ctx.random() < 0.45) {
       return {
         type: 'turn',
-        payload: { direction: pool[Math.floor(ctx.random() * pool.length)]! },
+        payload: { direction: steerPool[Math.floor(ctx.random() * steerPool.length)]! },
       };
     }
-    if (runner.trail.length > (difficulty === 'hard' ? 14 : 22)) {
+
+    // Return to territory when trail is getting risky
+    const maxTrailLimit = difficulty === 'hard' ? 8 : 14;
+    if (runner.trail.length > maxTrailLimit) {
       const homeward = steerPool.reduce((best, dir) => {
-        const n = { x: runner.x + DELTA[dir].dx, y: runner.y + DELTA[dir].dy };
-        const home = runner.home[0] ?? 0;
-        const hx = home % cols;
-        const hy = (home / cols) | 0;
-        const dist = Math.abs(n.x - hx) + Math.abs(n.y - hy);
-        const bestN = { x: runner.x + DELTA[best].dx, y: runner.y + DELTA[best].dy };
-        const bestD = Math.abs(bestN.x - hx) + Math.abs(bestN.y - hy);
-        return dist < bestD ? dir : best;
-      }, pool[0]!);
+        const nx = runner.x + DELTA[dir].dx;
+        const ny = runner.y + DELTA[dir].dy;
+        const dist = runner.home.reduce((min, h) => {
+          const d = Math.abs(nx - (h % cols)) + Math.abs(ny - ((h / cols) | 0));
+          return Math.min(min, d);
+        }, 9999);
+        const bestNx = runner.x + DELTA[best].dx;
+        const bestNy = runner.y + DELTA[best].dy;
+        const bestDist = runner.home.reduce((min, h) => {
+          const d = Math.abs(bestNx - (h % cols)) + Math.abs(bestNy - ((h / cols) | 0));
+          return Math.min(min, d);
+        }, 9999);
+        return dist < bestDist ? dir : best;
+      }, steerPool[0]!);
       return { type: 'turn', payload: { direction: homeward } };
     }
+
+    // Hard AI: hunts opponent trails if nearby
+    if (difficulty === 'hard') {
+      for (const other of Object.values(state.runners)) {
+        if (other.owner === runner.owner || other.trail.length === 0) continue;
+        for (const dir of steerPool) {
+          const nx = runner.x + DELTA[dir].dx;
+          const ny = runner.y + DELTA[dir].dy;
+          if (other.trail.includes(cellIndex(cols, nx, ny))) {
+            return { type: 'turn', payload: { direction: dir } };
+          }
+        }
+      }
+    }
+
+    // Default: Prefer unowned cells to expand territory
     const prefer = steerPool.filter((dir) => {
-      const n = { x: runner.x + DELTA[dir].dx, y: runner.y + DELTA[dir].dy };
-      if (!inBounds(cols, rows, n.x, n.y)) return false;
-      return grid[cellIndex(cols, n.x, n.y)] !== runner.owner;
+      const nx = runner.x + DELTA[dir].dx;
+      const ny = runner.y + DELTA[dir].dy;
+      return grid[cellIndex(cols, nx, ny)] !== runner.owner;
     });
-    const chosen = (prefer.length > 0 ? prefer : pool)[
-      Math.floor(ctx.random() * (prefer.length > 0 ? prefer.length : pool.length))
+
+    const chosen = (prefer.length > 0 ? prefer : steerPool)[
+      Math.floor(ctx.random() * (prefer.length > 0 ? prefer.length : steerPool.length))
     ]!;
     return { type: 'turn', payload: { direction: chosen } };
   },

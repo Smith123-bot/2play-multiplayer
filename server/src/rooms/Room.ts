@@ -9,6 +9,7 @@ import type {
 } from '@2play/shared';
 import { CHAT_HISTORY_LIMIT, ROOM_TRANSITIONS } from '@2play/shared';
 import { ServerPlayer } from './ServerPlayer';
+import { createId } from '../utils/ids';
 
 export interface RoomOptions {
   id: string;
@@ -47,6 +48,8 @@ export class Room {
   /** Epoch ms of the GO moment; null when no countdown is running. */
   public countdownEndsAt: number | null = null;
   public matchNumber = 1;
+  /** Opaque server-generated id for the current match; never accepted from clients. */
+  private readonly matchIds = new Map<number, string>();
 
   public readonly createdAt: number = Date.now();
   public updatedAt: number = Date.now();
@@ -80,6 +83,7 @@ export class Room {
     this.isPrivate = options.isPrivate;
     this.hostPlayerId = options.hostPlayerId;
     this.isQuickPlay = options.isQuickPlay ?? false;
+    this.matchIds.set(this.matchNumber, createId());
     this.settings = {
       playerCount: options.settings?.playerCount ?? options.maxPlayers,
       aiOpponents: options.settings?.aiOpponents ?? 0,
@@ -87,6 +91,15 @@ export class Room {
       ...(options.settings?.gridSize ? { gridSize: options.settings.gridSize } : {}),
       ...(options.settings?.rounds ? { rounds: options.settings.rounds } : {}),
     };
+  }
+
+  /** Stable server-generated id used by durable result idempotency. */
+  matchIdFor(matchNumber: number): string {
+    const existing = this.matchIds.get(matchNumber);
+    if (existing) return existing;
+    const generated = createId();
+    this.matchIds.set(matchNumber, generated);
+    return generated;
   }
 
   /* ---------------------------------------------------------------- */

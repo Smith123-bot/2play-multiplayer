@@ -10,15 +10,12 @@ import { wordScrambleGame } from '../games/word-scramble-battle';
 import { shapeMatchGame } from '../games/shape-match-battle';
 import { snakeBattleGame } from '../games/snake-battle';
 import { targetRushGame } from '../games/target-rush';
-import { paddleDuelGame } from '../games/paddle-duel';
-import { brickBreakerGame } from '../games/brick-breaker-battle';
 import { patternMemoryGame } from '../games/pattern-memory-battle';
 import { drawGuessGame } from '../games/draw-guess-battle';
 import { secretRoleGame } from '../games/secret-role';
 import { colorClashGame } from '../games/color-clash';
 import { territoryRushGame } from '../games/territory-rush';
 import { fakeDoorGame } from '../games/fake-door-battle';
-import { magnetThiefGame } from '../games/magnet-thief';
 import { splitWorldGame } from '../games/split-world';
 import { connectFourGame } from '../games/connect-four';
 import { hangmanGame } from '../games/hangman';
@@ -61,15 +58,12 @@ export class GameLoader {
       shapeMatchGame,
       snakeBattleGame,
       targetRushGame,
-      paddleDuelGame,
-      brickBreakerGame,
       patternMemoryGame,
       drawGuessGame,
       secretRoleGame,
       colorClashGame,
       territoryRushGame,
       fakeDoorGame,
-      magnetThiefGame,
       splitWorldGame,
       ludoGame,
       arrowPuzzleGame,

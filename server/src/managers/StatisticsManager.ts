@@ -41,8 +41,10 @@ export class StatisticsManager {
   >();
 
   /**
-   * Idempotency guard: `room.id:matchNumber` pairs already written to the
-   * database. A duplicate `game:finished` emission (retried finish, double
+   * Idempotency guard: the server-generated `room.matchIdFor(matchNumber)`
+   * identifier is written to the database. The same identifier is also persisted as
+   * `match_id`, so database retries remain idempotent after this process guard
+   * is evicted. A duplicate `game:finished` emission (retried finish, double
    * event) must never double-count a match; a rematch bumps `matchNumber`,
    * so it always records as a separate match.
    */
@@ -57,13 +59,9 @@ export class StatisticsManager {
 
   constructor(private readonly platform: Platform) {
     this.platform.eventBus.on('game:finished', ({ room, result }) => {
-      this.recordGlobalPopularity(
-        room.gameId,
-        room.humanPlayers.map((player) => player.id),
-        result.finishedAt,
-      );
-
       // Fire-and-forget: persistence must never block or break gameplay.
+      // `recordMatch` also gates the process-lifetime popularity projection by
+      // the same server-generated match identifier.
       void this.recordMatch(room, result).catch((error: unknown) => {
         this.logger.error('statistics persistence failed', {
           roomId: room.id,
@@ -98,15 +96,22 @@ export class StatisticsManager {
   }
 
   async recordMatch(room: Room, result: GameResult): Promise<void> {
-    const matchKey = `${room.id}:${room.matchNumber}`;
+    const matchNumber = result.matchNumber;
+    const matchId = room.matchIdFor(matchNumber);
+    const matchKey = `${room.id}:${matchNumber}`;
     if (this.recordedMatches.has(matchKey)) {
       this.logger.debug('duplicate finish ignored', {
         roomId: room.id,
-        matchNumber: room.matchNumber,
+        matchNumber,
       });
       return;
     }
     this.recordedMatches.add(matchKey);
+    this.recordGlobalPopularity(
+      room.gameId,
+      room.humanPlayers.map((player) => player.id),
+      result.finishedAt,
+    );
     while (this.recordedMatches.size > StatisticsManager.RECORDED_MATCHES_CAP) {
       const oldest = this.recordedMatches.values().next().value as string | undefined;
       if (oldest === undefined) break;
@@ -141,6 +146,7 @@ export class StatisticsManager {
             score,
             history: {
               userId: player.userId,
+              matchId,
               gameId: room.gameId,
               roomId: room.id,
               players,

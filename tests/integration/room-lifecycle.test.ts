@@ -319,42 +319,9 @@ describe('room lifecycle over sockets', () => {
     const games = (await fetch(`${server.url}/api/games`).then((res) => res.json())) as {
       games: Array<{ id: string }>;
     };
-    expect(games.games.map((game: { id: string }) => game.id).sort()).toEqual([
-      '2048-battle',
-      'arrow-puzzle',
-      'black-blast',
-      'brick-breaker-battle',
-      'chess',
-      'color-clash',
-      'connect-four',
-      'couple-memory',
-      'couple-sync',
-      'dots-and-boxes',
-      'draw-guess-battle',
-      'fake-door-battle',
-      'fuse',
-      'hangman',
-      'ludo',
-      'magnet-thief',
-      'math-rush',
-      'maze-race-2d',
-      'memory-match',
-      'mirror-grid',
-      'paddle-duel',
-      'pattern-memory-battle',
-      'reaction-race',
-      'rock-paper-scissors',
-      'secret-role',
-      'shape-match-battle',
-      'sim',
-      'snake-battle',
-      'sos-game',
-      'split-world',
-      'target-rush',
-      'territory-rush',
-      'uno',
-      'word-race',
-      'word-scramble-battle',
-    ]);
+    expect(games.games.map((game: { id: string }) => game.id).sort()).toEqual(
+      server.platform.registry.ids().sort(),
+    );
+    expect(games.games).toHaveLength(server.platform.registry.size);
   });
 });

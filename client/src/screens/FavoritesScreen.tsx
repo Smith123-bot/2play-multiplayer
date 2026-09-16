@@ -22,7 +22,7 @@ export function FavoritesScreen() {
 
   useEffect(() => {
     void loadGames();
-    void loadFavorites();
+    void loadFavorites(true);
   }, [loadGames, loadFavorites]);
 
   const favoriteGames = games.filter((game) => favorites.includes(game.id));

@@ -496,95 +496,6 @@ export const TARGET_RUSH_METADATA = {
 } satisfies GameMetadata;
 
 
-export const PADDLE_DUEL_METADATA = {
-  id: 'paddle-duel',
-  name: 'Paddle Duel',
-  description:
-    'Classic paddle versus paddle. Keep the ball in play, angle your returns and outlast your rival — first to the point limit takes the duel.',
-  category: 'reflex' as const,
-  icon: '🏓',
-  thumbnail: '🏓',
-  minPlayers: 2,
-  maxPlayers: 2,
-  supportedPlayerCounts: [2],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 180,
-  difficulty: 'medium' as const,
-  controls: 'Slide your paddle with W/S, the up/down arrow keys, or drag on your side of the arena.',
-  rules: [
-    'Both paddles live on the server — the ball is simulated there on a fixed clock.',
-    'The ball bounces off the top and bottom walls; returning it speeds it up a little.',
-    'Hit the ball with the edge of your paddle to angle it sharply.',
-    'If the ball passes your paddle your rival scores a point.',
-    'First to 7 points (configurable 3–15) wins; at the 3-minute timeout the leader takes it.',
-  ],
-  scoring: '1 point per rally won by your opponent missing the ball.',
-  winCondition: 'Reach the point limit first, or lead when the clock ends.',
-  tags: ['reflex', 'arcade', 'classic', '2 players'],
-  featured: false,
-  hasRounds: true,
-  defaultRounds: 7,
-  howToPlay: {
-    controls: { mobile: 'Drag up and down on the touch surface to slide your paddle.', desktop: 'Arrow Up / Arrow Down (or W / S) move the paddle.' },
-    turnSystem: 'Simultaneous and real-time — the server simulates both paddles and the ball on a fixed 16 ms step; there are no turns.',
-    timeLimit: 'First to 7 points wins — the limit is configurable from 3 to 15 in the lobby. A 3-minute cap ends the match and the leader takes it. The ball is served 1.2 s after each point.',
-    winCondition: 'Reach the point limit first, or lead when the 3-minute clock expires. Level scores at the clock are a draw.',
-    specialRules: [
-      'The ball is owned by the server; clients only ever send paddle intent.',
-      'Returning the ball speeds it up slightly.',
-      'Hitting with the edge of your paddle angles the ball sharply.',
-      'If the ball passes your paddle, your rival scores the point.',
-    ],
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
-export const BRICK_BREAKER_METADATA = {
-  id: 'brick-breaker-battle',
-  name: 'Brick Breaker Battle',
-  description:
-    'Two identical arenas, one mirrored brick wall each. Break your wall faster, chain combos and bank more points than your rival before the clock or your lives run out.',
-  category: 'reflex' as const,
-  icon: '🧱',
-  thumbnail: '🧱',
-  minPlayers: 2,
-  maxPlayers: 2,
-  supportedPlayerCounts: [2],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 180,
-  difficulty: 'medium' as const,
-  controls: 'Slide your paddle with A/D, the left/right arrow keys, mouse or by dragging on your arena.',
-  rules: [
-    'Each player breaks their own identical wall — the server simulates both balls.',
-    'Bricks are worth more the higher they sit: 10 to 30 points.',
-    'Chain bricks without touching your paddle to multiply them, up to x4.',
-    'Missing the ball costs a life; you have three, then your run is over.',
-    'Clearing the whole wall banks a 100-point bonus — most points in 3 minutes wins.',
-  ],
-  scoring: 'Brick points x combo multiplier (up to x4) + 100 for a full clear.',
-  winCondition: 'Score the most points (ties: earlier finish, then lives left).',
-  tags: ['reflex', 'arcade', 'classic', '2 players'],
-  featured: false,
-  howToPlay: {
-    controls: { mobile: 'Drag left and right on the touch surface to slide your paddle.', desktop: 'Arrow Left / Arrow Right (or A / D) move the paddle.' },
-    turnSystem: 'Simultaneous and real-time — each player breaks their own identical wall while the server simulates both balls on a 16 ms step.',
-    timeLimit: 'A 3-minute clock, three lives and up to 3 walls. Power-ups last 10 s. Your own run ends early if you lose all three lives.',
-    winCondition: 'Most points when the clock ends. Ties break on whoever finished their wall earlier, then on lives remaining; still level, it is a draw.',
-    specialRules: [
-      'Bricks are worth more the higher they sit: 10 to 30 points.',
-      'Chaining bricks without touching your paddle multiplies them, up to ×4.',
-      'Clearing a whole wall banks a 100-point bonus.',
-      'Missing the ball costs one of your three lives.',
-      'Both walls are mirrored, so neither player can see a private layout.',
-    ],
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
-
 export const PATTERN_MEMORY_METADATA = {
   id: 'pattern-memory-battle',
   name: 'Pattern Memory Battle',
@@ -855,48 +766,6 @@ export const FAKE_DOOR_METADATA = {
   version: '1.0.0',
 } satisfies GameMetadata;
 
-
-export const MAGNET_THIEF_METADATA = {
-  id: 'magnet-thief',
-  name: 'Magnet Thief',
-  description:
-    'Vacuum coins with a directional magnet, then steal a rival gem if you are in range. Ownership is server-side.',
-  category: 'strategy' as const,
-  icon: '🧲',
-  thumbnail: '💎',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 140,
-  difficulty: 'medium' as const,
-  controls: 'Move with WASD / arrows / D-pad. Magnet with Q/E or the magnet buttons (direction + activate).',
-  rules: [
-    'Step onto a coin to collect it. The server grants the points.',
-    'Activate your magnet in a direction to pull nearby coins one cell toward you (cooldown applies).',
-    'A carried gem can be stolen if you magnetise within range and the owner is not in a safe corner.',
-    'Magnetic zones double range. Clients cannot assign themselves an object.',
-  ],
-  scoring: 'Coin +10, gem +50 (held at the buzzer). Highest valid total wins.',
-  winCondition: 'Hold the highest score when the arena clock ends.',
-  tags: ['strategy', 'collection', 'arcade', '2-4 players'],
-  featured: false,
-  howToPlay: {
-    controls: { mobile: 'Swipe to move and tap the Pull or Repel buttons.', desktop: 'Arrow keys or WASD to move, E or Space to pull, Q to repel.' },
-    turnSystem: 'Simultaneous and real-time — everyone moves and magnetises in the same arena at the same time.',
-    timeLimit: 'A 60-second arena clock. The magnet has a 2 s cooldown between uses.',
-    winCondition: 'Highest score when the 60-second buzzer sounds. Only gems you are still holding at that moment are worth their +50, so one late steal can decide the match. A level total is a draw.',
-    specialRules: [
-      'Stepping onto a coin collects it, and the server grants the points.',
-      'Activating the magnet in a direction pulls nearby coins one cell toward you.',
-      'A carried gem can be stolen if you magnetise within range and the owner is not in a safe corner.',
-      'Magnetic zones double your magnet range.',
-      'A client can never assign itself an object — ownership is decided server-side.',
-    ],
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
 
 export const SPLIT_WORLD_METADATA = {
   id: 'split-world',
@@ -1713,15 +1582,12 @@ export const ALL_GAME_METADATA: readonly GameMetadata[] = [
   SHAPE_MATCH_METADATA,
   SNAKE_BATTLE_METADATA,
   TARGET_RUSH_METADATA,
-  PADDLE_DUEL_METADATA,
-  BRICK_BREAKER_METADATA,
   PATTERN_MEMORY_METADATA,
   DRAW_GUESS_METADATA,
   SECRET_ROLE_METADATA,
   COLOR_CLASH_METADATA,
   TERRITORY_RUSH_METADATA,
   FAKE_DOOR_METADATA,
-  MAGNET_THIEF_METADATA,
   SPLIT_WORLD_METADATA,
   LUDO_METADATA,
   ARROW_PUZZLE_METADATA,

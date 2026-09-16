@@ -45,14 +45,21 @@ export const useStatisticsStore = create<StatisticsStoreState>((set, get) => ({
     if (get().loadedUserId !== null && get().loadedUserId !== session.userId) {
       set({ statistics: [], history: [], summary: null, loadedUserId: null });
     }
-    if (get().loading) return;
     if (!force && get().summary && get().loadedUserId === session.userId) return;
 
+    const requestedUserId = session.userId;
     set({ loading: true, error: null });
     const [stats, history] = await Promise.all([
       api.statistics(session.userId, session.sessionToken),
       api.history(session.userId, 30, session.sessionToken),
     ]);
+
+    // A logout/login can finish while these requests are in flight. Never let
+    // an old account's response populate or clear the new account's cache.
+    if (useSessionStore.getState().session?.userId !== requestedUserId) {
+      set({ loading: false });
+      return;
+    }
 
     if (!stats.ok || !stats.data) {
       set({ loading: false, error: stats.error?.message ?? 'Could not load statistics.' });

@@ -21,6 +21,7 @@ import { useConnectionStore } from '../stores/connectionStore';
 import { getLocalPlayerId, setLocalPlayerId, useRoomStore } from '../stores/roomStore';
 import { useSessionStore } from '../stores/sessionStore';
 import { useStatisticsStore } from '../stores/statisticsStore';
+import { useFavoritesStore } from '../stores/favoritesStore';
 import { audioManager } from '../audio/AudioManager';
 import { hapticsManager } from '../haptics/HapticsManager';
 
@@ -50,7 +51,11 @@ export function useConnection(): { ensureSession: (nickname?: string, avatar?: s
       authenticating.current = true;
       try {
         const sessionInfo = await authenticateSession(name, explicitAvatar ?? current.avatar);
-        if (sessionInfo) return true;
+        if (sessionInfo) {
+          void useStatisticsStore.getState().load(true);
+          void useFavoritesStore.getState().load(true);
+          return true;
+        }
         toast.error('Could not sign you in. Check your nickname and try again.');
         return false;
       } finally {

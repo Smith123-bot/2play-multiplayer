@@ -4,6 +4,8 @@ import { api } from '../services/api';
 
 export interface FavoritesStoreState {
   favorites: string[];
+  /** User id represented by this server cache; never reuse it for another session. */
+  loadedUserId: string | null;
   loading: boolean;
   pending: Record<string, boolean>;
   load: (force?: boolean) => Promise<void>;
@@ -14,17 +16,38 @@ export interface FavoritesStoreState {
 
 export const useFavoritesStore = create<FavoritesStoreState>((set, get) => ({
   favorites: [],
+  loadedUserId: null,
   loading: false,
   pending: {},
 
   load: async (force = false) => {
     const session = useSessionStore.getState().session;
-    if (!session) return;
-    if (!force && get().favorites.length > 0) return;
+    if (!session) {
+      set({ favorites: [], loadedUserId: null, loading: false });
+      return;
+    }
+    // Never render one account's cached favorites for another account while
+    // the restored session is being authenticated.
+    if (get().loadedUserId !== null && get().loadedUserId !== session.userId) {
+      set({ favorites: [], loadedUserId: null });
+    }
+    if (!force && get().loadedUserId === session.userId) return;
+
     set({ loading: true });
+    const requestedUserId = session.userId;
     const result = await api.favorites(session.userId, session.sessionToken);
+    // A logout/login may have happened while the request was in flight. Do not
+    // let the old response populate the new account's cache.
+    if (useSessionStore.getState().session?.userId !== requestedUserId) {
+      set({ loading: false });
+      return;
+    }
     if (result.ok && result.data) {
-      set({ favorites: result.data.favorites.map((favorite) => favorite.gameId), loading: false });
+      set({
+        favorites: result.data.favorites.map((favorite) => favorite.gameId),
+        loadedUserId: requestedUserId,
+        loading: false,
+      });
     } else {
       set({ loading: false });
     }
@@ -48,12 +71,15 @@ export const useFavoritesStore = create<FavoritesStoreState>((set, get) => ({
 
     set({ pending: { ...get().pending, [gameId]: false } });
 
-    if (!result.ok) return;
+    if (!result.ok || useSessionStore.getState().session?.userId !== session.userId) return;
     // Re-read and de-duplicate at resolve time: state may have moved while the
     // request was in flight.
     const current = get().favorites.filter((id) => id !== gameId);
-    set({ favorites: isFavorite ? current : [gameId, ...current] });
+    set({
+      favorites: isFavorite ? current : [gameId, ...current],
+      loadedUserId: session.userId,
+    });
   },
 
-  clear: () => set({ favorites: [], pending: {} }),
+  clear: () => set({ favorites: [], loadedUserId: null, pending: {} }),
 }));

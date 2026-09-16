@@ -35,7 +35,7 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     /**
-     * Routes and the 39 game clients are code-split, so the entry chunk should
+     * Routes and the catalogue clients are code-split, so the entry chunk should
      * stay well under Vite's 500 KB default. This used to be raised to 900 to
      * silence the warning from a single 850 KB bundle that contained every game;
      * keeping a real limit means a future regression is reported at build time.

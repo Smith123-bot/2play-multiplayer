@@ -17,6 +17,7 @@ interface UserRow {
 interface HistoryRow {
   id: string;
   user_id: string;
+  match_id: string | null;
   game_id: string;
   room_id: string;
   players_json: PlayerSummary[] | null;
@@ -125,6 +126,7 @@ export class SupabaseRepository implements DatabaseRepository {
     return {
       id: row.id,
       userId: row.user_id,
+      matchId: row.match_id ?? '',
       gameId: row.game_id,
       roomId: row.room_id,
       players: (row.players_json ?? []) as PlayerSummary[],
@@ -241,6 +243,7 @@ export class SupabaseRepository implements DatabaseRepository {
     try {
       const { error } = await this.client.rpc('record_match_with_history', {
         p_user_id: input.userId,
+        p_match_id: input.history.matchId,
         p_game_id: input.gameId,
         p_result: input.result,
         p_score: input.score,

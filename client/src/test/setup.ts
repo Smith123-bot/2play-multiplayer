@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
-// A failed query prints the whole document. On the Games page that is 45 fully
-// rendered cards, and the dump alone took minutes and exhausted the worker, so
-// cap it at something still useful for debugging.
+// A failed query prints the whole document. On the Games page that is a large
+// set of fully rendered cards, and the dump alone took minutes and exhausted the
+// worker, so cap it at something still useful for debugging.
 process.env.DEBUG_PRINT_LIMIT = process.env.DEBUG_PRINT_LIMIT ?? '3000';
 
 // Minimal browser API stubs for jsdom.

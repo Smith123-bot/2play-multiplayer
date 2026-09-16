@@ -67,9 +67,18 @@ export function useRoomActions() {
 
   const leaveRoom = useCallback(async () => {
     const response = await socketClient.emitAck<{ left: boolean }>(CLIENT_EVENTS.ROOM_LEAVE, {});
-    if (!response.ok) fail(response.error);
+    if (!response.ok) {
+      fail(response.error);
+      // A failed leave is not an intentional departure. Keep the local room
+      // association so an ordinary connection loss can still reconnect to the
+      // server-owned room and the global prompt can reappear.
+      return false;
+    }
+    // Only a successful server acknowledgement is an intentional leave. This
+    // distinction is what keeps a lost leave request from looking like a
+    // network disconnect and accidentally defeating reconnect behaviour.
     useRoomStore.getState().clearRoom();
-    return response.ok;
+    return true;
   }, []);
 
   const kickPlayer = useCallback(async (payload: KickPlayerPayload) => {

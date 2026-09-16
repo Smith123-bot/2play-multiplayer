@@ -277,7 +277,6 @@ See [docs/adding-a-game.md](docs/adding-a-game.md). In short:
 | 🌈 Color Clash | reflex | 2–4 | yes | Fast colour rounds, labelled buttons |
 | 🗺️ Territory Rush | reflex | 2–4 | yes | Grid capture, flood-fill loops, trail cuts |
 | 🚪 Fake Door Battle | memory | 2–4 | yes | Learnable clues, server-owned safe door |
-| 🧲 Magnet Thief | strategy | 2–4 | yes | Server magnet range, cooldown, steal and ownership |
 | 🌍 Split World | strategy | 2–4 | yes | Shared true world, per-player views; hidden tiles never leave the server |
 | 🎲 Ludo | strategy | 2–4 | yes | Server-rolled dice, token captures, safe squares, four tokens home |
 | ➡️ Arrow Puzzle | strategy | 2–4 | yes | Identical seeded boards, path-gated arrows, placement + speed bonuses |

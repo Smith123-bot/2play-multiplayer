@@ -856,48 +856,6 @@ export const FAKE_DOOR_METADATA = {
 } satisfies GameMetadata;
 
 
-export const MAGNET_THIEF_METADATA = {
-  id: 'magnet-thief',
-  name: 'Magnet Thief',
-  description:
-    'Vacuum coins with a directional magnet, then steal a rival gem if you are in range. Ownership is server-side.',
-  category: 'strategy' as const,
-  icon: '🧲',
-  thumbnail: '💎',
-  minPlayers: 2,
-  maxPlayers: 4,
-  supportedPlayerCounts: [2, 3, 4],
-  hasAI: true,
-  aiDifficulties: ['easy', 'medium', 'hard'] as AIDifficulty[],
-  estimatedDuration: 140,
-  difficulty: 'medium' as const,
-  controls: 'Move with WASD / arrows / D-pad. Magnet with Q/E or the magnet buttons (direction + activate).',
-  rules: [
-    'Step onto a coin to collect it. The server grants the points.',
-    'Activate your magnet in a direction to pull nearby coins one cell toward you (cooldown applies).',
-    'A carried gem can be stolen if you magnetise within range and the owner is not in a safe corner.',
-    'Magnetic zones double range. Clients cannot assign themselves an object.',
-  ],
-  scoring: 'Coin +10, gem +50 (held at the buzzer). Highest valid total wins.',
-  winCondition: 'Hold the highest score when the arena clock ends.',
-  tags: ['strategy', 'collection', 'arcade', '2-4 players'],
-  featured: false,
-  howToPlay: {
-    controls: { mobile: 'Swipe to move and tap the Pull or Repel buttons.', desktop: 'Arrow keys or WASD to move, E or Space to pull, Q to repel.' },
-    turnSystem: 'Simultaneous and real-time — everyone moves and magnetises in the same arena at the same time.',
-    timeLimit: 'A 60-second arena clock. The magnet has a 2 s cooldown between uses.',
-    winCondition: 'Highest score when the 60-second buzzer sounds. Only gems you are still holding at that moment are worth their +50, so one late steal can decide the match. A level total is a draw.',
-    specialRules: [
-      'Stepping onto a coin collects it, and the server grants the points.',
-      'Activating the magnet in a direction pulls nearby coins one cell toward you.',
-      'A carried gem can be stolen if you magnetise within range and the owner is not in a safe corner.',
-      'Magnetic zones double your magnet range.',
-      'A client can never assign itself an object — ownership is decided server-side.',
-    ],
-  },
-  version: '1.0.0',
-} satisfies GameMetadata;
-
 export const SPLIT_WORLD_METADATA = {
   id: 'split-world',
   name: 'Split World',
@@ -1721,7 +1679,6 @@ export const ALL_GAME_METADATA: readonly GameMetadata[] = [
   COLOR_CLASH_METADATA,
   TERRITORY_RUSH_METADATA,
   FAKE_DOOR_METADATA,
-  MAGNET_THIEF_METADATA,
   SPLIT_WORLD_METADATA,
   LUDO_METADATA,
   ARROW_PUZZLE_METADATA,

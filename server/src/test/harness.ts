@@ -35,7 +35,6 @@ import { secretRoleGame } from '../games/secret-role';
 import { colorClashGame } from '../games/color-clash';
 import { territoryRushGame } from '../games/territory-rush';
 import { fakeDoorGame } from '../games/fake-door-battle';
-import { magnetThiefGame } from '../games/magnet-thief';
 import { splitWorldGame } from '../games/split-world';
 import { connectFourGame } from '../games/connect-four';
 import { hangmanGame } from '../games/hangman';
@@ -187,7 +186,6 @@ export function createTestPlatform(
       colorClashGame,
       territoryRushGame,
       fakeDoorGame,
-      magnetThiefGame,
       splitWorldGame,
       ludoGame,
       arrowPuzzleGame,

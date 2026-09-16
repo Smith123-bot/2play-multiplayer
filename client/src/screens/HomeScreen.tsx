@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, BarChart3, Heart, LogIn, Plus, RefreshCw, Sparkles, Users, Zap } from 'lucide-react';
 import { GameCard } from '../components/game/GameCard';
-import { ActiveRoomPrompt } from '../components/room/ActiveRoomPrompt';
 import { PublicRoomsModal } from '../components/room/PublicRoomsModal';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -143,7 +142,6 @@ export function HomeScreen() {
 
   return (
     <div className="space-y-10">
-      <ActiveRoomPrompt />
       <PublicRoomsModal
         open={roomsOpen}
         onClose={() => setRoomsOpen(false)}

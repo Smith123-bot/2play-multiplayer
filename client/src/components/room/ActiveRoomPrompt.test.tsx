@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { RoomState } from '@2play/shared';
@@ -33,7 +33,7 @@ const baseRoom = (overrides: Partial<RoomState> = {}): RoomState =>
     ...overrides,
   }) as RoomState;
 
-describe('ActiveRoomPrompt (Home "you are in a room" popup)', () => {
+describe('ActiveRoomPrompt (global "you are in a room" popup)', () => {
   beforeEach(() => {
     useRoomStore.getState().clearRoom();
     useGameStore.setState({
@@ -85,6 +85,35 @@ describe('ActiveRoomPrompt (Home "you are in a room" popup)', () => {
     expect(screen.queryByText('You are in a room')).not.toBeInTheDocument();
   });
 
+  it.each(['/games', '/games/reaction-race', '/stats', '/favorites', '/settings'])(
+    'remains available on %s while an active room exists', (route) => {
+      useRoomStore.getState().setRoom(baseRoom());
+
+      render(
+        <MemoryRouter initialEntries={[route]}>
+          <ActiveRoomPrompt />
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByText('You are in a room')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Return to room/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Leave room/i })).toBeInTheDocument();
+    },
+  );
+
+  it('stays hidden on the matching active room page', () => {
+    useRoomStore.getState().setRoom(baseRoom());
+
+    render(
+      <MemoryRouter initialEntries={['/room/ABC123']}>
+        <ActiveRoomPrompt />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText('You are in a room')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('active-room-banner')).not.toBeInTheDocument();
+  });
+
   it('Leave room clears the local room state so the popup disappears', async () => {
     useRoomStore.getState().setRoom(baseRoom());
     const emitAckSpy = vi
@@ -101,6 +130,26 @@ describe('ActiveRoomPrompt (Home "you are in a room" popup)', () => {
 
     expect(emitAckSpy).toHaveBeenCalled();
     expect(useRoomStore.getState().room).toBeNull();
+
+    emitAckSpy.mockRestore();
+  });
+
+  it('keeps the room association when the leave acknowledgement fails', async () => {
+    useRoomStore.getState().setRoom(baseRoom());
+    const emitAckSpy = vi.spyOn(socketClient, 'emitAck').mockResolvedValue({
+      ok: false,
+      error: { code: 'E008', name: 'CONNECTION_FAILED', message: 'Not connected to the server.' },
+    });
+
+    render(
+      <MemoryRouter>
+        <ActiveRoomPrompt />
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Leave room/i }));
+    await waitFor(() => expect(useRoomStore.getState().room?.id).toBe('ABC123'));
+    expect(screen.getByText('You are in a room')).toBeInTheDocument();
 
     emitAckSpy.mockRestore();
   });

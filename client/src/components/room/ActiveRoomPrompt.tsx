@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { DoorOpen, LogOut, Users } from 'lucide-react';
 import type { RoomStatus } from '@2play/shared';
@@ -66,6 +66,7 @@ function statusLabel(status: RoomStatus): string {
  */
 export function ActiveRoomPrompt() {
   const navigate = useNavigate();
+  const location = useLocation();
   const room = useRoomStore((store) => store.room);
   const clearRoom = useRoomStore((store) => store.clearRoom);
   const games = useGameStore((store) => store.games);
@@ -79,7 +80,15 @@ export function ActiveRoomPrompt() {
   }, [room, minimised]);
 
   const stillActive = Boolean(room && ACTIVE_STATUSES.includes(room.status));
-  const showDialog = Boolean(stillActive && room && room.id !== minimised);
+  // The prompt is mounted by AppShell, so it survives route changes. The one
+  // place it must stay silent is the room page for the room already in the
+  // store; RoomScreen owns that view and its full leave/reconnect controls.
+  const insideActiveRoom = Boolean(
+    room &&
+      location.pathname.startsWith('/room/') &&
+      location.pathname.slice('/room/'.length).split('/')[0] === room.id,
+  );
+  const showDialog = Boolean(stillActive && !insideActiveRoom && room && room.id !== minimised);
   const game = room ? games.find((entry) => entry.id === room.gameId) : undefined;
 
   const returnToRoom = () => {
@@ -105,7 +114,7 @@ export function ActiveRoomPrompt() {
     }
   };
 
-  if (!room || !stillActive) return null;
+  if (!room || !stillActive || insideActiveRoom) return null;
 
   // Minimised but still present: the persistent banner keeps Return / Leave
   // one tap away for as long as the room stays active.

@@ -335,7 +335,6 @@ describe('room lifecycle over sockets', () => {
       'fuse',
       'hangman',
       'ludo',
-      'magnet-thief',
       'math-rush',
       'maze-race-2d',
       'memory-match',

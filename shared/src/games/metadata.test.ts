@@ -10,8 +10,8 @@ import { GAME_CATEGORIES } from '../constants';
  * documentation (rules + How To Play) that a launch depends on.
  */
 describe('game catalogue metadata', () => {
-  it('ships the full 35 game catalogue with unique kebab-case ids', () => {
-    expect(ALL_GAME_METADATA).toHaveLength(35);
+  it('ships the 34-game catalogue with unique kebab-case ids', () => {
+    expect(ALL_GAME_METADATA).toHaveLength(34);
     const ids = ALL_GAME_METADATA.map((game) => game.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(id).toMatch(/^[a-z0-9-]+$/);

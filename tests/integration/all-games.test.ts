@@ -188,15 +188,6 @@ const CASES: GameCase[] = [
     action: { type: 'pick', payload: { doorId: 'door-0' } },
   },
   {
-    id: 'magnet-thief',
-    expect: (state) =>
-      Array.isArray(state.gems) &&
-      Boolean(state.players) &&
-      typeof state.range === 'number' &&
-      typeof state.endsAt === 'number',
-    action: { type: 'move', payload: { dx: 1, dy: 0 } },
-  },
-  {
     id: 'split-world',
     expect: (state) =>
       Array.isArray(state.tiles) &&

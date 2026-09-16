@@ -101,9 +101,13 @@ export function GameRenderer({
 
   const handleAction = useCallback(
     (action: GameAction) => {
-      void sendAction(action);
+      // Paddle heartbeat/retry packets are transport maintenance, not user
+      // errors. Keep them silent while preserving normal action feedback for
+      // every other game.
+      const silent = gameId === 'paddle-duel' || gameId === 'brick-breaker-battle';
+      return sendAction(action, silent ? { silent: true } : undefined);
     },
-    [sendAction],
+    [gameId, sendAction],
   );
 
   if (!known) {

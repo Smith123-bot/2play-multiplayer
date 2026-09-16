@@ -4,7 +4,6 @@ import type { ComponentType } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Player, RoomState } from '@2play/shared';
 import type { GameComponentProps } from './registry/types';
-import { magnetThiefClient, type MagnetThiefPublicState } from './magnet-thief';
 import { coupleSyncClient, type CoupleSyncPublicState } from './couple-sync';
 import { mazeRaceClient, type MazeRacePublicState } from './maze-race-2d';
 import { patternMemoryClient, type PatternMemoryPublicState } from './pattern-memory-battle';
@@ -57,46 +56,6 @@ function renderGame<T>(module: { Component: ComponentType<GameComponentProps<nev
 const now = Date.now();
 
 describe('Batch 3 premium game clients', () => {
-  it('renders Magnet Thief stages, obstacles and both field actions', async () => {
-    const player = {
-      x: 2,
-      y: 2,
-      facing: { dx: 1, dy: 0 },
-      score: 10,
-      stolen: 1,
-      carrying: 1,
-      cooldownLeft: 0,
-      latestInputSeq: -1,
-      inSafe: false,
-      disconnected: false,
-    };
-    const state = {
-      phase: 'playing',
-      gems: [{ id: 'g1', x: 3, y: 2, ownerId: 'p1', value: 10 }],
-      endsAt: now + 20_000,
-      finishReason: null,
-      lastEvent: null,
-      serverTime: now,
-      width: 18,
-      height: 12,
-      range: 3.35,
-      cooldown: 1700,
-      safeCorners: [{ x: 1.5, y: 1.5 }],
-      stage: 2,
-      nextStageAt: now + 5000,
-      obstacles: [{ x: 6, y: 4, radius: 1 }],
-      lastEffect: null,
-      players: { p1: player, p2: { ...player, x: 16, carrying: 0 } },
-      myCarrying: ['g1'],
-    } as MagnetThiefPublicState;
-    const send = renderGame(magnetThiefClient, state);
-    expect(screen.getByText('Stage 2/3')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Repel/ }));
-    expect(send).toHaveBeenCalledWith({ type: 'repel', payload: {} });
-    await userEvent.click(screen.getByRole('button', { name: 'Move down' }));
-    expect(send).toHaveBeenCalledWith({ type: 'move', payload: { dx: 0, dy: 1, sequence: 1 } });
-  });
-
   it('renders Couple Sync partner coordination, tier and match input', async () => {
     const state = {
       phase: 'active',

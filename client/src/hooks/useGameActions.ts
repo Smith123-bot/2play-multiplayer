@@ -16,8 +16,10 @@ export function useGameActions() {
       action,
     });
     if (!response.ok) {
-      if (!options.silent) toast.error(response.error?.message ?? 'That action was rejected.');
-      hapticsManager.trigger('error');
+      if (!options.silent) {
+        toast.error(response.error?.message ?? 'That action was rejected.');
+        hapticsManager.trigger('error');
+      }
       return false;
     }
     if (!response.data?.accepted && !options.silent) {

@@ -124,9 +124,9 @@ export function RoomScreen() {
 
   const leave = useCallback(async () => {
     setBusy(true);
-    await leaveRoom();
+    const left = await leaveRoom();
     setBusy(false);
-    navigate('/');
+    if (left) navigate('/');
   }, [leaveRoom, navigate]);
 
   // Phone/browser BACK while inside an active room is an INTENTIONAL leave
@@ -135,12 +135,10 @@ export function RoomScreen() {
   // ReconnectionManager grace period untouched — this only fires on a real
   // popstate (back navigation), never on connection loss.
   const leaveOnBack = useCallback(() => {
-    // Clear the client's own room state immediately so the UI (e.g. the
-    // Home "you are in a room" popup) never flashes while the leave request
-    // is in flight. The server remains authoritative: if this request is
-    // ever lost, the next `authenticate` re-attaches the session to its
-    // still-active room and the popup correctly reappears (spec §9).
-    useRoomStore.getState().clearRoom();
+    // Do not clear the client association until the server acknowledges the
+    // intentional leave. If the request is lost during a temporary connection
+    // drop, the existing session/room association must remain eligible for the
+    // normal reconnect path and the global prompt must not disappear falsely.
     void leaveRoom();
   }, [leaveRoom]);
 
@@ -149,7 +147,7 @@ export function RoomScreen() {
   const game = useMemo(() => games.find((entry) => entry.id === room?.gameId), [games, room?.gameId]);
 
   /**
-   * Centralised How to Play (all 35 games).
+   * Centralised How to Play (all catalogue games).
    *
    * The pre-match popup fires once per game before play begins, so no match can
    * start without its rules being one tap away; the header Rules button re-opens
@@ -215,7 +213,7 @@ export function RoomScreen() {
         </Link>
         <div className="flex items-center gap-2">
           <Badge tone={status === 'PLAYING' ? 'success' : 'default'}>{status}</Badge>
-          {/* Platform-level Help: available for all 35 games, before and during play. */}
+          {/* Platform-level Help: available for all catalogue games, before and during play. */}
           {game ? (
             <Button
               size="sm"

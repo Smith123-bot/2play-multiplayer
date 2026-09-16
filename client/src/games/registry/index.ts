@@ -3,7 +3,7 @@ import type { ClientGameModule } from './types';
 /**
  * Client game registry — lazily loaded, one Vite chunk per game.
  *
- * All 35 games used to be imported eagerly, which put every game's renderer
+ * All catalogue games used to be imported eagerly, which put every game's renderer
  * (including the chess engine, ludo board and canvas games) into the initial
  * bundle and made the Home page download ~850 KB of JavaScript before showing a
  * single card. Each game is now a dynamic import, so its chunk is fetched only
@@ -33,7 +33,6 @@ const loaders: Record<string, GameLoader> = {
   'fuse': () => import('../fuse').then((m) => m.fuseClient),
   'hangman': () => import('../hangman').then((m) => m.hangmanClient),
   'ludo': () => import('../ludo').then((m) => m.ludoClient),
-  'magnet-thief': () => import('../magnet-thief').then((m) => m.magnetThiefClient),
   'math-rush': () => import('../math-rush').then((m) => m.mathRushClient),
   'maze-race-2d': () => import('../maze-race-2d').then((m) => m.mazeRaceClient),
   'memory-match': () => import('../memory-match').then((m) => m.memoryMatchClient),

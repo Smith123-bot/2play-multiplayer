@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import { ConnectionBanner } from '../connection/ConnectionBanner';
+import { ActiveRoomPrompt } from '../room/ActiveRoomPrompt';
 import { cn } from '../../utils/cn';
 
 export function AppShell({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
@@ -15,6 +16,7 @@ export function AppShell({ children, wide = false }: { children: ReactNode; wide
           wide ? 'max-w-7xl' : 'max-w-6xl',
         )}
       >
+        <ActiveRoomPrompt />
         {children}
       </main>
       <BottomNav />

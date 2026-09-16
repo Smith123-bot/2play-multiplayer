@@ -14,7 +14,7 @@ import type { Room } from '../rooms/Room';
  *
  * Each case is driven with one connected human plus AI seats, which is the
  * Quick Play shape and by far the most common room on the platform. Matches are
- * finished directly rather than played out so all 35 games run in a few seconds;
+ * finished directly rather than played out so the full catalogue runs in a few seconds;
  * natural end-of-match behaviour is covered by the per-game module tests and by
  * tests/integration/all-games.test.ts.
  */
@@ -58,8 +58,8 @@ describe('every shipped game honours the result and rematch contract', () => {
     return { room, humanId: host.playerId };
   }
 
-  it('the registry ships the whole shared catalogue', () => {
-    expect(ALL_GAME_METADATA).toHaveLength(35);
+  it('the registry ships exactly the 34-game shared catalogue', () => {
+    expect(ALL_GAME_METADATA).toHaveLength(34);
     for (const game of ALL_GAME_METADATA) {
       expect(platform.registry.has(game.id), `${game.id} is missing from the registry`).toBe(true);
     }

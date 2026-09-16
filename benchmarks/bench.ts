@@ -273,9 +273,9 @@ async function main(): Promise<void> {
 
     /* ---------------- 8. Simulated realtime game broadcast pressure --------- */
     {
-      // Use paddle-duel (has update loop) to measure steady-state frame traffic.
+      // Use an existing update-loop game to measure steady-state frame traffic.
       const created = await emitAck<{ room: RoomState }>(host.socket, 'room:create', {
-        gameId: 'paddle-duel',
+        gameId: 'snake-battle',
         maxPlayers: 2,
         isPrivate: true,
       });
@@ -291,7 +291,7 @@ async function main(): Promise<void> {
       const wallMs = Number(process.hrtime.bigint() - wallStart) / 1e6;
       const deltaMsgs = trafficMessages - before.messages;
       const deltaBytes = trafficBytes - before.bytes;
-      console.log(`--- paddle-duel steady state: ${(deltaMsgs / (wallMs / 1000)).toFixed(1)} msg/s, ${(deltaBytes / 1024 / (wallMs / 1000)).toFixed(2)} KB/s per client`);
+      console.log(`--- snake-battle steady state: ${(deltaMsgs / (wallMs / 1000)).toFixed(1)} msg/s, ${(deltaBytes / 1024 / (wallMs / 1000)).toFixed(2)} KB/s per client`);
       await emitAck(host.socket, 'game:leave', {});
       await emitAck(host.socket, 'room:leave', {});
       await emitAck(p2.socket, 'room:leave', {});

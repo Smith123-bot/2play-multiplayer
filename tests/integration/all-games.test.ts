@@ -108,25 +108,6 @@ const CASES: GameCase[] = [
     action: { type: 'hit', payload: { targetId: 'target-0' } },
   },
   {
-    id: 'paddle-duel',
-    expect: (state) =>
-      Boolean(state.paddles) &&
-      Boolean(state.ball) &&
-      typeof state.scoreLimit === 'number' &&
-      typeof state.endsAt === 'number',
-    action: { type: 'move', payload: { direction: 'up' } },
-  },
-  {
-    id: 'brick-breaker-battle',
-    expect: (state) =>
-      typeof state.width === 'number' &&
-      Boolean(state.arenas) &&
-      Object.values(state.arenas as Record<string, { bricks: unknown[] } | null>).every(
-        (arena) => Array.isArray(arena?.bricks) && arena!.bricks.length === 28,
-      ),
-    action: { type: 'move', payload: { direction: 'right' } },
-  },
-  {
     id: 'pattern-memory-battle',
     expect: (state) =>
       typeof state.totalRounds === 'number' &&
@@ -186,15 +167,6 @@ const CASES: GameCase[] = [
       typeof state.clue === 'string' &&
       state.correctDoorId === null,
     action: { type: 'pick', payload: { doorId: 'door-0' } },
-  },
-  {
-    id: 'magnet-thief',
-    expect: (state) =>
-      Array.isArray(state.gems) &&
-      Boolean(state.players) &&
-      typeof state.range === 'number' &&
-      typeof state.endsAt === 'number',
-    action: { type: 'move', payload: { dx: 1, dy: 0 } },
   },
   {
     id: 'split-world',

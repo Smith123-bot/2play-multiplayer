@@ -21,6 +21,7 @@ Migrations: `server/src/database/migrations/*.sql` (idempotent, tracked by
 | ------ | ---- |
 | `id` | uuid PK |
 | `user_id` | uuid → `users(id)` ON DELETE CASCADE |
+| `match_id` | text | server-generated match key; unique with `user_id` for new rows |
 | `game_id` | text |
 | `room_id` | text |
 | `players_json` | jsonb |
@@ -30,7 +31,7 @@ Migrations: `server/src/database/migrations/*.sql` (idempotent, tracked by
 | `duration_seconds` | integer |
 | `played_at` | timestamptz |
 
-Indexes: `(user_id, played_at DESC)`, `(game_id, played_at DESC)`, `(room_id)`.
+Indexes: `(user_id, played_at DESC)`, `(game_id, played_at DESC)`, `(room_id)`, and unique `(user_id, match_id)` for durable result idempotency.
 
 ### `statistics`
 
@@ -56,11 +57,13 @@ Unique: `(user_id, game_id)`.
 
 Unique: `(user_id, game_id)`.
 
-### Function `record_match_result(user_id, game_id, result, score)`
+### Function `record_match_with_history(user_id, match_id, game_id, result, score, ...)`
 
-Atomically increments `wins`/`losses`/`draws`/`total_played` and raises
-`best_score`. The server calls it via `supabase.rpc(...)` after each match, then
-inserts the `game_history` row.
+The server calls this service-role-only RPC through `supabase.rpc(...)`. It inserts
+one history row and atomically increments `wins`/`losses`/`draws`/`total_played` and
+`best_score`. A unique `(user_id, match_id)` conflict returns without changing either
+table, so duplicate finish events, retries and reconnects cannot double-count.
+`record_match_result` is retained only as a revoked legacy signature.
 
 ## What is **not** stored
 
@@ -74,8 +77,8 @@ live in server memory only (spec §8). Live multiplayer is never persisted.
   data.
 * `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_DB_URL` are read from the server
   environment only and are never exposed through Vite variables.
-* REST endpoints accept an optional `x-session-token` header; when present, the
-  requested `userId` must match the session, and mutations (favorites) require it.
+* REST endpoints require an `x-session-token` header, resolve the authenticated session
+  on the server, and allow access only to that session's own user id.
 * Input is validated with Zod before it reaches the database; nicknames are length
   and character checked.
 
@@ -95,6 +98,8 @@ Supabase SQL editor:
 ```
 server/src/database/migrations/001_init.sql
 server/src/database/migrations/002_functions.sql
+server/src/database/migrations/003_security_hardening.sql
+server/src/database/migrations/004_match_idempotency.sql
 ```
 
 ## Graceful degradation

@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { addFavorite, removeFavorite } = vi.hoisted(() => ({
+const { favorites, addFavorite, removeFavorite } = vi.hoisted(() => ({
+  favorites: vi.fn(),
   addFavorite: vi.fn(),
   removeFavorite: vi.fn(),
 }));
 
 vi.mock('../services/api', () => ({
   api: {
-    favorites: vi.fn(),
+    favorites,
     addFavorite,
     removeFavorite,
   },
@@ -23,9 +24,10 @@ import { useSessionStore } from './sessionStore';
  */
 describe('favoritesStore', () => {
   beforeEach(() => {
+    favorites.mockReset();
     addFavorite.mockReset();
     removeFavorite.mockReset();
-    useFavoritesStore.setState({ favorites: [], pending: {}, loading: false });
+    useFavoritesStore.setState({ favorites: [], loadedUserId: null, pending: {}, loading: false });
     useSessionStore.setState({
       session: {
         userId: 'u1',
@@ -36,6 +38,38 @@ describe('favoritesStore', () => {
         createdAt: Date.now(),
       },
     });
+  });
+
+  it('loads an empty server response and remembers which user it belongs to', async () => {
+    favorites.mockResolvedValue({ ok: true, data: { favorites: [] } });
+    await useFavoritesStore.getState().load();
+    expect(favorites).toHaveBeenCalledWith('u1', 'token');
+    expect(useFavoritesStore.getState().loadedUserId).toBe('u1');
+
+    // An empty response is still authoritative; a repeat non-forced load uses
+    // the cache, while screens can call load(true) when they mount.
+    await useFavoritesStore.getState().load();
+    expect(favorites).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops one user cache before loading another user', async () => {
+    favorites.mockResolvedValue({ ok: true, data: { favorites: [{ gameId: 'chess' }] } });
+    await useFavoritesStore.getState().load();
+    useSessionStore.setState({
+      session: {
+        userId: 'u2',
+        sessionToken: 'token-u2',
+        playerId: 'p2',
+        nickname: 'Other',
+        avatar: '🐼',
+        createdAt: Date.now(),
+      },
+    });
+    favorites.mockResolvedValue({ ok: true, data: { favorites: [] } });
+    await useFavoritesStore.getState().load();
+    expect(favorites).toHaveBeenLastCalledWith('u2', 'token-u2');
+    expect(useFavoritesStore.getState().favorites).toEqual([]);
+    expect(useFavoritesStore.getState().loadedUserId).toBe('u2');
   });
 
   it('adds a game to the front of the list', async () => {

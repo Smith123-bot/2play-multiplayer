@@ -16,7 +16,8 @@ export class FavoriteManager {
   }
 
   async list(userId: string): Promise<FavoriteGame[]> {
-    return this.platform.database.getFavorites(userId);
+    const favorites = await this.platform.database.getFavorites(userId);
+    return favorites.filter((favorite) => this.platform.registry.has(favorite.gameId));
   }
 
   async add(userId: string, gameId: string): Promise<FavoriteGame> {
@@ -35,6 +36,7 @@ export class FavoriteManager {
   }
 
   async isFavorite(userId: string, gameId: string): Promise<boolean> {
+    this.assertGame(gameId);
     return this.platform.database.isFavorite(userId, gameId);
   }
 }

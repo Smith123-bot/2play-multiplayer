@@ -5,9 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Player, RoomState } from '@2play/shared';
 import type { GameComponentProps } from './registry/types';
 import { blackBlastClient, type BlastPublicState } from './black-blast';
-import { brickBreakerClient, type BrickBreakerPublicState } from './brick-breaker-battle';
 import { ludoClient, type LudoPublicState } from './ludo';
-import { paddleDuelClient, type PaddleDuelPublicState } from './paddle-duel';
 
 const players = [
   {
@@ -106,115 +104,6 @@ describe('Batch 1 premium game clients', () => {
     expect(screen.getByText('Target 7/30')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Drop overcharged pulse' }));
     expect(sendAction).toHaveBeenCalledWith({ type: 'pulse', payload: { mode: 'overcharge' } });
-  });
-
-  it('renders sequenced Paddle Duel controls and authoritative trajectory feedback', async () => {
-    const paddle = {
-      side: 'left' as const,
-      y: 30,
-      dir: 0,
-      latestInputSeq: 12,
-      score: 1,
-      rallies: 3,
-      bestRally: 3,
-      pointStreak: 1,
-      disconnected: false,
-      left: false,
-    };
-    const state: PaddleDuelPublicState = {
-      phase: 'playing',
-      width: 100,
-      height: 60,
-      paddleWidth: 2,
-      paddleHeight: 12,
-      ballRadius: 1,
-      ball: { x: 50, y: 20, vx: 40, vy: -10 },
-      serveAt: null,
-      servingTo: null,
-      rallyHits: 3,
-      pointNumber: 1,
-      lastHit: null,
-      lastImpact: { id: 4, kind: 'wall', x: 40, y: 1, at: Date.now() },
-      scoreLimit: 7,
-      startedAt: Date.now(),
-      endsAt: Date.now() + 30_000,
-      finishReason: null,
-      lastEvent: 'wall',
-      serverTime: Date.now(),
-      paddles: { p1: paddle, p2: { ...paddle, side: 'right', latestInputSeq: 2 } },
-    };
-    const { sendAction } = renderGame(paddleDuelClient, state);
-    await userEvent.pointer({
-      keys: '[MouseLeft>]',
-      target: screen.getByRole('button', { name: 'Move paddle up' }),
-    });
-    expect(sendAction).toHaveBeenCalledWith({
-      type: 'move',
-      payload: { direction: 'up', sequence: 13 },
-    });
-    expect(screen.getByText('Rally 3')).toBeInTheDocument();
-  });
-
-  it('renders Brick Breaker durability/layout progress and sends reconnect-safe input', async () => {
-    const durability = Array(28).fill(1) as number[];
-    durability[0] = 2;
-    const arena = {
-      paddleX: 50,
-      paddleDir: 0,
-      latestInputSeq: 8,
-      ball: { x: 50, y: 40, vx: 10, vy: -30 },
-      launchAt: null,
-      bricks: Array(28).fill(true) as boolean[],
-      brickHp: durability,
-      brickMaxHp: durability,
-      levelBrickCount: 28,
-      lastImpact: null,
-      destroyed: 4,
-      chain: 2,
-      level: 2,
-      levelsCleared: 1,
-      paddleScale: 1,
-      powerUp: null,
-      powerUpUntil: 0,
-      lives: 3,
-      score: 220,
-      bricksBroken: 32,
-      done: false,
-      doneAt: null,
-      disconnected: false,
-      left: false,
-    };
-    const state: BrickBreakerPublicState = {
-      phase: 'playing',
-      width: 100,
-      height: 70,
-      paddleWidth: 16,
-      paddleHeight: 2,
-      paddleY: 66,
-      ballRadius: 1,
-      brickCols: 7,
-      brickRows: 4,
-      brickValues: [30, 20, 15, 10],
-      clearBonus: 100,
-      maxLevels: 3,
-      startedAt: Date.now(),
-      endsAt: Date.now() + 30_000,
-      finishReason: null,
-      lastEvent: null,
-      serverTime: Date.now(),
-      arenas: { p1: arena, p2: { ...arena, latestInputSeq: 1 } },
-    };
-    const { sendAction } = renderGame(brickBreakerClient, state);
-    expect(screen.getAllByLabelText('Brick 1, 2 hits remaining')).toHaveLength(2);
-    expect(screen.getByText(/4\/28 wall/)).toBeInTheDocument();
-    await userEvent.pointer({
-      keys: '[MouseLeft>]',
-      target: screen.getByRole('button', { name: 'Move paddle right' }),
-    });
-    expect(sendAction).toHaveBeenCalledWith({
-      type: 'move',
-      payload: { direction: 'right', sequence: 9 },
-    });
   });
 
   it('renders Ludo capture feedback and moves only a server-listed token', async () => {

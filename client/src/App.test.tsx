@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { useGameStore } from './stores/gameStore';
 import { useSessionStore } from './stores/sessionStore';
 import { useStatisticsStore } from './stores/statisticsStore';
+import { ALL_GAME_METADATA } from '@2play/shared';
 
 /**
  * Navigation contract for the real (lazily split) route table.
@@ -114,12 +115,12 @@ describe('routing', () => {
   it('resolves /games and lists the whole catalogue', async () => {
     renderAt('/games');
     expect(await screen.findByRole('heading', { name: 'Games' })).toBeInTheDocument();
-    await screen.findByText(/35 games · 0 favorites/);
+    await screen.findByText(new RegExp(`${ALL_GAME_METADATA.length} games · 0 favorites`));
     // Scope to the All Games rail: New Games repeats six of the same games.
     const section = screen.getByRole('heading', { name: /All Games/i }).closest('section')!;
     expect(
       within(section as HTMLElement).getAllByRole('button', { name: /^Expand / }),
-    ).toHaveLength(35);
+    ).toHaveLength(ALL_GAME_METADATA.length);
   });
 
   it('resolves a direct deep link to a game', async () => {

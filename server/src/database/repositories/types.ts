@@ -12,6 +12,8 @@ export interface UserRecord {
 export interface HistoryRecord {
   id: string;
   userId: string;
+  /** Stable server-generated identifier used to deduplicate retries. */
+  matchId: string;
   gameId: string;
   roomId: string;
   players: PlayerSummary[];
@@ -24,6 +26,8 @@ export interface HistoryRecord {
 
 export interface NewHistoryRecord {
   userId: string;
+  /** Stable server-generated identifier used to deduplicate retries. */
+  matchId: string;
   gameId: string;
   roomId: string;
   players: PlayerSummary[];

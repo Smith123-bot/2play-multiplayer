@@ -20,7 +20,7 @@ export function StatisticsScreen() {
 
   useEffect(() => {
     void loadGames();
-    void load();
+    void load(true);
   }, [load, loadGames]);
 
   if (!session) {

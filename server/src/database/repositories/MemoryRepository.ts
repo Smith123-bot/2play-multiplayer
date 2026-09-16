@@ -22,6 +22,7 @@ export class MemoryRepository implements DatabaseRepository {
   private readonly users = new Map<string, UserRecord>();
   private readonly usersBySession = new Map<string, string>();
   private readonly history = new Map<string, HistoryRecord[]>();
+  private readonly recordedMatches = new Set<string>();
   private readonly statistics = new Map<string, GameStatistics>();
   private readonly favorites = new Map<string, Map<string, string>>();
   private readonly logger = createLogger('MemoryRepository');
@@ -40,6 +41,7 @@ export class MemoryRepository implements DatabaseRepository {
     this.users.clear();
     this.usersBySession.clear();
     this.history.clear();
+    this.recordedMatches.clear();
     this.statistics.clear();
     this.favorites.clear();
   }
@@ -110,6 +112,10 @@ export class MemoryRepository implements DatabaseRepository {
     score: number;
     history: NewHistoryRecord;
   }): Promise<void> {
+    const matchKey = `${input.userId}:${input.history.matchId}`;
+    if (this.recordedMatches.has(matchKey)) return;
+    this.recordedMatches.add(matchKey);
+
     const key = `${input.userId}:${input.gameId}`;
     const current: GameStatistics =
       this.statistics.get(key) ??
@@ -139,6 +145,7 @@ export class MemoryRepository implements DatabaseRepository {
     list.unshift({
       id: createId(),
       userId: input.userId,
+      matchId: input.history.matchId,
       gameId: input.history.gameId,
       roomId: input.history.roomId,
       players: input.history.players,

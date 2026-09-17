@@ -2,9 +2,11 @@ import { Link, useRouteError } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Button } from '../components/ui/Button';
+import { useNoindexPageSeo } from '../seo/usePageSeo';
 
 export function ErrorScreen() {
   const error = useRouteError() as { statusText?: string; message?: string } | null;
+  useNoindexPageSeo('Something Went Wrong', 'Something went wrong.');
 
   return (
     <EmptyState

@@ -45,6 +45,16 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: optionalString,
   SUPABASE_DB_URL: optionalString,
 
+  /**
+   * Search-engine submission & webmaster verification. All optional, all
+   * deployment secrets/config — the code never ships a hard-coded key. Shape
+   * validation lives in server/src/seo (invalid values are ignored with a
+   * startup warning, never trusted blindly).
+   */
+  INDEXNOW_KEY: optionalString,
+  GOOGLE_SITE_VERIFICATION: optionalString,
+  BING_SITE_VERIFICATION: optionalString,
+
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 
   MAX_ROOMS: z.coerce.number().int().min(1).max(100000).default(1000),

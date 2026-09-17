@@ -8,8 +8,10 @@ import { GamesLoadError } from '../components/game/GamesLoadError';
 import { useGameStore } from '../stores/gameStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useSessionStore } from '../stores/sessionStore';
+import { useNoindexPageSeo } from '../seo/usePageSeo';
 
 export function FavoritesScreen() {
+  useNoindexPageSeo('Your Favorites', 'Your favorite DuoPlay games.');
   const games = useGameStore((store) => store.games);
   const loading = useGameStore((store) => store.loading);
   const gamesError = useGameStore((store) => store.error);

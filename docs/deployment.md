@@ -80,6 +80,39 @@ location / {
 * Keep `pingInterval` (10 s) and `pingTimeout` (20 s) below any proxy idle timeout
   (60 s+ recommended), otherwise mobile clients will be dropped.
 
+## SEO surface
+
+The production site is `https://duoplay.in` (constant `SITE_URL` in
+`shared/src/seo`). All public SEO output is generated from the live game
+registry, so no file ever hard-codes the game list:
+
+* `/robots.txt` allows the public pages, disallows `/api/`, `/socket.io/`,
+  `/room/` and the account flows, and references the sitemap.
+* `/sitemap.xml` lists the homepage, `/games` and one URL per registered game.
+* Every SPA route is served with its own `<title>`, meta description,
+  canonical (always the duoplay.in origin, never the Render hostname),
+  Open Graph/Twitter tags, truthful JSON-LD and a crawlable `<noscript>` body
+  block. Unknown routes and invalid game ids return a real **404** with a
+  `noindex` head; rooms and account pages return 200 with `noindex`.
+
+### Search engine submission (Google & Bing)
+
+1. Deploy, then verify `https://duoplay.in/`, `/robots.txt` and
+   `/sitemap.xml` all return 200.
+2. **Google Search Console** → add property → "HTML tag" method → set
+   `GOOGLE_SITE_VERIFICATION` to the token value and redeploy. The server
+   injects `<meta name="google-site-verification" …>` into every page. Click
+   Verify, then submit `https://duoplay.in/sitemap.xml`.
+3. **Bing Webmaster Tools** → add site → meta tag method → set
+   `BING_SITE_VERIFICATION` to the `msvalidate.01` token value and redeploy.
+4. **IndexNow (optional push for Bing)**: set `INDEXNOW_KEY` (8–128 chars,
+   A–Z a–z 0–9 hyphen). The server serves the ownership proof at
+   `https://duoplay.in/<INDEXNOW_KEY>.txt`; run `npm run seo:submit` after
+   each deploy to push the full public URL list. The key lives only in the
+   environment — it is never committed.
+
+All four variables are documented in `.env.example` and are no-ops when unset.
+
 ## Scaling notes
 
 * Rooms are in memory: run a **single instance**, or add a Socket.IO Redis adapter

@@ -19,6 +19,9 @@ import { usePublicRooms } from '../hooks/usePublicRooms';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import { APP_CONFIG } from '../core/config';
 import { useConnectionStore } from '../stores/connectionStore';
+import { buildHomeSeo } from '@2play/shared';
+import { usePageSeo } from '../seo/usePageSeo';
+import { HomeAboutSection } from '../components/home/HomeAboutSection';
 import { formatCategory } from '../utils/format';
 import { cn } from '../utils/cn';
 
@@ -50,6 +53,9 @@ export function HomeScreen() {
   const gamesLoading = useGameStore((store) => store.loading);
   const gamesError = useGameStore((store) => store.error);
   const loadGames = useGameStore((store) => store.load);
+  // Homepage head tags (title, description, canonical, OG/Twitter, JSON-LD).
+  const homeSeo = useMemo(() => buildHomeSeo(games), [games]);
+  usePageSeo(homeSeo);
   const favorites = useFavoritesStore((store) => store.favorites);
   const loadFavorites = useFavoritesStore((store) => store.load);
   const toggleFavorite = useFavoritesStore((store) => store.toggle);
@@ -430,6 +436,11 @@ export function HomeScreen() {
           )}
         </Card>
       </section>
+
+      {/* Readable "What is DuoPlay" content. Rendered last on purpose: the
+          hero, game rails and public rooms stay within the first scrolls on
+          mobile, while the text serves readers and search engines below. */}
+      <HomeAboutSection games={games} />
     </div>
   );
 }

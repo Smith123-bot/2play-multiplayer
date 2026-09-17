@@ -1,8 +1,16 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Compass, Home } from 'lucide-react';
+import { buildNotFoundSeo } from '@2play/shared';
 import { EmptyState } from '../components/ui/EmptyState';
+import { usePageSeo } from '../seo/usePageSeo';
 
 export function NotFoundScreen() {
+  // Unknown route: the server already answered 404 for direct hits; keep the
+  // client-rendered head noindexed too so the state survives navigation.
+  const seo = useMemo(() => buildNotFoundSeo('Page'), []);
+  usePageSeo(seo);
+
   return (
     <EmptyState
       icon={<Compass className="h-10 w-10 text-primary-300" />}

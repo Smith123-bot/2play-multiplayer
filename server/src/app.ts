@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import helmet from 'helmet';
 import { makeErrorPayload } from '@2play/shared';
 import { env, isProduction, parseCorsOrigins } from './config/env';
@@ -9,6 +10,14 @@ import type { Platform } from './core/Platform';
 import { errorHandler, httpRateLimiter, notFoundHandler, requestLogger } from './middleware';
 import { createApiRouter } from './routes';
 import { healthzHandler } from './routes/health.routes';
+import { createSeoRouter } from './seo/routes';
+import { createSpaSeoHandler, type SeoMetadataProvider } from './seo/spa';
+import {
+  buildIndexNowKeyPath,
+  createIndexNowKeyHandler,
+  normalizeIndexNowKey,
+  normalizeVerificationToken,
+} from './seo/indexnow';
 import { createLogger } from './utils/logger';
 
 const logger = createLogger('App');
@@ -24,6 +33,23 @@ export function createApp(platform: Platform): Express {
   app.set('trust proxy', env.TRUST_PROXY);
   app.set('query parser', 'simple');
   app.disable('x-powered-by');
+
+  /**
+   * HTTP response compression (gzip/deflate via Accept-Encoding). Without it
+   * the SPA bundle (~500 KB minified) and the games catalogue (~70 KB JSON)
+   * ship raw on every connection. Two guards:
+   *  - `/socket.io` frames are excluded: Engine.IO owns that path and frames
+   *    are small already; wrapping them in a streaming compressor could risk
+   *    frame boundaries.
+   *  - small bodies (healthz, api/health, errors) fall below the 1 KB
+   *    compression threshold and pass through untouched.
+   */
+  app.use(
+    compression({
+      filter: (req, res) =>
+        !req.path.startsWith('/socket.io') && compression.filter(req, res),
+    }),
+  );
 
   app.use(
     helmet({
@@ -65,6 +91,42 @@ export function createApp(platform: Platform): Express {
   // subject to the API rate limiter. Helmet/CORS still apply (global above).
   app.get('/healthz', healthzHandler);
 
+  /**
+   * Public discovery documents (robots.txt, sitemap.xml) and the SEO view of
+   * the game catalogue. Everything at this layer reads the live registry, so
+   * the SEO surface can never drift from /api/games.
+   */
+  const seoProvider: SeoMetadataProvider = {
+    findGame: (gameId) => platform.registry.find(gameId)?.metadata,
+    listGames: () => platform.registry.getAllMetadata(),
+  };
+  app.use(createSeoRouter({ listGames: seoProvider.listGames }));
+
+  /**
+   * Search-engine submission & webmaster verification (all env-driven).
+   * IndexNow: serve the ownership proof at /<INDEXNOW_KEY>.txt so Bing can
+   * verify the key used by `npm run seo:submit`. An absent or malformed key
+   * simply registers nothing — submissions are a no-op without it.
+   */
+  const indexNowKey = normalizeIndexNowKey(env.INDEXNOW_KEY);
+  if (env.INDEXNOW_KEY && !indexNowKey) {
+    logger.warn('INDEXNOW_KEY ignored: expected 8–128 chars (A–Z, a–z, 0–9, hyphen)');
+  }
+  if (indexNowKey) {
+    app.get(buildIndexNowKeyPath(indexNowKey), createIndexNowKeyHandler(indexNowKey));
+    logger.info('IndexNow key endpoint registered', { path: buildIndexNowKeyPath(indexNowKey) });
+  }
+  const seoHeadExtras = {
+    googleSiteVerification: normalizeVerificationToken(env.GOOGLE_SITE_VERIFICATION),
+    bingSiteVerification: normalizeVerificationToken(env.BING_SITE_VERIFICATION),
+  };
+  if (env.GOOGLE_SITE_VERIFICATION && !seoHeadExtras.googleSiteVerification) {
+    logger.warn('GOOGLE_SITE_VERIFICATION ignored: invalid characters for a meta token');
+  }
+  if (env.BING_SITE_VERIFICATION && !seoHeadExtras.bingSiteVerification) {
+    logger.warn('BING_SITE_VERIFICATION ignored: invalid characters for a meta token');
+  }
+
   app.use('/api', httpRateLimiter, createApiRouter(platform));
 
   // Reject unknown API routes with JSON instead of HTML.
@@ -96,13 +158,23 @@ export function createApp(platform: Platform): Express {
       }),
     );
     app.use(express.static(clientDist, { maxAge: '1h', index: false }));
+    /**
+     * The SPA shell is read once at boot and re-rendered per request with the
+     * route's own title, description, canonical, Open Graph/Twitter tags and
+     * JSON-LD. Unknown paths and invalid game ids get a real 404 with a
+     * noindex head; private surfaces get a noindex head with a 200.
+     */
+    const indexFile = path.join(clientDist, 'index.html');
+    const indexTemplate = fs.existsSync(indexFile) ? fs.readFileSync(indexFile, 'utf8') : null;
+    const spaHandler = indexTemplate
+      ? createSpaSeoHandler(seoProvider, indexTemplate, seoHeadExtras)
+      : null;
     app.get('*', (_req: Request, res: Response, next: NextFunction) => {
-      const indexFile = path.join(clientDist, 'index.html');
-      if (!fs.existsSync(indexFile)) {
+      if (!spaHandler) {
         next();
         return;
       }
-      res.sendFile(indexFile);
+      spaHandler(_req, res);
     });
     logger.info('serving client build', { path: clientDist });
   } else if (isProduction) {

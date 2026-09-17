@@ -14,6 +14,7 @@ import { useRoomActions } from '../hooks/useRoomActions';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import { cn } from '../utils/cn';
 import { formatCategory } from '../utils/format';
+import { useNoindexPageSeo } from '../seo/usePageSeo';
 
 /**
  * Create Room — human multiplayer ONLY (spec: "2PLAY — UX + ROOM LIFECYCLE
@@ -26,6 +27,7 @@ export function CreateRoomScreen() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const gate = useIdentityGate();
+  useNoindexPageSeo('Create a Room', 'Create a DuoPlay room and invite friends with a room code.');
   const games = useGameStore((store) => store.games);
   const gamesLoading = useGameStore((store) => store.loading);
   const gamesError = useGameStore((store) => store.error);

@@ -25,6 +25,7 @@ import { useLeaveRoomOnBackNavigation } from '../hooks/useLeaveRoomOnBackNavigat
 import { getLocalPlayerId } from '../stores/roomStore';
 import { useGameEndReveal } from '../hooks/useGameEndReveal';
 import { cn } from '../utils/cn';
+import { useNoindexPageSeo } from '../seo/usePageSeo';
 
 const LOBBY_STATUSES: RoomState['status'][] = ['WAITING', 'LOBBY', 'READY'];
 const RESULT_STATUSES: RoomState['status'][] = ['GAME_FINISHED', 'RESULT', 'REMATCH_WAITING'];
@@ -46,6 +47,8 @@ function winnersText(
 export function RoomScreen() {
   const { roomId = '' } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
+  // Live matches are private and always excluded from search indexes.
+  useNoindexPageSeo('Room', 'A live DuoPlay room. Rooms are private, realtime matches and are not indexed.');
   const room = useRoomStore((store) => store.room);
   const lastResult = useRoomStore((store) => store.lastResult);
   const roomClosedReason = useRoomStore((store) => store.roomClosedReason);

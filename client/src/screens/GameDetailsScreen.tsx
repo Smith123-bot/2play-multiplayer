@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, Crown, Gamepad2, Heart, KeyRound, Users, Zap } from 'lucide-react';
+import { SITE_NAME, buildGameIntro, buildGameSeo, buildNotFoundSeo, gameModesFor, relatedGamesFor } from '@2play/shared';
 import { GameCard } from '../components/game/GameCard';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -12,6 +13,7 @@ import { useGameStore } from '../stores/gameStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import { useRoomActions } from '../hooks/useRoomActions';
+import { usePageSeo } from '../seo/usePageSeo';
 import { formatCategory, formatDuration } from '../utils/format';
 
 export function GameDetailsScreen() {
@@ -32,6 +34,18 @@ export function GameDetailsScreen() {
   }, [load]);
 
   const game = games.find((entry) => entry.id === gameId);
+
+  /**
+   * Per-page head tags. While the catalogue is still on the wire the head is
+   * left untouched (null), so crawlers never see a transient noindex; an
+   * invalid id settles on a noindexed "not found" head matching the body.
+   */
+  const pageSeo = useMemo(() => {
+    if (game) return buildGameSeo(game);
+    if (loading) return null;
+    return buildNotFoundSeo('Game');
+  }, [game, loading]);
+  usePageSeo(pageSeo);
 
   if (loading) return <LoadingBlock message="Loading game…" />;
 
@@ -58,7 +72,10 @@ export function GameDetailsScreen() {
     );
   }
 
-  const similar = games.filter((entry) => entry.id !== game.id && entry.category === game.category).slice(0, 3);
+  const related = relatedGamesFor(game, games, 3);
+  const modes = gameModesFor(game);
+  // Structured steps exist for some games; the flat rules are always there.
+  const steps = game.howToPlay?.steps ?? null;
 
   const playWithAI = () =>
     gate(async () => {
@@ -69,10 +86,22 @@ export function GameDetailsScreen() {
     });
 
   return (
-    <div className="space-y-6">
-      <Link to="/games" className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white">
-        <ArrowLeft className="h-4 w-4" /> All games
-      </Link>
+    <article className="space-y-6" aria-label={`${game.name} on DuoPlay`}>
+      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
+        <Link to="/games" className="inline-flex items-center gap-2 hover:text-white">
+          <ArrowLeft className="h-4 w-4" /> All games
+        </Link>
+        <span aria-hidden>/</span>
+        <Link
+          to={`/games?category=${game.category}`}
+          className="hover:text-white"
+          aria-label={`Browse ${formatCategory(game.category)} games`}
+        >
+          {formatCategory(game.category)} games
+        </Link>
+        <span aria-hidden>/</span>
+        <span className="text-slate-500" aria-current="page">{game.name}</span>
+      </nav>
 
       <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary-600/25 via-surface/80 to-secondary-500/20 p-6 sm:p-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
@@ -163,23 +192,52 @@ export function GameDetailsScreen() {
         </div>
       </section>
 
+      {/* Unique introduction — same metadata that feeds the meta description
+          and the JSON-LD, so page, snippet and structured data always agree. */}
+      <section
+        aria-labelledby={`about-${game.id}`}
+        className="rounded-3xl border border-white/10 bg-surface/60 p-6 sm:p-8"
+      >
+        <h2 id={`about-${game.id}`} className="text-lg font-bold text-white">
+          About {game.name}
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-300">
+          {buildGameIntro(game)}
+        </p>
+      </section>
+
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader
-            title="How to play"
-            subtitle={game.howToPlay?.objective ?? game.controls}
-          />
-          <ol className="space-y-2 text-sm text-slate-300">
-            {game.rules.map((rule, index) => (
-              <li key={rule} className="flex gap-3">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary-500/20 text-xs font-bold text-primary-200">
-                  {index + 1}
-                </span>
-                {rule}
-              </li>
-            ))}
-          </ol>
-        </Card>
+        <div className="space-y-4 lg:col-span-2">
+          <Card>
+            <CardHeader
+              title="How to play"
+              subtitle={game.howToPlay?.objective ?? game.controls}
+            />
+            <ol className="space-y-2 text-sm text-slate-300">
+              {(steps ?? game.rules).map((step, index) => (
+                <li key={step} className="flex gap-3">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary-500/20 text-xs font-bold text-primary-200">
+                    {index + 1}
+                  </span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </Card>
+
+          {/* The flat rules only repeat the steps when a game ships structured
+              steps of its own — showing both then would duplicate content. */}
+          {steps ? (
+            <Card>
+              <CardHeader title="Rules" />
+              <ul className="list-disc space-y-2 pl-5 text-sm text-slate-300">
+                {game.rules.map((rule) => (
+                  <li key={rule}>{rule}</li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+        </div>
 
         <div className="space-y-4">
           <Card>
@@ -208,8 +266,28 @@ export function GameDetailsScreen() {
             <p className="text-sm text-slate-300">{game.winCondition}</p>
           </Card>
           <Card>
+            <CardHeader title="Game modes" icon={<Users className="h-4 w-4" />} />
+            <ul className="list-disc space-y-1.5 pl-5 text-sm text-slate-300">
+              {modes.map((mode) => (
+                <li key={mode}>{mode}</li>
+              ))}
+            </ul>
+          </Card>
+          <Card>
             <CardHeader title="Details" />
             <dl className="space-y-2 text-sm">
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-400">Category</dt>
+                <dd className="font-medium text-white">{formatCategory(game.category)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-400">Player count</dt>
+                <dd className="font-medium text-white">
+                  {game.minPlayers === game.maxPlayers
+                    ? `${game.minPlayers} players`
+                    : `${game.minPlayers}–${game.maxPlayers} players`}
+                </dd>
+              </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-slate-400">Supported players</dt>
                 <dd className="font-medium text-white">{game.supportedPlayerCounts.join(', ')}</dd>
@@ -236,11 +314,17 @@ export function GameDetailsScreen() {
         </div>
       </div>
 
-      {similar.length > 0 ? (
-        <section>
-          <h2 className="mb-4 text-xl font-bold text-white">More {formatCategory(game.category)} games</h2>
+      {related.length > 0 ? (
+        <section aria-labelledby="related-games-heading">
+          <h2 id="related-games-heading" className="mb-2 text-xl font-bold text-white">
+            Related games
+          </h2>
+          <p className="mb-4 text-sm text-slate-400">
+            More {formatCategory(game.category).toLowerCase()} games and other {SITE_NAME}{' '}
+            titles you can start in seconds.
+          </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {similar.map((entry) => (
+            {related.map((entry) => (
               <GameCard
                 key={entry.id}
                 game={entry}
@@ -251,7 +335,31 @@ export function GameDetailsScreen() {
           </div>
         </section>
       ) : null}
-    </div>
+
+      {/* Last leg of the internal linking chain: game page → real gameplay.
+          Descriptive anchors (the hero buttons are actions, not links). */}
+      <nav
+        aria-label={`Play ${game.name}`}
+        className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-3xl border border-white/10 bg-surface/60 p-6 text-sm sm:p-8"
+      >
+        <span className="font-semibold text-white">Start playing {game.name}:</span>
+        <Link
+          to={`/create?game=${game.id}`}
+          className="font-medium text-primary-300 hover:underline"
+        >
+          Create a {game.name} room
+        </Link>
+        <Link
+          to={`/join?game=${game.id}`}
+          className="font-medium text-primary-300 hover:underline"
+        >
+          Join a {game.name} room with a code
+        </Link>
+        <Link to="/games" className="font-medium text-primary-300 hover:underline">
+          Explore all games
+        </Link>
+      </nav>
+    </article>
   );
 }
 

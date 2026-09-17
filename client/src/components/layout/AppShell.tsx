@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
+import { Footer } from './Footer';
 import { ConnectionBanner } from '../connection/ConnectionBanner';
 import { ActiveRoomPrompt } from '../room/ActiveRoomPrompt';
 import { cn } from '../../utils/cn';
@@ -20,9 +21,7 @@ export function AppShell({ children, wide = false }: { children: ReactNode; wide
         {children}
       </main>
       <BottomNav />
-      <footer className="hidden border-t border-white/5 py-6 text-center text-xs text-slate-500 md:block">
-        2PLAY v2.1 — Strictly 2D. Built for friends, families and quick matches.
-      </footer>
+      <Footer />
     </div>
   );
 }

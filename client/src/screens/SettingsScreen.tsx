@@ -16,9 +16,11 @@ import { audioManager } from '../audio/AudioManager';
 import { ALL_SOUNDS } from '../audio/sounds';
 import { hapticsManager } from '../haptics/HapticsManager';
 import { cn } from '../utils/cn';
+import { useNoindexPageSeo } from '../seo/usePageSeo';
 
 export function SettingsScreen() {
   const settings = useSettingsStore();
+  useNoindexPageSeo('Settings', 'Your DuoPlay settings.');
   const nickname = useSessionStore((store) => store.nickname);
   const avatar = useSessionStore((store) => store.avatar);
   const setIdentity = useSessionStore((store) => store.setIdentity);

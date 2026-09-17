@@ -11,9 +11,11 @@ import { useStatisticsStore } from '../stores/statisticsStore';
 import { useGameStore } from '../stores/gameStore';
 import { useSessionStore } from '../stores/sessionStore';
 import { formatDuration } from '../utils/format';
+import { useNoindexPageSeo } from '../seo/usePageSeo';
 
 export function StatisticsScreen() {
   const { statistics, history, summary, loading, error, load } = useStatisticsStore();
+  useNoindexPageSeo('Your Statistics', 'Your DuoPlay match statistics and history.');
   const games = useGameStore((store) => store.games);
   const loadGames = useGameStore((store) => store.load);
   const session = useSessionStore((store) => store.session);

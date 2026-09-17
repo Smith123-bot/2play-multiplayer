@@ -1,8 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Flame, Search, Sparkles, SlidersHorizontal, Heart, Gamepad2 } from 'lucide-react';
 import type { GameCategory, GameDifficulty, GameMetadata } from '@2play/shared';
-import { GAME_CATEGORIES } from '@2play/shared';
+import { GAME_CATEGORIES, buildGamesCatalogSeo } from '@2play/shared';
+import { usePageSeo } from '../seo/usePageSeo';
 import { GameCard } from '../components/game/GameCard';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
@@ -95,12 +96,22 @@ export function GameBrowserScreen() {
   const loadPopularity = usePopularityStore((store) => store.load);
   const { quickPlay } = useRoomActions();
 
+  const [searchParams] = useSearchParams();
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<GameCategory | 'all'>('all');
+  // Deep-linkable category filter: the game-page breadcrumb and external
+  // shares use /games?category=<id>; anything unknown safely means 'all'.
+  const [category, setCategory] = useState<GameCategory | 'all'>(() => {
+    const raw = searchParams.get('category') ?? '';
+    return (GAME_CATEGORIES as readonly string[]).includes(raw) ? (raw as GameCategory) : 'all';
+  });
   const [players, setPlayers] = useState<'all' | '2' | '3' | '4'>('all');
   const [difficulty, setDifficulty] = useState<GameDifficulty | 'all'>('all');
   const [sort, setSort] = useState<SortKey>('featured');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+
+  // Catalogue head tags (title, description, canonical, OG/Twitter).
+  const catalogSeo = useMemo(() => buildGamesCatalogSeo(games), [games]);
+  usePageSeo(catalogSeo);
 
   // Inline card expansion (spec: exactly one game expanded at a time, on the
   // same Games page — never navigate to a separate details/selection page).

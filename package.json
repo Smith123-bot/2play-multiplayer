@@ -35,6 +35,7 @@
     "test:all": "npm run test && npm run test:integration",
     "db:migrate": "npm run db:migrate -w @2play/server",
     "db:verify": "npm run db:verify -w @2play/server",
+    "seo:submit": "npm run seo:submit -w @2play/server",
     "clean": "rimraf shared/dist server/dist client/dist tests/dist coverage .eslintcache"
   },
   "devDependencies": {

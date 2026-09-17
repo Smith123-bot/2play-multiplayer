@@ -12,11 +12,13 @@ import { usePublicRooms } from '../hooks/usePublicRooms';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import { useSessionStore } from '../stores/sessionStore';
 import { useGameStore } from '../stores/gameStore';
+import { useNoindexPageSeo } from '../seo/usePageSeo';
 
 export function JoinRoomScreen() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const gate = useIdentityGate();
+  useNoindexPageSeo('Join a Room', 'Join a DuoPlay room with a room code from a friend.');
   const { joinRoom } = useRoomActions();
   const recentRooms = useSessionStore((store) => store.recentRooms);
   const games = useGameStore((store) => store.games);

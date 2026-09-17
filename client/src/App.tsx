@@ -29,6 +29,12 @@ const StatisticsScreen = lazy(() => import('./screens/StatisticsScreen'));
 const FavoritesScreen = lazy(() => import('./screens/FavoritesScreen'));
 const NotFoundScreen = lazy(() => import('./screens/NotFoundScreen'));
 const ErrorScreen = lazy(() => import('./screens/ErrorScreen'));
+// Public information & legal pages — lazy like every non-landing route.
+const AboutScreen = lazy(() => import('./screens/AboutScreen'));
+const PrivacyScreen = lazy(() => import('./screens/PrivacyScreen'));
+const TermsScreen = lazy(() => import('./screens/TermsScreen'));
+const ContactScreen = lazy(() => import('./screens/ContactScreen'));
+const FaqScreen = lazy(() => import('./screens/FaqScreen'));
 
 export function App() {
   // Single place where the socket is connected and bridged into the stores.
@@ -55,6 +61,11 @@ export function App() {
           <Route path="/stats" element={<StatisticsScreen />} />
           <Route path="/statistics" element={<Navigate to="/stats" replace />} />
           <Route path="/favorites" element={<FavoritesScreen />} />
+          <Route path="/about" element={<AboutScreen />} />
+          <Route path="/privacy" element={<PrivacyScreen />} />
+          <Route path="/terms" element={<TermsScreen />} />
+          <Route path="/contact" element={<ContactScreen />} />
+          <Route path="/faq" element={<FaqScreen />} />
           <Route path="/error" element={<ErrorScreen />} />
           <Route path="*" element={<NotFoundScreen />} />
         </Routes>

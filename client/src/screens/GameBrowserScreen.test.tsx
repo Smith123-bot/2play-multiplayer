@@ -56,9 +56,9 @@ const { GameBrowserScreen } = await import('./GameBrowserScreen');
 
 const CARD = /^Expand /;
 
-function renderScreen() {
+function renderScreen(initialPath?: string) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialPath ? [initialPath] : undefined}>
       <GameBrowserScreen />
     </MemoryRouter>,
   );
@@ -297,5 +297,25 @@ describe('game discovery: failure states', () => {
     gamesFail.current = false;
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
     await waitFor(() => expect(allGamesCards()).resolves.toHaveLength(ALL_GAME_METADATA.length));
+  });
+});
+
+describe('game discovery: deep-linked category filter', () => {
+  it('applies a valid ?category= from the URL (the game-page breadcrumb target)', async () => {
+    renderScreen('/games?category=reflex');
+    await waitFor(() => expect(resultCards().length).toBeGreaterThan(0));
+    const reflexIds = ALL_GAME_METADATA.filter((game) => game.category === 'reflex').map(
+      (game) => game.name,
+    );
+    // The filtered grid shows exactly the reflex catalogue — nothing else.
+    const names = cardNames(resultCards());
+    expect([...names].sort()).toEqual([...reflexIds].sort());
+    expect(screen.queryByRole('heading', { name: /All Games/i })).toBeNull();
+  });
+
+  it('treats an unknown ?category= as no filter', async () => {
+    renderScreen('/games?category=not-a-real-category');
+    const cards = await allGamesCards();
+    expect(cards).toHaveLength(ALL_GAME_METADATA.length);
   });
 });

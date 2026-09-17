@@ -183,8 +183,10 @@ describe('in-app navigation', () => {
     await userEvent.click(screen.getByRole('link', { name: /how to play/i }));
     expect(await screen.findByRole('heading', { name: cardName })).toBeInTheDocument();
 
-    // And the details page links back to the catalogue.
-    await userEvent.click(screen.getByRole('link', { name: /all games/i }));
+    // And the details page links back to the catalogue (via its breadcrumb —
+    // the page intentionally has a second "Explore all games" nav link).
+    const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    await userEvent.click(within(breadcrumb).getByRole('link', { name: /all games/i }));
     expect(await screen.findByRole('heading', { name: 'Games' })).toBeInTheDocument();
   });
 

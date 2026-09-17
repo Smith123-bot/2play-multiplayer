@@ -18,6 +18,13 @@ export const APP_CONFIG = {
   name: (import.meta.env.VITE_APP_NAME as string) || APP_NAME,
   version: (import.meta.env.VITE_APP_VERSION as string) || APP_VERSION,
   tagline: APP_TAGLINE,
+  /**
+   * Public contact address for the /contact page. Deliberately EMPTY by
+   * default: the app must never publish an invented email. A deployment sets
+   * VITE_CONTACT_EMAIL (build-time, public by design) to show a mailto link;
+   * an empty value keeps the page honest with a "not configured" note.
+   */
+  contactEmail: ((import.meta.env.VITE_CONTACT_EMAIL as string) ?? '').trim(),
 } as const;
 
 export const STORAGE_KEYS = {

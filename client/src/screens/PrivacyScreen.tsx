@@ -1,15 +1,15 @@
 import { Link } from 'react-router-dom';
 import { findStaticInfoPage } from '@2play/shared';
 import { InfoPageShell, InfoSection } from '../components/info/InfoPageShell';
+import { AnalyticsConsentControl } from '../analytics/AnalyticsConsentControl';
 
 const PAGE = findStaticInfoPage('/privacy')!;
 
 /**
  * /privacy — the privacy policy. Every statement describes behavior the
  * platform actually implements (verified against the server and client code):
- * nothing is claimed to be collected that is not collected, and the things
- * the platform genuinely never does (ads, analytics, trackers, cookies for
- * tracking) are stated plainly.
+ * nothing is claimed to be collected that is not collected. Optional analytics
+ * is described separately and is loaded only after an explicit opt-in choice.
  */
 export default function PrivacyScreen() {
   return (
@@ -62,10 +62,28 @@ export default function PrivacyScreen() {
 
       <InfoSection title="Cookies, tracking and analytics">
         <p>
-          DuoPlay uses <strong>no cookies</strong> — not for authentication, preferences or
-          anything else, and it runs <strong>no analytics, no advertising and no third-party
-          trackers</strong>. The only browser storage used is local storage (listed above), and
-          it is never shared out of band.
+          DuoPlay uses no cookies for authentication or preferences. The core platform
+          does not load analytics, advertising or third-party trackers unless you explicitly
+          allow optional analytics below. Your choice is stored in local storage.
+        </p>
+        <p>
+          If you opt in, the official Google Analytics 4 tag may set first-party analytics
+          cookies and receive pseudonymous technical and usage information, such as safe page
+          paths, browser/device information and the DuoPlay events listed below. Google may
+          use technical signals to provide aggregated reports. Analytics storage, advertising
+          storage, Google signals and ad personalization are disabled; DuoPlay does not send
+          usernames, room codes, session tokens, chat messages, game moves or other private
+          data to Google Analytics.
+        </p>
+        <AnalyticsConsentControl />
+      </InfoSection>
+
+      <InfoSection title="Analytics events">
+        <p>
+          With consent, DuoPlay records only successful lifecycle actions: when a room is
+          created or joined, a game starts or completes, and a favorite is added or removed.
+          Events may include a game identifier and a non-sensitive completion reason. Room
+          URLs are shortened before they are sent, so room codes are never included.
         </p>
       </InfoSection>
 
@@ -80,9 +98,10 @@ export default function PrivacyScreen() {
 
       <InfoSection title="Third-party services">
         <p>
-          The only third party that can store platform data is <strong>Supabase</strong>, which
-          hosts the database when a deployment enables persistence. No ad networks, analytics
-          providers, social widgets or CDNs of user content are involved.
+          <strong>Supabase</strong> hosts the database when a deployment enables persistence.
+          If you opt in to analytics, Google Analytics 4 processes the limited pseudonymous
+          measurement data described above. No ad networks, social widgets or CDNs of user
+          content are involved.
         </p>
       </InfoSection>
 
@@ -102,7 +121,8 @@ export default function PrivacyScreen() {
           <li>Idle anonymous sessions are pruned automatically.</li>
           <li>You can change your nickname/avatar and remove favorites at any time.</li>
           <li>
-            You can clear everything the browser stores by clearing site data in your browser.
+            You can clear everything the browser stores, including optional analytics cookies,
+            by clearing site data in your browser.
           </li>
           <li>
             Because there are no named accounts, per-user deletion of stored statistics is

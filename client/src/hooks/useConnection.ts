@@ -24,6 +24,12 @@ import { useStatisticsStore } from '../stores/statisticsStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { audioManager } from '../audio/AudioManager';
 import { hapticsManager } from '../haptics/HapticsManager';
+import {
+  trackGameCompleted,
+  trackGameStarted,
+  trackRoomCreated,
+  trackRoomJoined,
+} from '../analytics/analytics';
 
 /**
  * Bridges socket traffic into the Zustand stores.
@@ -91,6 +97,7 @@ export function useConnection(): { ensureSession: (nickname?: string, avatar?: s
     const offRoomCreated = socketClient.on<RoomCreatedPayload>(SERVER_EVENTS.ROOM_CREATED, (payload) => {
       useRoomStore.getState().setRoom(payload.room);
       pushRecentRoom({ id: payload.room.id, gameId: payload.room.gameId });
+      trackRoomCreated(payload.room.gameId);
       audioManager.play('roomCreated');
       hapticsManager.trigger('success');
     });
@@ -99,6 +106,7 @@ export function useConnection(): { ensureSession: (nickname?: string, avatar?: s
       useRoomStore.getState().setRoom(payload.room);
       setLocalPlayerId(payload.playerId);
       pushRecentRoom({ id: payload.room.id, gameId: payload.room.gameId });
+      trackRoomJoined(payload.room.gameId);
       audioManager.play('roomJoined');
       hapticsManager.trigger('success');
     });
@@ -156,12 +164,14 @@ export function useConnection(): { ensureSession: (nickname?: string, avatar?: s
       }
     });
 
-    const offStarted = socketClient.on<GameStartedPayload>(SERVER_EVENTS.GAME_STARTED, () => {
+    const offStarted = socketClient.on<GameStartedPayload>(SERVER_EVENTS.GAME_STARTED, (payload) => {
+      trackGameStarted(payload.gameId);
       const room = useRoomStore.getState().room;
       if (room) pushRecentlyPlayed(room.gameId);
     });
 
     const offFinished = socketClient.on<GameFinishedPayload>(SERVER_EVENTS.GAME_FINISHED, (payload) => {
+      trackGameCompleted(payload.gameId, payload.result.reason);
       useRoomStore.getState().setLastResult(payload.result);
       // A finished match changed our statistics: refresh the cache in the
       // background so Home/Stats show fresh numbers (failure keeps old data).

@@ -60,7 +60,9 @@ export function createApp(platform: Platform): Express {
           baseUri: ["'self'"],
           frameAncestors: isProduction ? ["'self'"] : ["'self'", 'https://*.e2b.app'],
           imgSrc: ["'self'", 'data:', 'blob:'],
-          scriptSrc: ["'self'"],
+          // The only external script permitted is Google's official gtag.js,
+          // which is injected after explicit analytics consent by the client.
+          scriptSrc: ["'self'", 'https://www.googletagmanager.com'],
           styleSrc: ["'self'", "'unsafe-inline'"],
           connectSrc: ["'self'", 'ws:', 'wss:', 'https:'],
           fontSrc: ["'self'", 'data:'],

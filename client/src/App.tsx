@@ -9,6 +9,8 @@ import { useAudioUnlock } from './hooks/useAudioUnlock';
 import { useGameStore } from './stores/gameStore';
 import { lazy, Suspense, useEffect } from 'react';
 import { HomeScreen } from './screens/HomeScreen';
+import { AnalyticsConsentBanner } from './analytics/AnalyticsConsentBanner';
+import { AnalyticsTracker } from './analytics/AnalyticsTracker';
 
 /**
  * Route-level code splitting.
@@ -48,6 +50,7 @@ export function App() {
 
   return (
     <>
+      <AnalyticsTracker />
       <AppShell>
         <Suspense fallback={<LoadingBlock message="Loading…" />}>
         <Routes>
@@ -74,6 +77,7 @@ export function App() {
 
       <NicknamePrompt />
       <ReconnectOverlay />
+      <AnalyticsConsentBanner />
 
       <Toaster
         position="top-center"

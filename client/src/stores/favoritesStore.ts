@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useSessionStore } from './sessionStore';
 import { api } from '../services/api';
+import { trackFavoriteAdded, trackFavoriteRemoved } from '../analytics/analytics';
 
 export interface FavoritesStoreState {
   favorites: string[];
@@ -79,6 +80,8 @@ export const useFavoritesStore = create<FavoritesStoreState>((set, get) => ({
       favorites: isFavorite ? current : [gameId, ...current],
       loadedUserId: session.userId,
     });
+    if (isFavorite) trackFavoriteRemoved(gameId);
+    else trackFavoriteAdded(gameId);
   },
 
   clear: () => set({ favorites: [], loadedUserId: null, pending: {} }),

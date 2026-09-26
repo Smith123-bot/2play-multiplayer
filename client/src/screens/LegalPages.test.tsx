@@ -152,8 +152,11 @@ describe('public information & legal pages', () => {
     ]) {
       expect(body.toLowerCase(), topic).toContain(topic.toLowerCase());
     }
-    // Explicit no-claim statements.
-    expect(body).toContain('no analytics');
+    // Analytics is opt-in and privacy-preserving; the policy must not imply
+    // that the optional tag is always active.
+    expect(body).toContain('unless you explicitly allow optional analytics');
+    expect(body).toContain('Google Analytics 4');
+    expect(body).toContain('room codes are never included');
     expect(body).not.toMatch(/we collect (your )?email/i);
   });
 

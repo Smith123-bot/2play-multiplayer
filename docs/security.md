@@ -112,7 +112,10 @@ state. `rematchReady` is never taken from the client as fact.
 - Nicknames containing markup are **rejected** rather than silently escaped
   (`isSafeNickname`).
 - A Content-Security-Policy is served on every response with
-  `default-src 'self'`, `object-src 'none'` and `script-src 'self'`.
+  `default-src 'self'`, `object-src 'none'` and a narrowly allow-listed
+  `script-src` for `'self'` plus Google's official gtag.js host. The Google tag
+  is injected only after explicit analytics consent; no inline scripts or
+  wildcard script sources are permitted.
 
 ## 10. Security headers
 
@@ -120,7 +123,7 @@ Set via Helmet and verified by an automated test:
 
 | Header | Value |
 |---|---|
-| `Content-Security-Policy` | `default-src 'self'; object-src 'none'; script-src 'self'; …` |
+| `Content-Security-Policy` | `default-src 'self'; object-src 'none'; script-src 'self' https://www.googletagmanager.com; …` |
 | `X-Content-Type-Options` | `nosniff` |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
 | `X-Frame-Options` | `SAMEORIGIN` |
